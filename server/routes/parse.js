@@ -87,15 +87,21 @@ function extractAndParseJson(text) {
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
     const mathSpans = mathMatches.map(m => m.replace(/<\/?math>/g, ''));
 
+    // Do NOT default missing correctAnswer to 0 (hard product rule). Set to null if missing/unspecified.
+    let correctAnswer = null;
+    if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
+      correctAnswer = q.correctAnswer;
+    }
+
     return {
       id: q.id || `q_${Date.now()}_${idx}`,
       questionText,
       type,
       options,
-      correctAnswer: q.correctAnswer !== undefined ? q.correctAnswer : 0,
+      correctAnswer,
       mathSpans,
       confidenceScore: q.confidenceScore || 0.95,
-      needsReview: q.needsReview || false
+      needsReview: correctAnswer === null || q.needsReview || false
     };
   });
 
@@ -103,6 +109,18 @@ function extractAndParseJson(text) {
     testTitle: parsed.testTitle || "Mathematics Test Paper",
     questions
   };
+}
+
+// Validate shape of parsed JSON structure
+function validateJsonSchema(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (!Array.isArray(data.questions) || data.questions.length === 0) return false;
+  
+  for (const q of data.questions) {
+    if (!q.questionText || typeof q.questionText !== 'string') return false;
+    if (!Array.isArray(q.options)) return false;
+  }
+  return true;
 }
 
 // POST /api/parse-question with Automatic Key Fallback & Failover
@@ -127,7 +145,7 @@ router.post('/parse-question', async (req, res) => {
   for (const provider of providers) {
     try {
       if (provider.name === 'gemini') {
-        console.log(`[Parser] Attempting Gemini API (${process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'})...`);
+        console.log(`[Parser] Attempting Gemini API (${process.env.GEMINI_MODEL || 'gemini-1.5-flash'})...`);
         const data = await parseWithGemini({
           geminiKey: provider.key,
           type,
@@ -136,6 +154,9 @@ router.post('/parse-question', async (req, res) => {
           mediaType,
           docxStructure
         });
+        if (!validateJsonSchema(data)) {
+          throw new Error('Gemini response failed JSON schema shape validation');
+        }
         return res.json({ success: true, data, mode: 'live_gemini' });
       }
 
@@ -149,6 +170,9 @@ router.post('/parse-question', async (req, res) => {
           mediaType,
           docxStructure
         });
+        if (!validateJsonSchema(data)) {
+          throw new Error('Claude response failed JSON schema shape validation');
+        }
         return res.json({ success: true, data, mode: 'live_anthropic' });
       }
     } catch (err) {
@@ -172,7 +196,7 @@ router.post('/parse-question', async (req, res) => {
 // Google Gemini Parser Implementation
 async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, docxStructure }) {
   const genAI = new GoogleGenerativeAI(geminiKey);
-  const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
   const model = genAI.getGenerativeModel({
     model: modelName,
     generationConfig: {
@@ -227,7 +251,7 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
   }
 
   const response = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
+    model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages
