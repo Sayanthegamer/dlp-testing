@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 require('dotenv').config();
 
 const parseRoutes = require('../server/routes/parse');
@@ -10,6 +9,18 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Vercel Rewrite URL Normalizer Middleware
+// Vercel rewrites mutate req.url to /api/index.js (or /api/...) when routing into serverless functions.
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/index.js')) {
+    req.url = req.url.replace('/api/index.js', '/api');
+  }
+  if (!req.url.startsWith('/api')) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+  next();
+});
 
 // Auth Gate Middleware: verify request header against APP_PASSWORD
 const authMiddleware = (req, res, next) => {
@@ -59,3 +70,4 @@ app.get('/api/health', (req, res) => {
 app.use('/api', authMiddleware, parseRoutes);
 
 module.exports = app;
+
