@@ -30,7 +30,7 @@ const authMiddleware = (req, res, next) => {
   return res.status(401).json({ success: false, error: 'Unauthorized: Invalid access password.' });
 };
 
-// API Route for Password Verification
+// Public endpoints
 app.post('/api/verify-password', (req, res) => {
   const { password } = req.body;
   const appPassword = process.env.APP_PASSWORD;
@@ -42,15 +42,6 @@ app.post('/api/verify-password', (req, res) => {
   return res.status(401).json({ success: false, error: 'Incorrect access password.' });
 });
 
-// Silence Chrome DevTools .well-known probe warning
-app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-  res.status(204).end();
-});
-
-// Protect API routes with authMiddleware
-app.use('/api', authMiddleware, parseRoutes);
-
-// Health check endpoint
 app.get('/api/health', (req, res) => {
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
   const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
@@ -63,12 +54,15 @@ app.get('/api/health', (req, res) => {
       gemini: hasGemini ? 'active' : 'inactive',
       anthropic: hasAnthropic ? 'active' : 'inactive'
     },
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash'
   });
 });
 
-// Serve client static files in production
-if (process.env.NODE_ENV === 'production') {
+// Protect remaining parsing API routes
+app.use('/api', authMiddleware, parseRoutes);
+
+// Serve client static files only in non-Vercel local production mode
+if (process.env.NODE_ENV === 'production' && process.env.VERCEL !== '1') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
