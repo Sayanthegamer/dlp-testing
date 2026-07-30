@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import { computeNeedsReview } from '../../services/reviewEvaluator';
 import { Check, Edit2, Copy, Trash2, CheckCircle2, Circle, Type, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 export default function QuestionCard({
@@ -13,8 +14,13 @@ export default function QuestionCard({
   const [isEditingStem, setIsEditingStem] = useState(false);
   const [editingOptionIdx, setEditingOptionIdx] = useState(null);
 
-  const { id, questionText, type, options, correctAnswer, confidenceScore = 0.95, needsReview } = question;
+  const { id, questionText, type, options, correctAnswer } = question;
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+  // Deterministic Needs Review Evaluation
+  const reviewEvaluation = computeNeedsReview(question);
+  const needsReview = reviewEvaluation.needsReview;
+  const reviewReasons = reviewEvaluation.reasons;
 
   // Smart options layout classifier: 2-column grid if short, 1-column list if long
   const totalOptionsLength = (options || []).reduce((acc, opt) => acc + (opt || '').length, 0);
@@ -40,13 +46,11 @@ export default function QuestionCard({
     onUpdateQuestion(id, { ...question, options: newOptions });
   };
 
-  const scorePct = Math.round((confidenceScore || 0.9) * 100);
-
   return (
     <div
       id={`question-card-${index}`}
       className={`exam-paper rounded-2xl p-6 sm:p-8 text-[#1c1b18] relative transition-all shadow-sm ${
-        needsReview || scorePct < 75 ? 'border-2 border-amber-300 bg-[#fefdfa]' : ''
+        needsReview ? 'border-2 border-amber-400 bg-[#fefdfa]' : ''
       }`}
     >
       {/* Top Meta Bar */}
@@ -66,30 +70,22 @@ export default function QuestionCard({
             <option value="short_answer">Short Answer</option>
           </select>
 
-          {/* Confidence Tag / Badge */}
-          {needsReview || scorePct < 75 ? (
+          {/* Deterministic Review Badge */}
+          {needsReview ? (
             <span
               className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-sans font-semibold"
-              title="Low OCR confidence or ambiguous math detected. Click to edit."
+              title={`Action required: ${reviewReasons.join(', ')}`}
             >
               <AlertTriangle className="w-3 h-3 text-amber-700" />
-              <span>{scorePct}% Confidence (Needs Review)</span>
-            </span>
-          ) : scorePct >= 90 ? (
-            <span
-              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-sans font-semibold"
-              title="High confidence AI transcription"
-            >
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>{scorePct}% Confident</span>
+              <span>Needs Review ({reviewReasons.join(', ')})</span>
             </span>
           ) : (
             <span
-              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-300 text-blue-800 font-sans font-semibold"
-              title="Good confidence AI transcription"
+              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-sans font-semibold"
+              title="Verified: Math syntax valid and answer key present"
             >
-              <ShieldCheck className="w-3 h-3 text-blue-600" />
-              <span>{scorePct}% Confidence</span>
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>Verified Ready</span>
             </span>
           )}
         </div>
