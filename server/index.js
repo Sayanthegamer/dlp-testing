@@ -75,17 +75,20 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
-  const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
-  const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
+// Only call app.listen in standalone mode (not when imported as Vercel serverless function)
+if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
+  app.listen(PORT, () => {
+    const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
+    const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
 
-  console.log(`=================================`);
-  console.log(`Math Pipeline Server running on http://localhost:${PORT}`);
-  console.log(`Gemini API (${process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'}): ${hasGemini ? 'ACTIVE' : 'OFF'}`);
-  console.log(`Anthropic API: ${hasAnthropic ? 'ACTIVE' : 'OFF'}`);
-  console.log(`Mode: ${hasGemini || hasAnthropic ? 'Live API (with failover)' : 'Smart Demo Fallback Mode'}`);
-  console.log(`=================================`);
-});
+    console.log(`=================================`);
+    console.log(`Math Pipeline Server running on http://localhost:${PORT}`);
+    console.log(`Gemini API (${process.env.GEMINI_MODEL || 'gemini-1.5-flash'}): ${hasGemini ? 'ACTIVE' : 'OFF'}`);
+    console.log(`Anthropic API: ${hasAnthropic ? 'ACTIVE' : 'OFF'}`);
+    console.log(`Mode: ${hasGemini || hasAnthropic ? 'Live API (with failover)' : 'Smart Demo Fallback Mode'}`);
+    console.log(`=================================`);
+  });
+}
 
 module.exports = app;
 
