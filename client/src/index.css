@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #f6f3ed;
+    color: #22201c;
+  }
+}
+
+/* Custom exam card styling */
+.exam-paper {
+  background-color: #fbf9f5;
+  border: 1px solid #e2dacd;
+  box-shadow: 0 4px 20px -2px rgba(45, 35, 20, 0.05), 0 2px 6px -1px rgba(45, 35, 20, 0.03);
+}
+
+/* KaTeX inline overrides for calm reading */
+.katex {
+  font-size: 1.05em !important;
+}
+
+.math-review-highlight {
+  background-color: rgba(235, 180, 75, 0.2);
+  border-bottom: 2px dashed #d9822b;
+  padding: 0 4px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.math-review-highlight:hover {
+  background-color: rgba(235, 180, 75, 0.35);
+}
+
+/* Smooth custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f0eae1;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4c8b8;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #bfae9b;
+}
