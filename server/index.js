@@ -86,3 +86,6 @@ app.listen(PORT, () => {
   console.log(`Mode: ${hasGemini || hasAnthropic ? 'Live API (with failover)' : 'Smart Demo Fallback Mode'}`);
   console.log(`=================================`);
 });
+
+module.exports = app;
+
