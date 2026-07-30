@@ -34,7 +34,7 @@ app.all('*', (req, res, next) => {
     const { password } = req.body || {};
     const appPassword = process.env.APP_PASSWORD;
 
-    if (!appPassword || password === appPassword) {
+    if (!appPassword || (password && password.trim() === appPassword.trim())) {
       return res.json({ success: true, message: 'Authenticated successfully.' });
     }
     return res.status(401).json({ success: false, error: 'Incorrect access password.' });

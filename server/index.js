@@ -35,7 +35,7 @@ app.post('/api/verify-password', (req, res) => {
   const { password } = req.body;
   const appPassword = process.env.APP_PASSWORD;
 
-  if (!appPassword || password === appPassword) {
+  if (!appPassword || (password && password.trim() === appPassword.trim())) {
     return res.json({ success: true, message: 'Authenticated successfully.' });
   }
 
