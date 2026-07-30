@@ -3,10 +3,28 @@
  * The backend securely attaches ANTHROPIC_API_KEY server-side.
  */
 
+function getAuthHeader() {
+  const pwd = localStorage.getItem('app_access_password') || '';
+  return { 'X-App-Password': pwd };
+}
+
+export async function verifyPassword(password) {
+  const response = await fetch('/api/verify-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Incorrect password.');
+  }
+  return true;
+}
+
 export async function parseQuestionText(rawText) {
   const response = await fetch('/api/parse-question', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ type: 'text', rawText })
   });
   return handleApiResponse(response);
@@ -15,7 +33,7 @@ export async function parseQuestionText(rawText) {
 export async function parseQuestionImage(imageBase64, mediaType = 'image/jpeg') {
   const response = await fetch('/api/parse-question', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ type: 'image', imageBase64, mediaType })
   });
   return handleApiResponse(response);
@@ -24,7 +42,7 @@ export async function parseQuestionImage(imageBase64, mediaType = 'image/jpeg') 
 export async function parseDocxStructure(docxStructure) {
   const response = await fetch('/api/parse-question', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify({ type: 'docx_structure', docxStructure })
   });
   return handleApiResponse(response);

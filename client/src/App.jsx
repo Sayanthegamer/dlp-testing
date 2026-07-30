@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import InputDrawer from './components/InputPanel/InputDrawer';
 import QuestionCatalogue from './components/Catalogue/QuestionCatalogue';
 import FloatingMathPopover from './components/VisualMathEditor/FloatingMathPopover';
 import PrintViewModal from './components/Common/PrintViewModal';
 import LoadingSpinner from './components/Common/LoadingSpinner';
+import AccessGateModal from './components/Common/AccessGateModal';
 import { parseQuestionText, parseQuestionImage, parseDocxStructure } from './services/apiService';
 
 const INITIAL_CATALOGUE = {
@@ -44,11 +45,20 @@ const INITIAL_CATALOGUE = {
 };
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [testTitle, setTestTitle] = useState(INITIAL_CATALOGUE.testTitle);
   const [questions, setQuestions] = useState(INITIAL_CATALOGUE.questions);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [isJustParsed, setIsJustParsed] = useState(false);
+
+  // Check stored auth on load
+  useEffect(() => {
+    const savedPwd = localStorage.getItem('app_access_password');
+    if (savedPwd) {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   // Floating Math Popover state
   const [activeMathEdit, setActiveMathEdit] = useState(null); // { questionId, mathLatex }
@@ -299,6 +309,11 @@ export default function App() {
           questions={questions}
           onClose={() => setShowPrintModal(false)}
         />
+      )}
+
+      {/* Access Gate Modal (Restricted Entry) */}
+      {!isAuthenticated && (
+        <AccessGateModal onAuthenticated={() => setIsAuthenticated(true)} />
       )}
     </div>
   );

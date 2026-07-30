@@ -13,13 +13,42 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Auth Gate Middleware: verify request header against APP_PASSWORD
+const authMiddleware = (req, res, next) => {
+  const appPassword = process.env.APP_PASSWORD;
+  
+  // If APP_PASSWORD is not set in environment, allow access (or lock if desired)
+  if (!appPassword) {
+    return next();
+  }
+
+  const authHeader = req.headers['x-app-password'] || req.headers.authorization;
+  if (authHeader === appPassword || authHeader === `Bearer ${appPassword}`) {
+    return next();
+  }
+
+  return res.status(401).json({ success: false, error: 'Unauthorized: Invalid access password.' });
+};
+
+// API Route for Password Verification
+app.post('/api/verify-password', (req, res) => {
+  const { password } = req.body;
+  const appPassword = process.env.APP_PASSWORD;
+
+  if (!appPassword || password === appPassword) {
+    return res.json({ success: true, message: 'Authenticated successfully.' });
+  }
+
+  return res.status(401).json({ success: false, error: 'Incorrect access password.' });
+});
+
 // Silence Chrome DevTools .well-known probe warning
 app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
   res.status(204).end();
 });
 
-// API Routes
-app.use('/api', parseRoutes);
+// Protect API routes with authMiddleware
+app.use('/api', authMiddleware, parseRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
