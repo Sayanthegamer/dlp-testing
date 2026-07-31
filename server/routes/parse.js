@@ -12,7 +12,7 @@ Your task is to parse input (informal text, photo of exam paper, or document str
     {
       "id": "q1",
       "questionText": "Question stem text with math enclosed in <math>LaTeX</math> tags. E.g. Solve for x: <math>x^2 + 2x - 3 = 0</math>",
-      "type": "mcq" | "short_answer_numeric" | "short_answer_text",
+      "type": "mcq" | "short_answer_numeric",
       "options": ["<math>Option A</math>", "<math>Option B</math>", "<math>Option C</math>", "<math>Option D</math>"],
       "correctAnswer": 0,
       "acceptedRange": [1.99, 2.01],
@@ -27,11 +27,10 @@ CRITICAL RULES:
 1. <math>...</math> tags are ONLY for mathematical formulas, equations, variables, and math symbols (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
 2. Do NOT place plain English text, computer science terms, or general option descriptions inside <math> tags.
 3. If the input contains MULTIPLE questions (e.g. Question 1, Question 2...), extract ALL questions into the "questions" array.
-4. For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq".
-5. For numeric Short Answer questions (where the answer is a number/float), set "type": "short_answer_numeric", "options": [], "correctAnswer": numeric_value, and "acceptedRange": [min, max] (e.g. ±1% or ±0.01 tolerance).
-6. For free-text or non-numeric Short Answer questions, set "type": "short_answer_text" and "options": [].
-7. Set "correctAnswer" to integer index (0-3) for MCQ if identifiable, or a number for short_answer_numeric, or null/string for short_answer_text.
-8. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+4. For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq", with "correctAnswer" as the 0-indexed integer of the correct option if identifiable.
+5. ALL non-MCQ questions MUST be "type": "short_answer_numeric". There are NO free-text subjective questions. The answer is ALWAYS a numerical value (integer or decimal from -infinity to +infinity).
+6. ALWAYS SOLVE/ESTIMATE THE NUMERICAL ANSWER for numerical questions: output an estimated "correctAnswer" (numeric float/integer) AND a suggested "acceptedRange": [min, max] (e.g. [14.5, 15.5] or ±1% tolerance around the estimated answer).
+7. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');
@@ -82,23 +81,37 @@ function extractAndParseJson(text) {
   // Normalize each question
   questions = questions.map((q, idx) => {
     const questionText = q.questionText || `Question ${idx + 1}`;
-    const type = q.type || (q.options && q.options.length > 0 ? "mcq" : "short_answer_text");
-    const options = Array.isArray(q.options) ? q.options : [];
+    // Force non-MCQ questions to short_answer_numeric
+    let type = q.type;
+    if (type !== 'mcq') {
+      type = 'short_answer_numeric';
+    }
+    const options = type === 'mcq' ? (Array.isArray(q.options) ? q.options : []) : [];
     
     // Auto-extract mathSpans
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
     const mathSpans = mathMatches.map(m => m.replace(/<\/?math>/g, ''));
 
-    // Do NOT default missing correctAnswer to 0. Set to null if missing/unspecified.
     let correctAnswer = null;
     if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
-      correctAnswer = q.correctAnswer;
+      const numVal = parseFloat(q.correctAnswer);
+      correctAnswer = !isNaN(numVal) ? numVal : q.correctAnswer;
     }
 
-    // Preserve acceptedRange if provided (must be array of length 2). Do NOT default/invent range if missing.
+    // Preserve or generate estimated acceptedRange for numerical questions
     let acceptedRange = undefined;
-    if (Array.isArray(q.acceptedRange) && q.acceptedRange.length === 2) {
-      acceptedRange = q.acceptedRange;
+    if (type === 'short_answer_numeric') {
+      if (Array.isArray(q.acceptedRange) && q.acceptedRange.length === 2 &&
+          typeof q.acceptedRange[0] === 'number' && typeof q.acceptedRange[1] === 'number') {
+        acceptedRange = q.acceptedRange;
+      } else if (typeof correctAnswer === 'number' && Number.isFinite(correctAnswer)) {
+        // Suggested range around the estimated answer (e.g. ±0.5 or exact)
+        const margin = Math.abs(correctAnswer) > 0 ? Math.max(0.1, Math.abs(correctAnswer) * 0.02) : 0.5;
+        acceptedRange = [
+          Math.round((correctAnswer - margin) * 100) / 100,
+          Math.round((correctAnswer + margin) * 100) / 100
+        ];
+      }
     }
 
     const normalized = {
@@ -109,7 +122,8 @@ function extractAndParseJson(text) {
       correctAnswer,
       mathSpans,
       confidenceScore: q.confidenceScore || 0.95,
-      needsReview: correctAnswer === null || q.needsReview || false
+      numericalConfirmed: false,
+      needsReview: true // Always requires teacher verification before publishing
     };
 
     if (acceptedRange !== undefined) {

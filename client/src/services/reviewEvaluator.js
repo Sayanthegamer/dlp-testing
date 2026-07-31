@@ -33,6 +33,8 @@ export function computeNeedsReview(question) {
     
     if (!isValidRange) {
       reasons.push('Numeric Range Not Set');
+    } else if (!question.numericalConfirmed) {
+      reasons.push('Numerical Range Unconfirmed');
     }
   }
 

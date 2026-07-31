@@ -16,15 +16,21 @@ export function evaluateQuestion(question, studentAnswer) {
     return { status: isCorrect ? 'correct' : 'incorrect', isAutoGraded: true, isCorrect };
   }
 
-  if (question.type === 'short_answer_numeric') {
-    const range = question.acceptedRange;
+  if (question.type === 'short_answer_numeric' || question.type === 'short_answer_text' || question.type === 'short_answer') {
+    let range = question.acceptedRange;
+    
+    // If range is missing but correctAnswer is a number, create exact range [target, target]
+    if ((!Array.isArray(range) || range.length !== 2) && typeof question.correctAnswer === 'number' && Number.isFinite(question.correctAnswer)) {
+      range = [question.correctAnswer, question.correctAnswer];
+    }
+
     const isValidRange = Array.isArray(range) && 
       range.length === 2 && 
       typeof range[0] === 'number' && Number.isFinite(range[0]) &&
       typeof range[1] === 'number' && Number.isFinite(range[1]) &&
       range[0] <= range[1];
 
-    if (!isValidRange || question.correctAnswer === null || question.correctAnswer === undefined) {
+    if (!isValidRange) {
       return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
     }
 
@@ -32,9 +38,6 @@ export function evaluateQuestion(question, studentAnswer) {
     const isCorrect = !isNaN(parsedInput) && parsedInput >= range[0] && parsedInput <= range[1];
     return { status: isCorrect ? 'correct' : 'incorrect', isAutoGraded: true, isCorrect };
   }
-
-  // short_answer_text or unclassified legacy short_answer
-  return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
 }
 
 /**

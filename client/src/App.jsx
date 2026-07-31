@@ -15,6 +15,7 @@ import TestResultScreen from './components/Student/TestResultScreen';
 import SubmissionsDashboardModal from './components/TeacherDashboard/SubmissionsDashboardModal';
 import PublishExamModal from './components/TeacherDashboard/PublishExamModal';
 import { parseQuestionText, parseQuestionImage, parseDocxStructure, publishExam, fetchExamSnapshot } from './services/apiService';
+import { computeNeedsReview } from './services/reviewEvaluator';
 
 const INITIAL_CATALOGUE = {
   testTitle: "Mathematics Practice Test",
@@ -336,6 +337,29 @@ export default function App() {
 
   // Handle Publish Exam snapshot
   const handlePublishExam = async () => {
+    // Validate that all questions are confirmed and ready
+    const unreviewedQuestions = [];
+    questions.forEach((q, idx) => {
+      const evaluation = computeNeedsReview(q);
+      if (evaluation.needsReview) {
+        unreviewedQuestions.push({ index: idx + 1, reasons: evaluation.reasons });
+      }
+    });
+
+    if (unreviewedQuestions.length > 0) {
+      const details = unreviewedQuestions
+        .map(u => `Question #${u.index}: ${u.reasons.join(', ')}`)
+        .join('\n');
+      alert(`Cannot publish exam paper yet!\n\nPlease review and confirm all numerical ranges and answer keys before publishing:\n\n${details}`);
+      
+      const firstUnreviewedIdx = unreviewedQuestions[0].index - 1;
+      const cardElem = document.getElementById(`question-card-${firstUnreviewedIdx}`);
+      if (cardElem) {
+        cardElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
     setIsLoading(true);
     setLoadingMessage('Publishing frozen exam snapshot...');
     try {

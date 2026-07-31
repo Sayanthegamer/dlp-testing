@@ -62,13 +62,12 @@ export default function QuestionCard({
 
           {/* Question Type Switcher */}
           <select
-            value={type}
+            value={type === 'short_answer_text' || type === 'short_answer' ? 'short_answer_numeric' : type}
             onChange={(e) => onUpdateQuestion(id, { ...question, type: e.target.value })}
             className="text-xs px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer"
           >
             <option value="mcq">Multiple Choice (MCQ)</option>
-            <option value="short_answer_numeric">Numeric Short Answer</option>
-            <option value="short_answer_text">Text Short Answer (Manual Review)</option>
+            <option value="short_answer_numeric">Numerical Question (Integer / Decimal Range)</option>
           </select>
 
           {/* Deterministic Review Badge */}
@@ -260,13 +259,37 @@ export default function QuestionCard({
       {/* Numeric Short Answer Mode */}
       {type === 'short_answer_numeric' && (
         <div className="mt-4 p-4 rounded-xl bg-[#faf7f2] border border-[#e2d8ca] space-y-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#736c62] block">
-            Numeric Answer Key & Tolerance Range
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#736c62] block">
+              Numeric Answer Key & Tolerance Range
+            </span>
+            <button
+              type="button"
+              onClick={() => onUpdateQuestion(id, { ...question, numericalConfirmed: !question.numericalConfirmed })}
+              className={`flex items-center gap-1.5 text-xs font-sans font-bold px-3 py-1.5 rounded-lg transition-all ${
+                question.numericalConfirmed
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-amber-500 text-white hover:bg-amber-600 shadow-xs animate-pulse'
+              }`}
+            >
+              {question.numericalConfirmed ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                  <span>Answer Range Confirmed</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-white" />
+                  <span>Confirm Answer Range (Required to Publish)</span>
+                </>
+              )}
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans">
             <div>
               <label className="block text-[11px] font-medium text-[#5c5346] mb-1">
-                Center Value (Target)
+                Center Target Value
               </label>
               <input
                 type="number"
@@ -274,15 +297,15 @@ export default function QuestionCard({
                 value={correctAnswer !== undefined && correctAnswer !== null ? correctAnswer : ''}
                 onChange={(e) => {
                   const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                  onUpdateQuestion(id, { ...question, correctAnswer: val });
+                  onUpdateQuestion(id, { ...question, correctAnswer: val, numericalConfirmed: true });
                 }}
-                placeholder="e.g. 3.1"
+                placeholder="e.g. 15"
                 className="w-full px-3 py-1.5 rounded-lg border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
               />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-[#5c5346] mb-1">
-                Min Range (Inclusive)
+                Min Accepted Value (Inclusive)
               </label>
               <input
                 type="number"
@@ -292,15 +315,15 @@ export default function QuestionCard({
                   const minVal = e.target.value === '' ? undefined : parseFloat(e.target.value);
                   const currentMax = Array.isArray(question.acceptedRange) ? question.acceptedRange[1] : undefined;
                   const newRange = (minVal === undefined && currentMax === undefined) ? undefined : [minVal, currentMax];
-                  onUpdateQuestion(id, { ...question, acceptedRange: newRange });
+                  onUpdateQuestion(id, { ...question, acceptedRange: newRange, numericalConfirmed: true });
                 }}
-                placeholder="e.g. 3.0"
+                placeholder="e.g. 14.5"
                 className="w-full px-3 py-1.5 rounded-lg border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
               />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-[#5c5346] mb-1">
-                Max Range (Inclusive)
+                Max Accepted Value (Inclusive)
               </label>
               <input
                 type="number"
@@ -310,30 +333,13 @@ export default function QuestionCard({
                   const maxVal = e.target.value === '' ? undefined : parseFloat(e.target.value);
                   const currentMin = Array.isArray(question.acceptedRange) ? question.acceptedRange[0] : undefined;
                   const newRange = (currentMin === undefined && maxVal === undefined) ? undefined : [currentMin, maxVal];
-                  onUpdateQuestion(id, { ...question, acceptedRange: newRange });
+                  onUpdateQuestion(id, { ...question, acceptedRange: newRange, numericalConfirmed: true });
                 }}
-                placeholder="e.g. 3.2"
+                placeholder="e.g. 15.5"
                 className="w-full px-3 py-1.5 rounded-lg border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
               />
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Text / Legacy Short Answer Mode */}
-      {/* Note: Preserving || type === 'short_answer' is intentional for backwards compatibility so unclassified legacy questions render text input rather than a blank card. */}
-      {(type === 'short_answer_text' || type === 'short_answer') && (
-        <div className="mt-4 p-4 rounded-xl bg-[#faf7f2] border border-[#e2d8ca] space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#736c62] block">
-            Expected Answer Key (Text / Free-Form — Always Pending Review)
-          </span>
-          <input
-            type="text"
-            value={correctAnswer !== undefined && correctAnswer !== null ? correctAnswer : ''}
-            onChange={(e) => onUpdateQuestion(id, { ...question, correctAnswer: e.target.value })}
-            placeholder="Enter reference answer value (e.g. x = 2)..."
-            className="w-full px-3.5 py-2 rounded-xl border border-[#c9bea9] bg-white font-serif text-base text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
-          />
         </div>
       )}
     </div>

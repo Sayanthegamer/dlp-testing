@@ -125,7 +125,7 @@ export default function TestQuestionView({
                 type="text"
                 value={currentAnswer !== undefined && currentAnswer !== null ? currentAnswer : ''}
                 onChange={(e) => onAnswerChange(id, e.target.value)}
-                placeholder={type === 'short_answer_numeric' ? "Enter numerical value (e.g. 3.1)..." : "Enter your answer text..."}
+                placeholder="Enter numerical value (integer or decimal, e.g. 15, -3.5)..."
                 autoFocus
                 className="w-full p-4 rounded-2xl border border-[#DCD5C4] bg-white font-serif text-lg text-[#232323] focus:outline-none focus:ring-2 focus:ring-[#232323] shadow-inner"
               />
