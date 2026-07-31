@@ -19,8 +19,8 @@ export default function TestResultScreen({
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   return (
-    <div className="min-h-screen bg-[#FAF7F0] text-[#232323] py-10 px-4 sm:px-6 print:hidden">
-      <div className="max-w-3xl w-full mx-auto space-y-8">
+    <div className="min-h-screen bg-[#FAF7F0] text-[#232323] py-10 px-4 sm:px-6">
+      <div className="max-w-3xl w-full mx-auto space-y-8 print:hidden">
         
         {/* Top Summary Card (Exam Native Tone) */}
         <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
