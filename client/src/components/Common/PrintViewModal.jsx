@@ -11,33 +11,40 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   return (
-    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 overflow-y-auto print:p-0 print:bg-white print:static print:block">
-      <div className="print-modal-container bg-[#fbf9f5] border border-[#dcd2c4] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible">
+    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-black/50 overflow-y-auto print:p-0 print:bg-white print:static print:block">
+      <div className="print-modal-container bg-[#fbf9f5] border-0 sm:border border-[#dcd2c4] rounded-none sm:rounded-2xl max-w-4xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible relative">
         
-        {/* Modal Header Bar (Hidden on print) */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e2d8ca] bg-[#f5efe4] print:hidden">
-          <div className="flex items-center gap-2">
-            <Printer className="w-5 h-5 text-[#8c4a17]" />
-            <h3 className="font-serif font-bold text-base text-[#1c1b18]">
-              Exam Paper Print / PDF Export Preview
+        {/* Sticky Modal Header Bar (Hidden on print) */}
+        <div className="sticky top-0 z-20 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-[#e2d8ca] bg-[#f5efe4] print:hidden gap-2 shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#8c4a17] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <Printer className="w-4 h-4" />
+            </div>
+            <h3 className="font-serif font-bold text-xs sm:text-base text-[#1c1b18] truncate">
+              Exam Paper Print Preview
             </h3>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             <button
               type="button"
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-[#fbf9f5] text-xs font-semibold shadow-xs transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-[#fbf9f5] text-xs font-semibold shadow-xs transition-all active:scale-95"
             >
               <Printer className="w-4 h-4 text-[#e6cca6]" />
-              <span>Print / Save PDF</span>
+              <span className="hidden sm:inline">Print / Save PDF</span>
+              <span className="sm:hidden">Print</span>
             </button>
+
+            {/* Prominent High-Contrast Mobile Close X Button */}
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-[#786f63] hover:bg-[#e8decb] transition-colors"
+              className="p-1.5 sm:p-2 rounded-xl bg-[#1c1b18] text-white hover:bg-black active:scale-95 transition-all shadow-xs shrink-0 flex items-center justify-center min-w-[36px] min-h-[36px]"
+              title="Close Preview"
+              aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 text-white" />
             </button>
           </div>
         </div>

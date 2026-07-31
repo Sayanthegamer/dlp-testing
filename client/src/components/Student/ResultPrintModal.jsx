@@ -19,62 +19,72 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
   };
 
   return (
-    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 overflow-y-auto print:p-0 print:bg-white print:static print:block">
-      <div className="print-modal-container bg-[#fbf9f5] border border-[#dcd2c4] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible">
+    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-black/50 overflow-y-auto print:p-0 print:bg-white print:static print:block">
+      <div className="print-modal-container bg-[#fbf9f5] border-0 sm:border border-[#dcd2c4] rounded-none sm:rounded-2xl max-w-4xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible relative">
         
-        {/* Modal Header Bar (Hidden on Print) */}
-        <div className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-[#e2d8ca] bg-[#f5efe4] print:hidden gap-3">
-          <div className="flex items-center gap-2">
-            <Printer className="w-5 h-5 text-[#8c4a17]" />
-            <h3 className="font-serif font-bold text-base text-[#1c1b18]">
-              Print Examination Result Report
+        {/* Sticky Modal Header Bar (Hidden on Print) */}
+        <div className="sticky top-0 z-20 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-[#e2d8ca] bg-[#f5efe4] print:hidden gap-2 shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#8c4a17] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <Printer className="w-4 h-4" />
+            </div>
+            <h3 className="font-serif font-bold text-xs sm:text-base text-[#1c1b18] truncate">
+              Result Report
             </h3>
           </div>
 
           {/* Style Selector Buttons */}
-          <div className="flex items-center gap-2 font-sans text-xs">
+          <div className="flex items-center gap-1 font-sans text-xs shrink-0">
             <button
               type="button"
               onClick={() => setPrintStyle('short')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all ${
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl font-semibold transition-all text-xs ${
                 printStyle === 'short'
                   ? 'bg-[#2c2825] text-white shadow-xs'
                   : 'bg-[#e5dcd0] text-[#4a443b] hover:bg-[#d8ccbc]'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Short Style (Summary)</span>
+              <span className="hidden sm:inline">Short Style</span>
+              <span className="sm:hidden">Short</span>
             </button>
             <button
               type="button"
               onClick={() => setPrintStyle('long')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all ${
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl font-semibold transition-all text-xs ${
                 printStyle === 'long'
                   ? 'bg-[#2c2825] text-[#FAF7F0] shadow-xs'
                   : 'bg-[#e5dcd0] text-[#4a443b] hover:bg-[#d8ccbc]'
               }`}
             >
               <AlignLeft className="w-3.5 h-3.5" />
-              <span>Long Style (Detailed)</span>
+              <span className="hidden sm:inline">Long Style</span>
+              <span className="sm:hidden">Long</span>
             </button>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
             <button
               type="button"
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
+              className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
+              title="Print / Save PDF"
             >
-              <Printer className="w-4 h-4 text-white" />
-              <span>Print / Save PDF</span>
+              <Printer className="w-3.5 h-3.5 text-white" />
+              <span className="hidden sm:inline">Print / Save PDF</span>
+              <span className="sm:hidden">Print</span>
             </button>
+
+            {/* Prominent High-Contrast Mobile Close X Button */}
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-[#786f63] hover:bg-[#e8decb] transition-colors"
+              className="p-1.5 sm:p-2 rounded-xl bg-[#1c1b18] text-white hover:bg-black active:scale-95 transition-all shadow-xs shrink-0 flex items-center justify-center min-w-[36px] min-h-[36px]"
+              title="Close Report"
+              aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 text-white" />
             </button>
           </div>
         </div>
