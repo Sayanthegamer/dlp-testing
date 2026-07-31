@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import QuestionCard from './QuestionCard';
+import { computeNeedsReview } from '../../services/reviewEvaluator';
 import { Plus, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react';
 
 export default function QuestionCatalogue({
@@ -21,6 +22,15 @@ export default function QuestionCatalogue({
       topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [isJustParsed]);
+
+  // Sort questions so flagged items (needsReview === true) float to top of list until resolved
+  const sortedQuestions = [...questions].sort((a, b) => {
+    const aNeeds = computeNeedsReview(a).needsReview;
+    const bNeeds = computeNeedsReview(b).needsReview;
+    if (aNeeds && !bNeeds) return -1;
+    if (!aNeeds && bNeeds) return 1;
+    return 0;
+  });
 
   return (
     <div ref={topRef} className="space-y-6">
@@ -65,9 +75,9 @@ export default function QuestionCatalogue({
         </p>
       </div>
 
-      {/* Stacked Question Cards */}
+      {/* Stacked Question Cards (Flagged Items Floating to Top) */}
       <div className="space-y-6">
-        {questions.map((question, idx) => (
+        {sortedQuestions.map((question, idx) => (
           <QuestionCard
             key={question.id || idx}
             question={question}
