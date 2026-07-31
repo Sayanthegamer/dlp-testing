@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import ResultPrintModal from './ResultPrintModal';
 import { gradeAttempt } from '../../services/gradingService';
-import { CheckCircle2, XCircle, Clock, RotateCcw, Home } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, RotateCcw, Home, Printer } from 'lucide-react';
 
 export default function TestResultScreen({
   questions,
   studentAnswers,
   studentName,
+  testTitle,
   onRestartTest,
   onExitStudentMode
 }) {
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const result = gradeAttempt(questions, studentAnswers);
   const { autoGraded, pendingReview, perQuestion } = result;
 
@@ -21,7 +24,7 @@ export default function TestResultScreen({
         
         {/* Top Summary Card (Exam Native Tone) */}
         <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
-          <div className="border-b border-[#DCD5C4] pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="border-b border-[#DCD5C4] pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#8c4a17] block">
                 Official Examination Summary
@@ -30,9 +33,19 @@ export default function TestResultScreen({
                 Test Evaluation Results
               </h1>
             </div>
-            <span className="text-xs font-sans text-[#5c5346] bg-[#f0e6d8] px-3.5 py-1.5 rounded-full font-medium">
-              Candidate: <strong className="text-[#232323]">{studentName}</strong>
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-sans text-[#5c5346] bg-[#f0e6d8] px-3.5 py-1.5 rounded-full font-medium">
+                Candidate: <strong className="text-[#232323]">{studentName}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-sans font-semibold shadow-xs transition-all active:scale-95"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Result Report</span>
+              </button>
+            </div>
           </div>
 
           {/* Score Header */}
@@ -180,6 +193,17 @@ export default function TestResultScreen({
         </div>
 
       </div>
+
+      {/* Printable Result Modal */}
+      {showPrintModal && (
+        <ResultPrintModal
+          testTitle={testTitle}
+          studentName={studentName}
+          questions={questions}
+          studentAnswers={studentAnswers}
+          onClose={() => setShowPrintModal(false)}
+        />
+      )}
     </div>
   );
 }

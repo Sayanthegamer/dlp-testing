@@ -371,6 +371,7 @@ export default function App() {
           questions={questions}
           studentAnswers={studentAnswers}
           studentName={studentName}
+          testTitle={testTitle}
           onRestartTest={() => {
             handleClearStudentSession();
             setStudentStep('intro');
