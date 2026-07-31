@@ -70,23 +70,23 @@ export default function PublishedExamsList() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Search Input */}
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-initial w-full sm:w-auto">
             <Search className="w-4 h-4 text-[#8c8275] absolute left-3 top-2.5" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search published exams..."
-              className="pl-9 pr-3 py-1.5 rounded-xl border border-[#dcd0be] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] w-56"
+              className="pl-9 pr-3 py-1.5 rounded-xl border border-[#dcd0be] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] w-full sm:w-56"
             />
           </div>
 
           <button
             type="button"
             onClick={loadExams}
-            className="p-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4d8c5] text-[#5c5346] transition-colors"
+            className="p-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4d8c5] text-[#5c5346] transition-colors shrink-0"
             title="Refresh list"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

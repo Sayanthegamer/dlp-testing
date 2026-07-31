@@ -50,36 +50,36 @@ export default function TestResultScreen({
       <div className="max-w-3xl w-full mx-auto space-y-8 print:hidden">
         
         {/* Top Summary Card (Exam Native Tone) */}
-        <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+        <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm space-y-4">
           <div className="border-b border-[#DCD5C4] pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#8c4a17] block">
                 Official Examination Summary
               </span>
-              <h1 className="font-serif font-bold text-2xl text-[#232323]">
+              <h1 className="font-serif font-bold text-xl sm:text-2xl text-[#232323]">
                 Test Evaluation Results
               </h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-sans text-[#5c5346] bg-[#f0e6d8] px-3.5 py-1.5 rounded-full font-medium">
+              <span className="text-xs font-sans text-[#5c5346] bg-[#f0e6d8] px-3 py-1 rounded-full font-medium">
                 Candidate: <strong className="text-[#232323]">{studentName}</strong>
               </span>
 
               {/* Submission Status Badge */}
               {submissionStatus === 'submitted' && (
-                <span className="text-xs font-sans font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <span className="text-xs font-sans font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 px-3 py-1 rounded-full flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
                   <span>Submitted to Teacher</span>
                 </span>
               )}
               {submissionStatus === 'submitting' && (
-                <span className="text-xs font-sans font-medium bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <span className="text-xs font-sans font-medium bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1 rounded-full flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" />
-                  <span>Saving Submission...</span>
+                  <span>Saving...</span>
                 </span>
               )}
               {submissionStatus === 'offline' && (
-                <span className="text-xs font-sans text-gray-700 bg-gray-100 border border-gray-300 px-3 py-1.5 rounded-full">
+                <span className="text-xs font-sans text-gray-700 bg-gray-100 border border-gray-300 px-3 py-1 rounded-full">
                   Saved Locally
                 </span>
               )}
@@ -90,30 +90,30 @@ export default function TestResultScreen({
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-sans font-semibold shadow-xs transition-all active:scale-95"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>Print Result Report</span>
+                <span>Print Result</span>
               </button>
             </div>
           </div>
 
           {/* Score Header */}
           {autoGraded.total > 0 ? (
-            <div className="flex flex-wrap items-baseline gap-4 pt-2">
-              <div className="font-serif font-bold text-3xl sm:text-4xl text-[#232323]">
-                {autoGraded.score} <span className="text-xl text-[#736c62] font-normal">/ {autoGraded.total}</span>
+            <div className="flex flex-wrap items-baseline gap-2 sm:gap-4 pt-1">
+              <div className="font-serif font-bold text-2xl sm:text-4xl text-[#232323]">
+                {autoGraded.score} <span className="text-lg sm:text-xl text-[#736c62] font-normal">/ {autoGraded.total}</span>
               </div>
-              <div className="text-sm font-sans font-semibold text-[#5c5346]">
+              <div className="text-xs sm:text-sm font-sans font-semibold text-[#5c5346]">
                 Auto-graded Score ({autoGraded.percentage}%)
               </div>
             </div>
           ) : (
-            <div className="pt-2 font-serif text-lg text-[#5c5346] italic">
+            <div className="pt-2 font-serif text-base sm:text-lg text-[#5c5346] italic">
               All responses submitted and flagged for teacher evaluation.
             </div>
           )}
 
           {/* Pending Review Tally Banner */}
           {pendingReview.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-sans flex items-center gap-2.5">
+            <div className="p-3.5 rounded-xl sm:rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-sans flex items-center gap-2.5">
               <Clock className="w-4 h-4 text-amber-700 shrink-0" />
               <span>
                 <strong>{pendingReview.length} {pendingReview.length === 1 ? 'question' : 'questions'}</strong> routed for teacher review (short answer / unclassified type).
@@ -123,7 +123,7 @@ export default function TestResultScreen({
         </div>
 
         {/* Question-by-Question Detailed Breakdown */}
-        <div className="space-y-5">
+        <div className="space-y-4 sm:space-y-5">
           <h3 className="font-sans font-bold text-xs uppercase tracking-wider text-[#5c5346]">
             Itemized Response Breakdown
           </h3>
@@ -161,33 +161,33 @@ export default function TestResultScreen({
             return (
               <div
                 key={q.id || idx}
-                className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl p-6 shadow-xs space-y-4"
+                className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl p-4 sm:p-6 shadow-xs space-y-3 sm:space-y-4"
               >
-                <div className="flex items-start justify-between gap-4 border-b border-[#f0e6d8] pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-7 h-7 rounded-lg bg-[#232323] text-white flex items-center justify-center font-serif font-bold text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0e6d8] pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#232323] text-white flex items-center justify-center font-serif font-bold text-xs">
                       #{idx + 1}
                     </span>
                     <span className="text-xs font-sans font-medium text-[#736c62] uppercase tracking-wider">
-                      {q.type === 'mcq' ? 'Multiple Choice' : q.type === 'short_answer_numeric' ? 'Numeric Short Answer' : 'Text Short Answer'}
+                      {q.type === 'mcq' ? 'MCQ' : q.type === 'short_answer_numeric' ? 'Numeric Short Answer' : 'Text Short Answer'}
                     </span>
                   </div>
 
                   {/* Status Badge */}
                   {item.status === 'correct' && (
-                    <span className="px-3 py-1 rounded-full bg-[#f4f9f4] border border-[#81c784] text-[#2e7d32] text-xs font-sans font-semibold flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#f4f9f4] border border-[#81c784] text-[#2e7d32] text-xs font-sans font-semibold flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5 text-[#2e7d32]" />
                       <span>Correct (+1)</span>
                     </span>
                   )}
                   {item.status === 'incorrect' && (
-                    <span className="px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-sans font-semibold flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-sans font-semibold flex items-center gap-1">
                       <XCircle className="w-3.5 h-3.5 text-red-600" />
                       <span>Incorrect (0)</span>
                     </span>
                   )}
                   {item.status === 'pending_review' && (
-                    <span className="px-3 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-sans font-semibold flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-sans font-semibold flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-amber-700" />
                       <span>Pending Teacher Review</span>
                     </span>

@@ -39,13 +39,13 @@ export default function InputTabs({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`flex flex-col items-center justify-center p-2.5 rounded-md text-xs transition-all ${
+              className={`flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-md text-[11px] sm:text-xs transition-all ${
                 isActive
                   ? 'bg-white text-[#1c1b18] font-semibold shadow-xs'
                   : 'text-[#6e6456] hover:text-[#1c1b18] hover:bg-[#e4dbcc]'
               }`}
             >
-              <Icon className={`w-4 h-4 mb-1 ${isActive ? 'text-[#a86e2d]' : 'text-[#7e7465]'}`} />
+              <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 mb-0.5 sm:mb-1 ${isActive ? 'text-[#a86e2d]' : 'text-[#7e7465]'}`} />
               <span className="truncate w-full text-center">{t.label}</span>
             </button>
           );

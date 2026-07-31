@@ -49,14 +49,14 @@ export default function QuestionCard({
   return (
     <div
       id={`question-card-${index}`}
-      className={`exam-paper rounded-2xl p-6 sm:p-8 text-[#1c1b18] relative transition-all shadow-sm ${
+      className={`exam-paper rounded-2xl p-4 sm:p-6 md:p-8 text-[#1c1b18] relative transition-all shadow-sm ${
         needsReview ? 'border-2 border-amber-400 bg-[#fefdfa]' : ''
       }`}
     >
       {/* Top Meta Bar */}
-      <div className="flex items-center justify-between border-b border-[#e5dcd0] pb-3.5 mb-5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="w-8 h-8 rounded-lg bg-[#8c4a17] text-white flex items-center justify-center font-serif font-bold text-sm shadow-xs">
+      <div className="flex flex-wrap items-center justify-between border-b border-[#e5dcd0] pb-3 mb-4 sm:mb-5 gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-w-full">
+          <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#8c4a17] text-white flex items-center justify-center font-serif font-bold text-xs sm:text-sm shadow-xs shrink-0">
             #{index + 1}
           </span>
 
@@ -64,38 +64,38 @@ export default function QuestionCard({
           <select
             value={type === 'short_answer_text' || type === 'short_answer' ? 'short_answer_numeric' : type}
             onChange={(e) => onUpdateQuestion(id, { ...question, type: e.target.value })}
-            className="text-xs px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer"
+            className="text-xs px-2 sm:px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer max-w-[180px] sm:max-w-none truncate"
           >
-            <option value="mcq">Multiple Choice (MCQ)</option>
-            <option value="short_answer_numeric">Numerical Question (Integer / Decimal Range)</option>
+            <option value="mcq">MCQ</option>
+            <option value="short_answer_numeric">Numerical Question</option>
           </select>
 
           {/* Deterministic Review Badge */}
           {needsReview ? (
             <span
-              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-sans font-semibold"
+              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-sans font-semibold leading-tight"
               title={`Action required: ${reviewReasons.join(', ')}`}
             >
-              <AlertTriangle className="w-3 h-3 text-amber-700" />
+              <AlertTriangle className="w-3 h-3 text-amber-700 shrink-0" />
               <span>Needs Review ({reviewReasons.join(', ')})</span>
             </span>
           ) : (
             <span
-              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-sans font-semibold"
+              className="flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-sans font-semibold shrink-0"
               title="Verified: Math syntax valid and answer key present"
             >
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
               <span>Verified Ready</span>
             </span>
           )}
         </div>
 
         {/* Card Actions (Duplicate / Delete) */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 shrink-0 ml-auto">
           <button
             type="button"
             onClick={() => onDuplicateQuestion(id)}
-            className="p-2 rounded-lg text-[#736c62] hover:bg-[#ede5d8] transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-[#736c62] hover:bg-[#ede5d8] transition-colors"
             title="Duplicate Question"
           >
             <Copy className="w-4 h-4" />
@@ -103,7 +103,7 @@ export default function QuestionCard({
           <button
             type="button"
             onClick={() => onDeleteQuestion(id)}
-            className="p-2 rounded-lg text-[#c53030] hover:bg-red-50 transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-[#c53030] hover:bg-red-50 transition-colors"
             title="Delete Question"
           >
             <Trash2 className="w-4 h-4" />

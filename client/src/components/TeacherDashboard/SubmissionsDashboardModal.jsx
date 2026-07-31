@@ -283,17 +283,28 @@ export default function SubmissionsDashboardModal({ onClose }) {
           </div>
 
           {/* Right Column: Submission Detail & Manual Grading Inspector */}
-          <div className="flex-1 flex flex-col bg-[#FAF7F0] overflow-hidden">
+          <div className={`${selectedSubmission ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-[#FAF7F0] overflow-hidden`}>
             {selectedSubmission ? (() => {
               const evaluation = evaluateSubmission(selectedSubmission.questions, selectedSubmission.studentAnswers, manualGrades);
 
               return (
                 <div className="flex-1 flex flex-col overflow-hidden">
                   
+                  {/* Mobile Back Button (< md) */}
+                  <div className="md:hidden p-3 border-b border-[#e2d8ca] bg-[#f5efe4] flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSubmission(null)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#dcd0be] text-xs font-bold text-[#1c1b18] shadow-xs active:scale-95"
+                    >
+                      ← Back to Submissions List
+                    </button>
+                  </div>
+
                   {/* Inspector Banner */}
-                  <div className="p-4 sm:p-6 border-b border-[#e2d8ca] bg-[#fcfbfa] flex items-center justify-between gap-4">
+                  <div className="p-4 sm:p-6 border-b border-[#e2d8ca] bg-[#fcfbfa] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-bold uppercase tracking-wider text-[#8c4a17]">
                           Candidate Scorecard
                         </span>
@@ -307,7 +318,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
                           </span>
                         )}
                       </div>
-                      <h2 className="font-serif font-bold text-xl sm:text-2xl text-[#1c1b18]">
+                      <h2 className="font-serif font-bold text-xl sm:text-2xl text-[#1c1b18] mt-1">
                         {selectedSubmission.studentName}
                       </h2>
                       <p className="text-xs text-[#786f63]">
@@ -315,7 +326,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
                       </p>
                     </div>
 
-                    <div className="text-right space-y-1">
+                    <div className="text-left sm:text-right space-y-1 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[#e2d8ca]">
                       <div className="text-xs text-gray-500 font-medium">
                         {evaluation.pendingCount > 0 ? (
                           <span className="text-amber-800 font-semibold">Provisional Score ({evaluation.pendingCount} pending)</span>
@@ -323,7 +334,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
                           <span>Final Score</span>
                         )}
                       </div>
-                      <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18] flex items-baseline justify-end gap-2">
+                      <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18] flex items-baseline justify-start sm:justify-end gap-2">
                         <span>{evaluation.score} / {evaluation.total}</span>
                         <span className="text-xs font-sans font-semibold text-[#8c4a17]">
                           {evaluation.pendingCount > 0
@@ -335,7 +346,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
                         type="button"
                         onClick={handleSaveGrades}
                         disabled={saving}
-                        className="px-4 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 ml-auto"
+                        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50 sm:ml-auto mt-2 sm:mt-0"
                       >
                         <Check className="w-4 h-4" />
                         <span>{saving ? 'Saving...' : 'Save & Finalize Grades'}</span>

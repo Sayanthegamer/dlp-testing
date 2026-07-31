@@ -88,11 +88,11 @@ export default function FloatingMathPopover({ activeMath, targetElement, onSave,
         </div>
 
         {/* Real-time Typeset KaTeX Preview */}
-        <div className="bg-[#f7f2ea] border border-[#e2d8ca] rounded-xl p-4">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#736c62] block mb-2">
+        <div className="bg-[#f7f2ea] border border-[#e2d8ca] rounded-xl p-3 sm:p-4">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#736c62] block mb-1.5">
             Live Exam Typeset Preview
           </span>
-          <div className="text-xl font-serif text-[#1c1b18] min-h-[44px] flex items-center justify-center bg-white rounded-lg border border-[#eae0d2] p-3 shadow-xs">
+          <div className="text-lg sm:text-xl font-serif text-[#1c1b18] min-h-[44px] flex items-center justify-center bg-white rounded-lg border border-[#eae0d2] p-3 shadow-xs overflow-x-auto max-w-full">
             <MathRenderer text={`<math>${cleanPreview}</math>`} />
           </div>
         </div>
