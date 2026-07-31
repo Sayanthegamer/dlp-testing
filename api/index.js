@@ -37,6 +37,16 @@ app.post('/api/verify-password', (req, res) => {
   return res.status(401).json({ success: false, error: 'Incorrect access password.' });
 });
 
+app.post('/api/verify-student-password', (req, res) => {
+  const { password } = req.body || {};
+  const studentPassword = process.env.STUDENT_PASSWORD;
+
+  if (!studentPassword || (password && password.trim() === studentPassword.trim())) {
+    return res.json({ success: true, message: 'Student authenticated successfully.' });
+  }
+  return res.status(401).json({ success: false, error: 'Incorrect student access password.' });
+});
+
 // Public: health check
 app.get('/api/health', (req, res) => {
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));

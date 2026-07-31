@@ -21,7 +21,6 @@ export async function verifyPassword(password) {
   }
 
   if (!response.ok) {
-    // Try to parse JSON error from our API
     let errBody;
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
@@ -32,12 +31,43 @@ export async function verifyPassword(password) {
       throw new Error(errBody.error);
     }
 
-    // Non-JSON response (e.g. Vercel 502 HTML error page) means the serverless function crashed
     if (response.status >= 500) {
       throw new Error(`Server error (${response.status}): The API function failed to start. Check Vercel deployment logs.`);
     }
 
     throw new Error(`Authentication failed (${response.status}).`);
+  }
+  return true;
+}
+
+export async function verifyStudentPassword(password) {
+  let response;
+  try {
+    response = await fetch('/api/verify-student-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+  } catch (networkErr) {
+    throw new Error('Network error: Cannot reach the server. Please check your connection.');
+  }
+
+  if (!response.ok) {
+    let errBody;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      errBody = await response.json().catch(() => null);
+    }
+
+    if (errBody && errBody.error) {
+      throw new Error(errBody.error);
+    }
+
+    if (response.status >= 500) {
+      throw new Error(`Server error (${response.status}): The API function failed to start.`);
+    }
+
+    throw new Error(`Student authentication failed (${response.status}).`);
   }
   return true;
 }

@@ -32,7 +32,7 @@ const authMiddleware = (req, res, next) => {
 
 // Public endpoints
 app.post('/api/verify-password', (req, res) => {
-  const { password } = req.body;
+  const { password } = req.body || {};
   const appPassword = process.env.APP_PASSWORD;
 
   if (!appPassword || (password && password.trim() === appPassword.trim())) {
@@ -40,6 +40,17 @@ app.post('/api/verify-password', (req, res) => {
   }
 
   return res.status(401).json({ success: false, error: 'Incorrect access password.' });
+});
+
+app.post('/api/verify-student-password', (req, res) => {
+  const { password } = req.body || {};
+  const studentPassword = process.env.STUDENT_PASSWORD;
+
+  if (!studentPassword || (password && password.trim() === studentPassword.trim())) {
+    return res.json({ success: true, message: 'Student authenticated successfully.' });
+  }
+
+  return res.status(401).json({ success: false, error: 'Incorrect student access password.' });
 });
 
 app.get('/api/health', (req, res) => {

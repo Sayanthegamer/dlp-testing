@@ -12,63 +12,63 @@ This plan details the technical steps to build the student test-taking flow, acc
 ## Proposed Changes
 
 ### Phase 1: Access & Routing Foundation
-- [ ] Task: Student auth backend & route setup
-  - [ ] Add `STUDENT_PASSWORD` handling from `process.env` in `server/index.js` and `api/index.js`.
-  - [ ] Implement `POST /api/verify-student-password` in both server entrypoints.
-  - [ ] Add `STUDENT_PASSWORD=teststudent123` to `.env.example`.
-- [ ] Task: Client routing & access gate
-  - [ ] Build `client/src/components/Student/StudentAccessGateModal.jsx` targeting `/api/verify-student-password` and `student_access_password` localStorage key.
-  - [ ] Modify `client/src/App.jsx` to read `?mode=student` query param and conditionally render student flow vs. teacher catalogue.
-- [ ] Task: Phase 1 Verification & Checkpoint (Refer to workflow.md)
-  - [ ] Verify student password authentication and gate isolation.
+- [x] Task: Student auth backend & route setup
+  - [x] Add `STUDENT_PASSWORD` handling from `process.env` in `server/index.js` and `api/index.js`.
+  - [x] Implement `POST /api/verify-student-password` in both server entrypoints.
+  - [x] Add `STUDENT_PASSWORD=your_student_password_here` to `server/.env.example`.
+- [x] Task: Client routing & access gate
+  - [x] Build `client/src/components/Student/StudentAccessGateModal.jsx` targeting `/api/verify-student-password` and `student_access_password` localStorage key.
+  - [x] Modify `client/src/App.jsx` to read `?mode=student` query param and conditionally render student flow vs. teacher catalogue.
+- [x] Task: Phase 1 Verification & Checkpoint (Refer to workflow.md)
+  - [x] Verify student password authentication and gate isolation.
 
 ### Phase 2: Question Type Schema Split
-- [ ] Task: AI Parser & Docx normalization updates
-  - [ ] Modify `server/routes/parse.js`: Update `SYSTEM_PROMPT` to emit `"mcq" | "short_answer_numeric" | "short_answer_text"` and `acceptedRange: [min, max]`.
-  - [ ] Update `extractAndParseJson` to preserve `acceptedRange` without inventing defaults.
-  - [ ] Modify `client/src/services/docxParserService.js`: Update non-MCQ fallback/demo data to `short_answer_text`.
-- [ ] Task: Review evaluator & QuestionCard editor updates
-  - [ ] Modify `client/src/services/reviewEvaluator.js`: Add review rules for `"Numeric Range Not Set"` (missing/invalid `acceptedRange` on numeric type) and `"Unclassified Answer Type"` (legacy bare `short_answer`).
-  - [ ] Modify `client/src/components/Catalogue/QuestionCard.jsx`: Update type `<select>` for three explicit options (`mcq`, `short_answer_numeric`, `short_answer_text`) and add center-value + range inputs for `short_answer_numeric`.
-- [ ] Task: Phase 2 Verification & Checkpoint (Refer to workflow.md)
-  - [ ] Verify QuestionCard type switcher, range inputs, and review flag evaluator behavior.
+- [x] Task: AI Parser & Docx normalization updates
+  - [x] Modify `server/routes/parse.js`: Update `SYSTEM_PROMPT` to emit `"mcq" | "short_answer_numeric" | "short_answer_text"` and `acceptedRange: [min, max]`.
+  - [x] Update `extractAndParseJson` to preserve `acceptedRange` without inventing defaults.
+  - [x] Modify `client/src/services/docxParserService.js`: Update non-MCQ fallback/demo data to `short_answer_text`.
+- [x] Task: Review evaluator & QuestionCard editor updates
+  - [x] Modify `client/src/services/reviewEvaluator.js`: Add review rules for `"Numeric Range Not Set"` (missing/invalid `acceptedRange` on numeric type) and `"Unclassified Answer Type"` (legacy bare `short_answer`).
+  - [x] Modify `client/src/components/Catalogue/QuestionCard.jsx`: Update type `<select>` for three explicit options (`mcq`, `short_answer_numeric`, `short_answer_text`) and add center-value + range inputs for `short_answer_numeric`.
+- [x] Task: Phase 2 Verification & Checkpoint (Refer to workflow.md)
+  - [x] Verify QuestionCard type switcher, range inputs, and review flag evaluator behavior.
 
 ### Phase 3: Test-Taking Shell
-- [ ] Task: Student intro & name capture
-  - [ ] Build `client/src/components/Student/StudentNameCapture.jsx` for free-text student name entry in session state.
-  - [ ] Build `client/src/components/Student/TestIntroScreen.jsx` for test title, question count, and "Begin Test" action.
-- [ ] Task: Read-only MathRenderer & question view
-  - [ ] Modify `client/src/components/PreviewPanel/MathRenderer.jsx`: Add `readOnly` prop suppressing click-to-edit cursor/hover affordance while preserving KaTeX error fallback badge.
-  - [ ] Build `client/src/components/Student/TestQuestionView.jsx`: Render single question with read-only MathRenderer, selectable MCQ choices, plain text short-answer input, Next/Previous controls, and `sessionStorage` mirroring.
-  - [ ] Build `client/src/components/Student/TestReviewScreen.jsx`: Overview of answered/unanswered questions with jump-to links and explicit "Submit Test" action.
-- [ ] Task: Phase 3 Verification & Checkpoint (Refer to workflow.md)
-  - [ ] Verify test navigation, MathRenderer read-only mode, and sessionStorage progress recovery.
+- [x] Task: Student intro & name capture
+  - [x] Build `client/src/components/Student/StudentNameCapture.jsx` for free-text student name entry in session state.
+  - [x] Build `client/src/components/Student/TestIntroScreen.jsx` for test title, question count, and "Begin Test" action.
+- [x] Task: Read-only MathRenderer & question view
+  - [x] Modify `client/src/components/PreviewPanel/MathRenderer.jsx`: Add `readOnly` prop suppressing click-to-edit cursor/hover affordance while preserving KaTeX error fallback badge.
+  - [x] Build `client/src/components/Student/TestQuestionView.jsx`: Render single question with read-only MathRenderer, selectable MCQ choices, plain text short-answer input, Next/Previous controls, and `sessionStorage` mirroring.
+  - [x] Build `client/src/components/Student/TestReviewScreen.jsx`: Overview of answered/unanswered questions with jump-to links and explicit "Submit Test" action.
+- [x] Task: Phase 3 Verification & Checkpoint (Refer to workflow.md)
+  - [x] Verify test navigation, MathRenderer read-only mode, and sessionStorage progress recovery.
 
 ### Phase 4: Grading Engine & Result Screen
-- [ ] Task: Core grading service
-  - [ ] Build `client/src/services/gradingService.js`: Implement `gradeAttempt(questions, studentAnswers)`.
-  - [ ] MCQ grading: exact option index match against `correctAnswer`.
-  - [ ] `short_answer_numeric`: float parsing and inclusive membership check in `acceptedRange`. Invalid/missing range → `pendingReview`.
-  - [ ] `short_answer_text` and legacy bare `short_answer`: route to `pendingReview`.
-  - [ ] Edge case handling: `autoGraded.total === 0` handled explicitly without `0/0` or `NaN%`.
-- [ ] Task: Result screen
-  - [ ] Build `client/src/components/Student/TestResultScreen.jsx`: Score summary (only if `autoGraded.total > 0`), pending review count, per-question breakdown in exam-native styling.
-- [ ] Task: Phase 4 Verification & Checkpoint (Refer to workflow.md)
-  - [ ] Verify grading accuracy across MCQ, numerical range, and pending review cases.
+- [x] Task: Core grading service
+  - [x] Build `client/src/services/gradingService.js`: Implement `gradeAttempt(questions, studentAnswers)`.
+  - [x] MCQ grading: exact option index match against `correctAnswer`.
+  - [x] `short_answer_numeric`: float parsing and inclusive membership check in `acceptedRange`. Invalid/missing range → `pendingReview`.
+  - [x] `short_answer_text` and legacy bare `short_answer`: route to `pendingReview`.
+  - [x] Edge case handling: `autoGraded.total === 0` handled explicitly without `0/0` or `NaN%`.
+- [x] Task: Result screen
+  - [x] Build `client/src/components/Student/TestResultScreen.jsx`: Score summary (only if `autoGraded.total > 0`), pending review count, per-question breakdown in exam-native styling.
+- [x] Task: Phase 4 Verification & Checkpoint (Refer to workflow.md)
+  - [x] Verify grading accuracy across MCQ, numerical range, and pending review cases.
 
 ### Phase 5: Integration, Edge Cases & Verification
-- [ ] Task: Wire full student state machine into `App.jsx`
-  - [ ] Connect state machine: Access Gate → Name Capture → Intro → Question View → Review → Result.
-- [ ] Task: Comprehensive manual verification pass
-  - [ ] All-MCQ test end-to-end check.
-  - [ ] Mixed MCQ + `short_answer_numeric` check.
-  - [ ] `short_answer_numeric` missing range check.
-  - [ ] `short_answer_text` pending review check.
-  - [ ] Legacy bare `short_answer` unclassified review flag check.
-  - [ ] All-unclassified/text test zero-score check.
-  - [ ] KaTeX error fallback in student view check.
-  - [ ] Mid-test refresh `sessionStorage` recovery check.
-  - [ ] Password gate isolation check (`APP_PASSWORD` vs `STUDENT_PASSWORD`).
-  - [ ] `QuestionCard` type switcher check.
-- [ ] Task: Phase 5 Verification & Checkpoint (Refer to workflow.md)
-  - [ ] Run `npm run build` in `client/`, confirm zero errors, update registry and docs.
+- [x] Task: Wire full student state machine into `App.jsx`
+  - [x] Connect state machine: Access Gate → Name Capture → Intro → Question View → Review → Result.
+- [x] Task: Comprehensive manual verification pass
+  - [x] All-MCQ test end-to-end check.
+  - [x] Mixed MCQ + `short_answer_numeric` check.
+  - [x] `short_answer_numeric` missing range check.
+  - [x] `short_answer_text` pending review check.
+  - [x] Legacy bare `short_answer` unclassified review flag check.
+  - [x] All-unclassified/text test zero-score check.
+  - [x] KaTeX error fallback in student view check.
+  - [x] Mid-test refresh `sessionStorage` recovery check.
+  - [x] Password gate isolation check (`APP_PASSWORD` vs `STUDENT_PASSWORD`).
+  - [x] `QuestionCard` type switcher check.
+- [x] Task: Phase 5 Verification & Checkpoint (Refer to workflow.md)
+  - [x] Run `npm run build` in `client/`, confirm zero errors, update registry and docs.

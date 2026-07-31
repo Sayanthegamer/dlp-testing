@@ -101,7 +101,7 @@ function processDocxLines(lines, allMathSpans) {
 
   return {
     questionText,
-    type: isMcq ? "mcq" : "short_answer",
+    type: isMcq ? "mcq" : "short_answer_text",
     options: isMcq ? options : [],
     correctAnswer: null,
     mathSpans: allMathSpans,

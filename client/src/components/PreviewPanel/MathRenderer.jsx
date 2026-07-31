@@ -1,7 +1,7 @@
 import React from 'react';
 import katex from 'katex';
 
-export default function MathRenderer({ text = '', needsReview = false, onSelectMathForEdit }) {
+export default function MathRenderer({ text = '', needsReview = false, readOnly = false, onSelectMathForEdit }) {
   if (!text || text.trim() === '') {
     return <span className="italic text-[#8c8275]">No text transcribed yet.</span>;
   }
@@ -63,9 +63,11 @@ export default function MathRenderer({ text = '', needsReview = false, onSelectM
           return (
             <span
               key={idx}
-              onClick={() => onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
-              className="inline-block font-sans text-xs font-semibold mx-1 cursor-pointer rounded px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 hover:bg-amber-200 transition-all"
-              title="Math formula syntax needs review — click to edit visually"
+              onClick={() => !readOnly && onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
+              className={`inline-block font-sans text-xs font-semibold mx-1 rounded px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 ${
+                readOnly ? '' : 'cursor-pointer hover:bg-amber-200 transition-all'
+              }`}
+              title={readOnly ? "Math formula needs review" : "Math formula syntax needs review — click to edit visually"}
             >
               [Math Formula Needs Review]
             </span>
@@ -75,13 +77,13 @@ export default function MathRenderer({ text = '', needsReview = false, onSelectM
         return (
           <span
             key={idx}
-            onClick={() => onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
-            className={`inline-block font-serif mx-0.5 cursor-pointer rounded px-1 transition-all ${
-              isHighlighted
-                ? 'math-review-highlight hover:bg-amber-200/70'
-                : 'hover:bg-amber-100/50 hover:underline'
+            onClick={() => !readOnly && onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
+            className={`inline-block font-serif mx-0.5 rounded px-1 transition-all ${
+              readOnly
+                ? ''
+                : `cursor-pointer ${isHighlighted ? 'math-review-highlight hover:bg-amber-200/70' : 'hover:bg-amber-100/50 hover:underline'}`
             }`}
-            title="Click to edit formula visually"
+            title={readOnly ? undefined : "Click to edit formula visually"}
             dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
         );

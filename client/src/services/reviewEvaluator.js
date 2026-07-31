@@ -15,10 +15,24 @@ export function computeNeedsReview(question) {
     reasons.push('Answer Key Unset');
   }
 
-  // Rule 2: MCQ option counts
+  // Rule 2: Question Type specific validation
   if (question.type === 'mcq') {
     if (!Array.isArray(question.options) || question.options.length < 2) {
       reasons.push('Fewer than 2 MCQ Options');
+    }
+  } else if (question.type === 'short_answer') {
+    // Bare legacy short_answer type
+    reasons.push('Unclassified Answer Type');
+  } else if (question.type === 'short_answer_numeric') {
+    const range = question.acceptedRange;
+    const isValidRange = Array.isArray(range) && 
+      range.length === 2 && 
+      typeof range[0] === 'number' && Number.isFinite(range[0]) &&
+      typeof range[1] === 'number' && Number.isFinite(range[1]) &&
+      range[0] <= range[1];
+    
+    if (!isValidRange) {
+      reasons.push('Numeric Range Not Set');
     }
   }
 

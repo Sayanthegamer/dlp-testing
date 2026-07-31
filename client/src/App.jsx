@@ -5,7 +5,12 @@ import QuestionCatalogue from './components/Catalogue/QuestionCatalogue';
 import FloatingMathPopover from './components/VisualMathEditor/FloatingMathPopover';
 import PrintViewModal from './components/Common/PrintViewModal';
 import LoadingSpinner from './components/Common/LoadingSpinner';
-import AccessGateModal from './components/Common/AccessGateModal';
+import StudentAccessGateModal from './components/Student/StudentAccessGateModal';
+import StudentNameCapture from './components/Student/StudentNameCapture';
+import TestIntroScreen from './components/Student/TestIntroScreen';
+import TestQuestionView from './components/Student/TestQuestionView';
+import TestReviewScreen from './components/Student/TestReviewScreen';
+import TestResultScreen from './components/Student/TestResultScreen';
 import { parseQuestionText, parseQuestionImage, parseDocxStructure } from './services/apiService';
 
 const INITIAL_CATALOGUE = {
@@ -52,13 +57,67 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [isJustParsed, setIsJustParsed] = useState(false);
 
+  // Mode Switch Detection: ?mode=student
+  const searchParams = new URLSearchParams(window.location.search);
+  const isStudentMode = searchParams.get('mode') === 'student';
+
+  // Student Flow State Machine
+  const [isStudentAuthenticated, setIsStudentAuthenticated] = useState(false);
+  const [studentStep, setStudentStep] = useState('name'); // 'name' | 'intro' | 'test' | 'review' | 'result'
+  const [studentName, setStudentName] = useState('');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [studentAnswers, setStudentAnswers] = useState({});
+
   // Check stored auth on load
   useEffect(() => {
     const savedPwd = localStorage.getItem('app_access_password');
     if (savedPwd) {
       setIsAuthenticated(true);
     }
+
+    const savedStudentPwd = localStorage.getItem('student_access_password');
+    if (savedStudentPwd) {
+      setIsStudentAuthenticated(true);
+    }
   }, []);
+
+  // Restore student in-progress answers from sessionStorage
+  useEffect(() => {
+    if (isStudentMode) {
+      try {
+        const sessionKey = `student_answers_${testTitle}`;
+        const savedSession = sessionStorage.getItem(sessionKey);
+        if (savedSession) {
+          const parsed = JSON.parse(savedSession);
+          if (parsed && typeof parsed === 'object') {
+            setStudentAnswers(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not restore sessionStorage answers:', e);
+      }
+    }
+  }, [isStudentMode, testTitle]);
+
+  // Mirror student answers to sessionStorage
+  const handleStudentAnswerChange = (questionId, value) => {
+    const updated = { ...studentAnswers, [questionId]: value };
+    setStudentAnswers(updated);
+    try {
+      const sessionKey = `student_answers_${testTitle}`;
+      sessionStorage.setItem(sessionKey, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Could not save to sessionStorage:', e);
+    }
+  };
+
+  const handleClearStudentSession = () => {
+    setStudentAnswers({});
+    try {
+      const sessionKey = `student_answers_${testTitle}`;
+      sessionStorage.removeItem(sessionKey);
+    } catch (e) {}
+  };
 
   // Floating Math Popover state
   const [activeMathEdit, setActiveMathEdit] = useState(null); // { questionId, mathLatex }
@@ -240,6 +299,90 @@ export default function App() {
     setActiveMathEdit(null);
   };
 
+  // Render Student Flow if ?mode=student query param is present
+  if (isStudentMode) {
+    if (!isStudentAuthenticated) {
+      return (
+        <StudentAccessGateModal
+          onAuthenticated={() => setIsStudentAuthenticated(true)}
+        />
+      );
+    }
+
+    if (studentStep === 'name') {
+      return (
+        <StudentNameCapture
+          defaultName={studentName}
+          onNameSubmit={(name) => {
+            setStudentName(name);
+            setStudentStep('intro');
+          }}
+        />
+      );
+    }
+
+    if (studentStep === 'intro') {
+      return (
+        <TestIntroScreen
+          testTitle={testTitle}
+          questionCount={questions.length}
+          studentName={studentName}
+          onStartTest={() => {
+            setStudentStep('test');
+            setCurrentQuestionIndex(0);
+          }}
+        />
+      );
+    }
+
+    if (studentStep === 'test') {
+      return (
+        <TestQuestionView
+          questions={questions}
+          currentIndex={currentQuestionIndex}
+          answers={studentAnswers}
+          onAnswerChange={handleStudentAnswerChange}
+          onNext={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+          onPrevious={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
+          onReview={() => setStudentStep('review')}
+          studentName={studentName}
+        />
+      );
+    }
+
+    if (studentStep === 'review') {
+      return (
+        <TestReviewScreen
+          questions={questions}
+          answers={studentAnswers}
+          onJumpToQuestion={(idx) => {
+            setCurrentQuestionIndex(idx);
+            setStudentStep('test');
+          }}
+          onSubmitTest={() => setStudentStep('result')}
+        />
+      );
+    }
+
+    if (studentStep === 'result') {
+      return (
+        <TestResultScreen
+          questions={questions}
+          studentAnswers={studentAnswers}
+          studentName={studentName}
+          onRestartTest={() => {
+            handleClearStudentSession();
+            setStudentStep('intro');
+          }}
+          onExitStudentMode={() => {
+            window.location.href = window.location.pathname;
+          }}
+        />
+      );
+    }
+  }
+
+  // Teacher Catalogue Mode (Default)
   return (
     <div className="min-h-screen bg-[#f7f4ee] flex flex-col font-sans">
       {/* Navbar */}

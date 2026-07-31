@@ -67,7 +67,8 @@ export default function QuestionCard({
             className="text-xs px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer"
           >
             <option value="mcq">Multiple Choice (MCQ)</option>
-            <option value="short_answer">Short Answer</option>
+            <option value="short_answer_numeric">Numeric Short Answer</option>
+            <option value="short_answer_text">Text Short Answer (Manual Review)</option>
           </select>
 
           {/* Deterministic Review Badge */}
@@ -256,17 +257,80 @@ export default function QuestionCard({
         </div>
       )}
 
-      {/* Short Answer mode display & edit */}
-      {type === 'short_answer' && (
+      {/* Numeric Short Answer Mode */}
+      {type === 'short_answer_numeric' && (
+        <div className="mt-4 p-4 rounded-xl bg-[#faf7f2] border border-[#e2d8ca] space-y-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#736c62] block">
+            Numeric Answer Key & Tolerance Range
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans">
+            <div>
+              <label className="block text-[11px] font-medium text-[#5c5346] mb-1">
+                Center Value (Target)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={correctAnswer !== undefined && correctAnswer !== null ? correctAnswer : ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                  onUpdateQuestion(id, { ...question, correctAnswer: val });
+                }}
+                placeholder="e.g. 3.1"
+                className="w-full px-3 py-1.5 rounded-lg border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-[#5c5346] mb-1">
+                Min Range (Inclusive)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={Array.isArray(question.acceptedRange) && typeof question.acceptedRange[0] === 'number' ? question.acceptedRange[0] : ''}
+                onChange={(e) => {
+                  const minVal = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                  const currentMax = Array.isArray(question.acceptedRange) ? question.acceptedRange[1] : undefined;
+                  const newRange = (minVal === undefined && currentMax === undefined) ? undefined : [minVal, currentMax];
+                  onUpdateQuestion(id, { ...question, acceptedRange: newRange });
+                }}
+                placeholder="e.g. 3.0"
+                className="w-full px-3 py-1.5 rounded-lg border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-[#5c5346] mb-1">
+                Max Range (Inclusive)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={Array.isArray(question.acceptedRange) && typeof question.acceptedRange[1] === 'number' ? question.acceptedRange[1] : ''}
+                onChange={(e) => {
+                  const maxVal = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                  const currentMin = Array.isArray(question.acceptedRange) ? question.acceptedRange[0] : undefined;
+                  const newRange = (currentMin === undefined && maxVal === undefined) ? undefined : [currentMin, maxVal];
+                  onUpdateQuestion(id, { ...question, acceptedRange: newRange });
+                }}
+                placeholder="e.g. 3.2"
+                className="w-full px-3 py-1.5 rounded-lg border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Text / Legacy Short Answer Mode */}
+      {(type === 'short_answer_text' || type === 'short_answer') && (
         <div className="mt-4 p-4 rounded-xl bg-[#faf7f2] border border-[#e2d8ca] space-y-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-[#736c62] block">
-            Expected Answer Key (Short Answer)
+            Expected Answer Key (Text / Free-Form — Always Pending Review)
           </span>
           <input
             type="text"
             value={correctAnswer !== undefined && correctAnswer !== null ? correctAnswer : ''}
             onChange={(e) => onUpdateQuestion(id, { ...question, correctAnswer: e.target.value })}
-            placeholder="Enter expected answer value (e.g. 5, x = 2, or short text)..."
+            placeholder="Enter reference answer value (e.g. x = 2)..."
             className="w-full px-3.5 py-2 rounded-xl border border-[#c9bea9] bg-white font-serif text-base text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d]"
           />
         </div>

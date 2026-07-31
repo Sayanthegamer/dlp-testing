@@ -12,9 +12,10 @@ Your task is to parse input (informal text, photo of exam paper, or document str
     {
       "id": "q1",
       "questionText": "Question stem text with math enclosed in <math>LaTeX</math> tags. E.g. Solve for x: <math>x^2 + 2x - 3 = 0</math>",
-      "type": "mcq" | "short_answer",
+      "type": "mcq" | "short_answer_numeric" | "short_answer_text",
       "options": ["<math>Option A</math>", "<math>Option B</math>", "<math>Option C</math>", "<math>Option D</math>"],
       "correctAnswer": 0,
+      "acceptedRange": [1.99, 2.01],
       "mathSpans": ["x^2 + 2x - 3 = 0"],
       "confidenceScore": 0.95,
       "needsReview": false
@@ -24,12 +25,13 @@ Your task is to parse input (informal text, photo of exam paper, or document str
 
 CRITICAL RULES:
 1. <math>...</math> tags are ONLY for mathematical formulas, equations, variables, and math symbols (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
-2. Do NOT place plain English text, computer science terms, or general option descriptions (e.g. "An electronic hardware", "Calculated value") inside <math> tags.
-3. If the input contains MULTIPLE questions (e.g. a page with Question 1, Question 2, Question 3...), extract ALL questions into the "questions" array.
-4. For MCQ questions, populate "options" as an array of 4 option strings.
-5. For Short Answer questions, set "type": "short_answer" and "options": [].
-6. Set "correctAnswer" to the integer index (0-3) for MCQ if identifiable, or a string/number for short_answer.
-7. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+2. Do NOT place plain English text, computer science terms, or general option descriptions inside <math> tags.
+3. If the input contains MULTIPLE questions (e.g. Question 1, Question 2...), extract ALL questions into the "questions" array.
+4. For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq".
+5. For numeric Short Answer questions (where the answer is a number/float), set "type": "short_answer_numeric", "options": [], "correctAnswer": numeric_value, and "acceptedRange": [min, max] (e.g. ±1% or ±0.01 tolerance).
+6. For free-text or non-numeric Short Answer questions, set "type": "short_answer_text" and "options": [].
+7. Set "correctAnswer" to integer index (0-3) for MCQ if identifiable, or a number for short_answer_numeric, or null/string for short_answer_text.
+8. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');
@@ -80,20 +82,26 @@ function extractAndParseJson(text) {
   // Normalize each question
   questions = questions.map((q, idx) => {
     const questionText = q.questionText || `Question ${idx + 1}`;
-    const type = q.type || (q.options && q.options.length > 0 ? "mcq" : "short_answer");
+    const type = q.type || (q.options && q.options.length > 0 ? "mcq" : "short_answer_text");
     const options = Array.isArray(q.options) ? q.options : [];
     
     // Auto-extract mathSpans
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
     const mathSpans = mathMatches.map(m => m.replace(/<\/?math>/g, ''));
 
-    // Do NOT default missing correctAnswer to 0 (hard product rule). Set to null if missing/unspecified.
+    // Do NOT default missing correctAnswer to 0. Set to null if missing/unspecified.
     let correctAnswer = null;
     if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
       correctAnswer = q.correctAnswer;
     }
 
-    return {
+    // Preserve acceptedRange if provided (must be array of length 2). Do NOT default/invent range if missing.
+    let acceptedRange = undefined;
+    if (Array.isArray(q.acceptedRange) && q.acceptedRange.length === 2) {
+      acceptedRange = q.acceptedRange;
+    }
+
+    const normalized = {
       id: q.id || `q_${Date.now()}_${idx}`,
       questionText,
       type,
@@ -103,7 +111,19 @@ function extractAndParseJson(text) {
       confidenceScore: q.confidenceScore || 0.95,
       needsReview: correctAnswer === null || q.needsReview || false
     };
+
+    if (acceptedRange !== undefined) {
+      normalized.acceptedRange = acceptedRange;
+    }
+
+    return normalized;
   });
+
+  return {
+    testTitle: parsed.testTitle || "Mathematics Test Paper",
+    questions
+  };
+}
 
   return {
     testTitle: parsed.testTitle || "Mathematics Test Paper",
