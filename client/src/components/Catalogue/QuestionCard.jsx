@@ -321,6 +321,7 @@ export default function QuestionCard({
       )}
 
       {/* Text / Legacy Short Answer Mode */}
+      {/* Note: Preserving || type === 'short_answer' is intentional for backwards compatibility so unclassified legacy questions render text input rather than a blank card. */}
       {(type === 'short_answer_text' || type === 'short_answer') && (
         <div className="mt-4 p-4 rounded-xl bg-[#faf7f2] border border-[#e2d8ca] space-y-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-[#736c62] block">

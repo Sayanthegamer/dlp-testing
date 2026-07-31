@@ -3,6 +3,30 @@ import MathRenderer from '../PreviewPanel/MathRenderer';
 import { fetchSubmissions, gradeSubmission } from '../../services/apiService';
 import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare } from 'lucide-react';
 
+function computeDisplayedScore(submission, manualGrades) {
+  if (!submission || !Array.isArray(submission.questions)) return '0 / 0';
+  let totalScore = 0;
+
+  submission.questions.forEach(q => {
+    const studentAns = submission.studentAnswers ? submission.studentAnswers[q.id] : undefined;
+    const manualInfo = manualGrades[q.id];
+
+    let isCorrect = false;
+    if (manualInfo && manualInfo.status) {
+      isCorrect = manualInfo.status === 'correct';
+    } else if (q.type === 'mcq') {
+      isCorrect = studentAns === q.correctAnswer;
+    } else if (q.type === 'short_answer_numeric' && Array.isArray(q.acceptedRange)) {
+      const val = parseFloat(studentAns);
+      isCorrect = !isNaN(val) && val >= q.acceptedRange[0] && val <= q.acceptedRange[1];
+    }
+
+    if (isCorrect) totalScore += 1;
+  });
+
+  return `${totalScore} / ${submission.questions.length}`;
+}
+
 export default function SubmissionsDashboardModal({ onClose }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -280,14 +304,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
                   <div className="text-right space-y-1">
                     <div className="text-xs text-gray-500 font-medium">Final Score</div>
                     <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18]">
-                      {(() => {
-                        let score = selectedSubmission.autoGraded ? selectedSubmission.autoGraded.score : 0;
-                        Object.values(manualGrades).forEach(g => {
-                          if (g && g.status === 'correct') score += (g.score || 1);
-                        });
-                        const total = selectedSubmission.questions ? selectedSubmission.questions.length : 0;
-                        return `${score} / ${total}`;
-                      })()}
+                      {computeDisplayedScore(selectedSubmission, manualGrades)}
                     </div>
                     <button
                       type="button"

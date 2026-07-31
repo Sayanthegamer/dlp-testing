@@ -57,6 +57,7 @@ export default function App() {
   const [testTitle, setTestTitle] = useState(INITIAL_CATALOGUE.testTitle);
   const [questions, setQuestions] = useState(INITIAL_CATALOGUE.questions);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Processing...');
   const [isJustParsed, setIsJustParsed] = useState(false);
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
 

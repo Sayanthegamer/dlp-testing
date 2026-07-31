@@ -70,8 +70,6 @@ given question.
   copy from the same work).
 
 ## Explicitly Out of Scope for This Phase
-- No test-taking flow, timer, or student-facing UI yet (that's phase 2).
-- No accounts/login yet — but don't hardcode assumptions that would block
-  adding per-teacher scoping later.
-- No API key ever touches the browser or the teacher's hands, in any
-  form, at any point — see tech-stack.md for how this is enforced.
+- No multi-tenant accounts/database login yet — per-teacher password isolation (`APP_PASSWORD` / `STUDENT_PASSWORD`) is enforced.
+- Serverless File Persistence: In production serverless deployments (Vercel), submissions and exam snapshots use `/tmp/` file storage fallback. A external cloud database (e.g. Supabase, PostgreSQL, or KV) is out of scope for the current file-storage phase.
+- No API key ever touches the browser or the teacher's hands, in any form, at any point — see tech-stack.md for how this is enforced.
