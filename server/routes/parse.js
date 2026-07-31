@@ -123,6 +123,14 @@ function validateJsonSchema(data) {
   return true;
 }
 
+function getGeminiModelName() {
+  const model = process.env.GEMINI_MODEL;
+  if (!model || model.includes('3.5')) {
+    return 'gemini-1.5-flash';
+  }
+  return model;
+}
+
 // POST /api/parse-question with Automatic Key Fallback & Failover
 router.post('/parse-question', async (req, res) => {
   const { type, rawText, imageBase64, mediaType, docxStructure } = req.body;
@@ -145,7 +153,8 @@ router.post('/parse-question', async (req, res) => {
   for (const provider of providers) {
     try {
       if (provider.name === 'gemini') {
-        console.log(`[Parser] Attempting Gemini API (${process.env.GEMINI_MODEL || 'gemini-1.5-flash'})...`);
+        const activeModel = getGeminiModelName();
+        console.log(`[Parser] Attempting Gemini API (${activeModel})...`);
         const data = await parseWithGemini({
           geminiKey: provider.key,
           type,
@@ -181,22 +190,30 @@ router.post('/parse-question', async (req, res) => {
     }
   }
 
-  // If both keys failed or no keys configured, gracefully fall back to local smart demo response
-  console.log('[Parser Info] No functional API keys available or all API providers failed. Using Smart Demo Fallback.');
+  // If API keys were provided but failed, throw explicit error so the user knows what went wrong
+  if (providers.length > 0) {
+    const errDetails = errors.map(e => `[${e.provider}]: ${e.error}`).join(' | ');
+    return res.status(500).json({
+      success: false,
+      error: `AI API call failed: ${errDetails}`
+    });
+  }
+
+  // If no keys configured at all, gracefully fall back to local smart demo response
+  console.log('[Parser Info] No API keys configured. Using Smart Demo Fallback.');
   const simulatedResult = generateLocalFallback(type, rawText, docxStructure);
   
   return res.json({
     success: true,
     data: simulatedResult,
-    mode: 'demo_fallback',
-    warnings: errors.length > 0 ? errors : undefined
+    mode: 'demo_fallback'
   });
 });
 
 // Google Gemini Parser Implementation
 async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, docxStructure }) {
   const genAI = new GoogleGenerativeAI(geminiKey);
-  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const modelName = getGeminiModelName();
   const model = genAI.getGenerativeModel({
     model: modelName,
     generationConfig: {
