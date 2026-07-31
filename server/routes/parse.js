@@ -125,12 +125,6 @@ function extractAndParseJson(text) {
   };
 }
 
-  return {
-    testTitle: parsed.testTitle || "Mathematics Test Paper",
-    questions
-  };
-}
-
 // Validate shape of parsed JSON structure
 function validateJsonSchema(data) {
   if (!data || typeof data !== 'object') return false;
@@ -308,7 +302,7 @@ function generateLocalFallback(type, rawText = '', docxStructure = null) {
         {
           id: "q_docx_1",
           questionText: docxStructure.questionText || "Extracted Docx Question: <math>x^2 + y^2 = r^2</math>",
-          type: docxStructure.options && docxStructure.options.length > 0 ? "mcq" : "short_answer",
+          type: docxStructure.options && docxStructure.options.length > 0 ? "mcq" : "short_answer_text",
           options: docxStructure.options || ["<math>r = \\sqrt{x^2+y^2}</math>", "<math>r = x+y</math>", "<math>r = x^2</math>", "<math>r = y^2</math>"],
           correctAnswer: 0,
           mathSpans: docxStructure.mathSpans || ["x^2 + y^2 = r^2"],
