@@ -12,6 +12,7 @@ import TestIntroScreen from './components/Student/TestIntroScreen';
 import TestQuestionView from './components/Student/TestQuestionView';
 import TestReviewScreen from './components/Student/TestReviewScreen';
 import TestResultScreen from './components/Student/TestResultScreen';
+import SubmissionsDashboardModal from './components/TeacherDashboard/SubmissionsDashboardModal';
 import { parseQuestionText, parseQuestionImage, parseDocxStructure } from './services/apiService';
 
 const INITIAL_CATALOGUE = {
@@ -55,8 +56,8 @@ export default function App() {
   const [testTitle, setTestTitle] = useState(INITIAL_CATALOGUE.testTitle);
   const [questions, setQuestions] = useState(INITIAL_CATALOGUE.questions);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
   const [isJustParsed, setIsJustParsed] = useState(false);
+  const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
 
   // Mode Switch Detection: ?mode=student
   const searchParams = new URLSearchParams(window.location.search);
@@ -391,6 +392,7 @@ export default function App() {
       <Navbar
         onReset={handleReset}
         onOpenPrintView={() => setShowPrintModal(true)}
+        onOpenSubmissions={() => setShowSubmissionsModal(true)}
       />
 
       {/* Main Content Area */}
@@ -453,6 +455,13 @@ export default function App() {
           testTitle={testTitle}
           questions={questions}
           onClose={() => setShowPrintModal(false)}
+        />
+      )}
+
+      {/* Submissions & Grading Dashboard Modal */}
+      {showSubmissionsModal && (
+        <SubmissionsDashboardModal
+          onClose={() => setShowSubmissionsModal(false)}
         />
       )}
 

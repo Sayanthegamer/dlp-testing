@@ -109,6 +109,49 @@ export async function checkServerHealth() {
   }
 }
 
+export async function submitStudentTest(payload) {
+  try {
+    const response = await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `Submission HTTP error ${response.status}`);
+    }
+    return await response.json();
+  } catch (err) {
+    console.warn('[Student Submission Warn]: Server offline or request failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchSubmissions() {
+  const response = await fetch('/api/submissions', {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch submissions (${response.status})`);
+  }
+  return await response.json();
+}
+
+export async function gradeSubmission(submissionId, manualGrades) {
+  const response = await fetch(`/api/submissions/${submissionId}/grade`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ manualGrades })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to grade submission (${response.status})`);
+  }
+  return await response.json();
+}
+
 async function handleApiResponse(response) {
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));

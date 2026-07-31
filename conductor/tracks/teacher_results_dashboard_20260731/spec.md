@@ -11,6 +11,10 @@ This track implements the server-side persistence for student test submissions a
 
 ### 3.1 Backend API & Persistence (`server/routes/submissions.js` or `server/index.js`)
 - `POST /api/submissions`: Public endpoint to store a completed student test attempt.
+  - **Security & Append-Only Protection**:
+    - Strictly **append-only**: Server generates a random UUID/timestamp ID (`sub_${Date.now()}_${randomId}`); client-provided IDs are ignored.
+    - No overwrite, truncation, or deletion capabilities exist on this route.
+    - Strict payload validation: string length capping (`studentName` max 100 chars, text answers max 5,000 chars), max array size limits, and body size limits to prevent disk exhaustion / DoS attacks.
   - Payload schema:
     ```json
     {

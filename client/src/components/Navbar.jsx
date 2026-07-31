@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RefreshCw, Printer, Sparkles } from 'lucide-react';
+import { BookOpen, RefreshCw, Printer, Award } from 'lucide-react';
 import { checkServerHealth } from '../services/apiService';
 
-export default function Navbar({ onReset, onOpenPrintView }) {
+export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions }) {
   const [serverHealth, setServerHealth] = useState({ status: 'checking' });
 
   useEffect(() => {
@@ -48,6 +48,17 @@ export default function Navbar({ onReset, onOpenPrintView }) {
               </>
             )}
           </div>
+
+          {/* Submissions Dashboard Button */}
+          <button
+            type="button"
+            onClick={onOpenSubmissions}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-[#fbf9f5] text-xs font-semibold shadow-xs transition-all active:scale-95"
+            title="Open Teacher Submissions Dashboard"
+          >
+            <Award className="w-4 h-4 text-[#e6cca6]" />
+            <span className="hidden sm:inline">Submissions & Grading</span>
+          </button>
 
           {/* Print / Save PDF Export Button */}
           <button

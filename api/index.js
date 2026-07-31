@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const parseRoutes = require('../server/routes/parse');
+const submissionsRoutes = require('../server/routes/submissions');
 
 const app = express();
 
@@ -63,6 +64,9 @@ app.get('/api/health', (req, res) => {
     geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
   });
 });
+
+// Submissions API routes
+app.use('/api', submissionsRoutes);
 
 // Protected: mount parse routes at /api with auth
 app.use('/api', authMiddleware, parseRoutes);

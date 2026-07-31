@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import ResultPrintModal from './ResultPrintModal';
 import { gradeAttempt } from '../../services/gradingService';
-import { CheckCircle2, XCircle, Clock, RotateCcw, Home, Printer } from 'lucide-react';
+import { submitStudentTest } from '../../services/apiService';
+import { CheckCircle2, XCircle, Clock, RotateCcw, Home, Printer, Send } from 'lucide-react';
 
 export default function TestResultScreen({
   questions,
@@ -13,10 +14,36 @@ export default function TestResultScreen({
   onExitStudentMode
 }) {
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState('submitting'); // 'submitting' | 'submitted' | 'offline'
+
   const result = gradeAttempt(questions, studentAnswers);
   const { autoGraded, pendingReview, perQuestion } = result;
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+  useEffect(() => {
+    let isMounted = true;
+    async function doSubmit() {
+      const payload = {
+        testTitle: testTitle || 'Mathematics Practice Test',
+        studentName: studentName || 'Candidate',
+        autoGraded,
+        pendingCount: pendingReview.length,
+        questions,
+        studentAnswers
+      };
+      const res = await submitStudentTest(payload);
+      if (isMounted) {
+        if (res && res.success) {
+          setSubmissionStatus('submitted');
+        } else {
+          setSubmissionStatus('offline');
+        }
+      }
+    }
+    doSubmit();
+    return () => { isMounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FAF7F0] text-[#232323] py-10 px-4 sm:px-6">
@@ -37,6 +64,26 @@ export default function TestResultScreen({
               <span className="text-xs font-sans text-[#5c5346] bg-[#f0e6d8] px-3.5 py-1.5 rounded-full font-medium">
                 Candidate: <strong className="text-[#232323]">{studentName}</strong>
               </span>
+
+              {/* Submission Status Badge */}
+              {submissionStatus === 'submitted' && (
+                <span className="text-xs font-sans font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Submitted to Teacher</span>
+                </span>
+              )}
+              {submissionStatus === 'submitting' && (
+                <span className="text-xs font-sans font-medium bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" />
+                  <span>Saving Submission...</span>
+                </span>
+              )}
+              {submissionStatus === 'offline' && (
+                <span className="text-xs font-sans text-gray-700 bg-gray-100 border border-gray-300 px-3 py-1.5 rounded-full">
+                  Saved Locally
+                </span>
+              )}
+
               <button
                 type="button"
                 onClick={() => setShowPrintModal(true)}
