@@ -98,7 +98,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
   const unreviewedCount = submissions.filter(s => s.status === 'pending_review').length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 overflow-y-auto">
       <div className="bg-[#FAF7F0] border border-[#dcd2c4] rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto font-sans text-[#1c1b18]">
         
         {/* Header Bar with Main Tabs */}

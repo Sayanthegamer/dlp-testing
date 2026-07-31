@@ -42,7 +42,7 @@ export default function FloatingMathPopover({ activeMath, targetElement, onSave,
   const cleanPreview = (previewLatex || '').replace(/<\/?math>/gi, '').trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-in fade-in duration-200">
       <div className="bg-[#fcfbfa] border border-[#dcd2c4] rounded-2xl p-5 sm:p-6 shadow-2xl max-w-lg w-full space-y-4 relative animate-in zoom-in-95 duration-200">
         
         {/* Popover Header */}

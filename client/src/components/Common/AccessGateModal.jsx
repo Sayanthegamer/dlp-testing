@@ -26,7 +26,7 @@ export default function AccessGateModal({ onAuthenticated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1c1b18]/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-[#1c1b18]/85 flex items-center justify-center p-4">
       <div className="bg-[#fcfbfa] border border-[#dcd2c4] rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
         
         {/* Lock Header */}
