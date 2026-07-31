@@ -133,6 +133,7 @@ export function evaluateSubmission(questions = [], studentAnswers = {}, manualGr
   return {
     score,
     total,
+    evaluatedTotal,
     pendingCount,
     percentage,
     provisionalPercentage,

@@ -289,8 +289,13 @@ export default function SubmissionsDashboardModal({ onClose }) {
                           <span>Final Score</span>
                         )}
                       </div>
-                      <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18]">
-                        {evaluation.score} / {evaluation.total}
+                      <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18] flex items-baseline justify-end gap-2">
+                        <span>{evaluation.score} / {evaluation.total}</span>
+                        <span className="text-xs font-sans font-semibold text-[#8c4a17]">
+                          {evaluation.pendingCount > 0
+                            ? `(${evaluation.provisionalPercentage}% graded rate)`
+                            : `(${evaluation.percentage}%)`}
+                        </span>
                       </div>
                       <button
                         type="button"
