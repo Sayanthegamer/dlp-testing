@@ -124,11 +124,7 @@ function validateJsonSchema(data) {
 }
 
 function getGeminiModelName() {
-  const model = process.env.GEMINI_MODEL;
-  if (!model || model.includes('3.5')) {
-    return 'gemini-1.5-flash';
-  }
-  return model;
+  return process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 }
 
 // POST /api/parse-question with Automatic Key Fallback & Failover
