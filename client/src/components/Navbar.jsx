@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RefreshCw, Printer, Award } from 'lucide-react';
+import { BookOpen, RefreshCw, Printer, Award, Share2 } from 'lucide-react';
 import { checkServerHealth } from '../services/apiService';
 
-export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions }) {
+export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, onPublishExam }) {
   const [serverHealth, setServerHealth] = useState({ status: 'checking' });
 
   useEffect(() => {
@@ -58,6 +58,17 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions }) 
           >
             <Award className="w-4 h-4 text-[#e6cca6]" />
             <span className="hidden sm:inline">Submissions & Grading</span>
+          </button>
+
+          {/* Publish Exam & Share Link Button */}
+          <button
+            type="button"
+            onClick={onPublishExam}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
+            title="Freeze exam and generate shareable student link"
+          >
+            <Share2 className="w-4 h-4 text-emerald-200" />
+            <span className="hidden sm:inline">Publish Exam</span>
           </button>
 
           {/* Print / Save PDF Export Button */}

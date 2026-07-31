@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const parseRoutes = require('./routes/parse');
 const submissionsRoutes = require('./routes/submissions');
+const examsRoutes = require('./routes/exams');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -70,8 +71,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Submissions API routes
+// Submissions & Exams API routes
 app.use('/api', submissionsRoutes);
+app.use('/api', examsRoutes);
 
 // Protect remaining parsing API routes
 app.use('/api', authMiddleware, parseRoutes);

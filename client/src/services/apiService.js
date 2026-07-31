@@ -152,6 +152,31 @@ export async function gradeSubmission(submissionId, manualGrades) {
   return await response.json();
 }
 
+export async function publishExam(payload) {
+  const response = await fetch('/api/exams/publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to publish exam (${response.status})`);
+  }
+  return await response.json();
+}
+
+export async function fetchExamSnapshot(examId) {
+  const response = await fetch(`/api/exams/${examId}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch exam snapshot (${response.status})`);
+  }
+  return await response.json();
+}
+
 async function handleApiResponse(response) {
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));

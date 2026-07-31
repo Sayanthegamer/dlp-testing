@@ -13,7 +13,8 @@ import TestQuestionView from './components/Student/TestQuestionView';
 import TestReviewScreen from './components/Student/TestReviewScreen';
 import TestResultScreen from './components/Student/TestResultScreen';
 import SubmissionsDashboardModal from './components/TeacherDashboard/SubmissionsDashboardModal';
-import { parseQuestionText, parseQuestionImage, parseDocxStructure } from './services/apiService';
+import PublishExamModal from './components/TeacherDashboard/PublishExamModal';
+import { parseQuestionText, parseQuestionImage, parseDocxStructure, publishExam, fetchExamSnapshot } from './services/apiService';
 
 const INITIAL_CATALOGUE = {
   testTitle: "Mathematics Practice Test",
@@ -59,9 +60,40 @@ export default function App() {
   const [isJustParsed, setIsJustParsed] = useState(false);
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
 
-  // Mode Switch Detection: ?mode=student
+  // Mode Switch Detection: ?mode=student & ?testId=exam_...
   const searchParams = new URLSearchParams(window.location.search);
   const isStudentMode = searchParams.get('mode') === 'student';
+  const targetTestId = searchParams.get('testId');
+
+  const [publishedExamInfo, setPublishedExamInfo] = useState(null);
+  const [isFetchingExam, setIsFetchingExam] = useState(false);
+  const [examFetchError, setExamFetchError] = useState(null);
+
+  // Fetch published frozen exam snapshot if testId query param exists
+  useEffect(() => {
+    if (isStudentMode && targetTestId) {
+      let isMounted = true;
+      async function loadSnapshot() {
+        setIsFetchingExam(true);
+        setExamFetchError(null);
+        try {
+          const res = await fetchExamSnapshot(targetTestId);
+          if (isMounted && res && res.exam) {
+            setTestTitle(res.exam.testTitle);
+            setQuestions(res.exam.questions);
+          }
+        } catch (err) {
+          if (isMounted) {
+            setExamFetchError(err.message || 'Exam paper snapshot not found or link has expired.');
+          }
+        } finally {
+          if (isMounted) setIsFetchingExam(false);
+        }
+      }
+      loadSnapshot();
+      return () => { isMounted = false; };
+    }
+  }, [isStudentMode, targetTestId]);
 
   // Student Flow State Machine
   const [isStudentAuthenticated, setIsStudentAuthenticated] = useState(false);
@@ -301,8 +333,54 @@ export default function App() {
     setActiveMathEdit(null);
   };
 
+  // Handle Publish Exam snapshot
+  const handlePublishExam = async () => {
+    setIsLoading(true);
+    setLoadingMessage('Publishing frozen exam snapshot...');
+    try {
+      const res = await publishExam({ testTitle, questions });
+      if (res && res.examId) {
+        setPublishedExamInfo({
+          examId: res.examId,
+          testTitle: res.testTitle,
+          questionsCount: questions.length
+        });
+      }
+    } catch (err) {
+      alert(`Publish Failed: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Render Student Flow if ?mode=student query param is present
   if (isStudentMode) {
+    if (isFetchingExam) {
+      return (
+        <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center p-6 text-center font-sans">
+          <LoadingSpinner message="Loading published examination paper..." />
+        </div>
+      );
+    }
+
+    if (examFetchError) {
+      return (
+        <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center p-6 text-center font-sans">
+          <div className="bg-white border border-[#dcd2c4] rounded-3xl p-8 max-w-md w-full shadow-lg space-y-4">
+            <h2 className="font-serif font-bold text-xl text-red-700">Exam Paper Not Found</h2>
+            <p className="text-xs text-gray-600">{examFetchError}</p>
+            <button
+              type="button"
+              onClick={() => window.location.href = window.location.pathname}
+              className="px-5 py-2.5 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-white text-xs font-semibold shadow-xs"
+            >
+              Return to Main Portal
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (!isStudentAuthenticated) {
       return (
         <StudentAccessGateModal
@@ -393,6 +471,7 @@ export default function App() {
         onReset={handleReset}
         onOpenPrintView={() => setShowPrintModal(true)}
         onOpenSubmissions={() => setShowSubmissionsModal(true)}
+        onPublishExam={handlePublishExam}
       />
 
       {/* Main Content Area */}
@@ -462,6 +541,16 @@ export default function App() {
       {showSubmissionsModal && (
         <SubmissionsDashboardModal
           onClose={() => setShowSubmissionsModal(false)}
+        />
+      )}
+
+      {/* Published Exam Snapshot Share Link Modal */}
+      {publishedExamInfo && (
+        <PublishExamModal
+          examId={publishedExamInfo.examId}
+          testTitle={publishedExamInfo.testTitle}
+          questionsCount={publishedExamInfo.questionsCount}
+          onClose={() => setPublishedExamInfo(null)}
         />
       )}
 
