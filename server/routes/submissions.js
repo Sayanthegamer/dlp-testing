@@ -3,38 +3,68 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const SUBMISSIONS_FILE = path.join(DATA_DIR, 'submissions.json');
-
-// Ensure data directory and file exist
-function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+function getSubmissionsFilePath() {
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
+  if (isVercel) {
+    return path.join('/tmp', 'submissions.json');
   }
-  if (!fs.existsSync(SUBMISSIONS_FILE)) {
-    fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify([]), 'utf8');
+  return path.join(__dirname, '..', 'data', 'submissions.json');
+}
+
+// Ensure data directory and file exist (with Vercel /tmp fallback)
+function ensureDataFile() {
+  const filePath = getSubmissionsFilePath();
+  const dirPath = path.dirname(filePath);
+  try {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify([]), 'utf8');
+    }
+    return filePath;
+  } catch (err) {
+    console.error('[Submissions Dir/File Creation Warning]:', err.message);
+    const tmpPath = path.join('/tmp', 'submissions.json');
+    try {
+      if (!fs.existsSync(tmpPath)) {
+        fs.writeFileSync(tmpPath, JSON.stringify([]), 'utf8');
+      }
+    } catch (tmpErr) {}
+    return tmpPath;
   }
 }
 
 function readSubmissions() {
-  ensureDataFile();
+  const filePath = ensureDataFile();
   try {
-    const raw = fs.readFileSync(SUBMISSIONS_FILE, 'utf8');
+    const raw = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(raw) || [];
   } catch (err) {
-    console.error('[Submissions Read Error]:', err);
-    return [];
+    console.error('[Submissions Read Primary Warning]:', err.message);
+    try {
+      const rawTmp = fs.readFileSync('/tmp/submissions.json', 'utf8');
+      return JSON.parse(rawTmp) || [];
+    } catch (tmpErr) {
+      return [];
+    }
   }
 }
 
 function writeSubmissions(data) {
-  ensureDataFile();
+  const filePath = ensureDataFile();
   try {
-    fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (err) {
-    console.error('[Submissions Write Error]:', err);
-    return false;
+    console.error('[Submissions Write Primary Warning]:', err.message);
+    try {
+      fs.writeFileSync('/tmp/submissions.json', JSON.stringify(data, null, 2), 'utf8');
+      return true;
+    } catch (tmpErr) {
+      console.error('[Submissions Write Tmp Fallback Error]:', tmpErr.message);
+      return false;
+    }
   }
 }
 
@@ -95,10 +125,10 @@ router.post('/submissions', (req, res) => {
 
   const list = readSubmissions();
   list.unshift(submissionObj); // Add to start of array
-  writeSubmissions(list);
+  const written = writeSubmissions(list);
 
   return res.json({
-    success: true,
+    success: written,
     submissionId: serverGeneratedId,
     status: submissionObj.status
   });
