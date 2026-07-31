@@ -228,7 +228,67 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
                         <MathRenderer text={q.questionText} readOnly={true} />
                       </div>
 
-                      {/* Details */}
+                      {/* MCQ Options with Full Content & Math */}
+                      {q.type === 'mcq' && q.options && q.options.length > 0 && (
+                        <div className="space-y-1.5 pl-2 pt-1 font-serif text-sm">
+                          <span className="text-[11px] font-sans font-semibold text-gray-500 uppercase tracking-wider block">
+                            Options:
+                          </span>
+                          <div className="space-y-1.5">
+                            {q.options.map((opt, optIdx) => {
+                              const letter = optionLetters[optIdx] || optIdx + 1;
+                              const isCandidateChoice = studentAns === optIdx;
+                              const isCorrectKey = q.correctAnswer === optIdx;
+
+                              let badgeText = null;
+                              let badgeStyle = '';
+
+                              if (isCandidateChoice && isCorrectKey) {
+                                badgeText = 'Student Choice • Correct Key';
+                                badgeStyle = 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold';
+                              } else if (isCandidateChoice) {
+                                badgeText = 'Student Choice';
+                                badgeStyle = 'bg-red-100 border-red-300 text-red-800 font-bold';
+                              } else if (isCorrectKey && item.status !== 'pending_review') {
+                                badgeText = 'Correct Key';
+                                badgeStyle = 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold';
+                              }
+
+                              return (
+                                <div
+                                  key={optIdx}
+                                  className={`flex items-start justify-between gap-3 p-2 rounded-lg border text-xs font-sans ${
+                                    isCandidateChoice
+                                      ? isCorrectKey
+                                        ? 'bg-emerald-50/70 border-emerald-300'
+                                        : 'bg-red-50/70 border-red-200'
+                                      : isCorrectKey && item.status !== 'pending_review'
+                                      ? 'bg-[#f4f9f4] border-[#a5d6a7]'
+                                      : 'bg-white border-gray-200'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2 font-serif text-sm text-[#1c1b18]">
+                                    <span className="font-bold font-sans text-xs text-gray-700 shrink-0 mt-0.5">
+                                      ({letter})
+                                    </span>
+                                    <div>
+                                      <MathRenderer text={opt} readOnly={true} />
+                                    </div>
+                                  </div>
+
+                                  {badgeText && (
+                                    <span className={`px-2 py-0.5 rounded text-[11px] shrink-0 border ${badgeStyle}`}>
+                                      {badgeText}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Details Summary Box */}
                       <div className="bg-[#FAF7F0] p-3 rounded-lg font-sans text-xs space-y-1">
                         <div><span className="text-gray-500">Student Response: </span><strong className="text-gray-900">{formattedStudentAns}</strong></div>
                         {revealedCorrectAns && item.status !== 'pending_review' && (
