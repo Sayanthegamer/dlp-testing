@@ -11,8 +11,8 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-[#fbf9f5] border border-[#dcd2c4] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-xs overflow-y-auto print:p-0 print:bg-white print:static print:block">
+      <div className="print-modal-container bg-[#fbf9f5] border border-[#dcd2c4] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible">
         
         {/* Modal Header Bar (Hidden on print) */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#e2d8ca] bg-[#f5efe4] print:hidden">

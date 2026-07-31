@@ -49,3 +49,67 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #bfae9b;
 }
+
+/* Print Stylesheet Rules */
+@media print {
+  /* Hide main app UI, navbar, drawer, cards, dev inspector when print modal is open */
+  body > main,
+  body header,
+  body footer,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset body and page backgrounds */
+  html, body {
+    background: #ffffff !important;
+    color: #1c1b18 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure modal container becomes normal document flow without fixed overlay or rounded card borders */
+  .print-modal-overlay {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    inset: auto !important;
+    z-index: auto !important;
+  }
+
+  .print-modal-container {
+    background: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+  }
+
+  #printable-exam-paper {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Enforce clean page breaks */
+  .page-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+
