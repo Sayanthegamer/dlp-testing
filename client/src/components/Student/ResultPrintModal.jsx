@@ -288,13 +288,15 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
                         </div>
                       )}
 
-                      {/* Details Summary Box */}
-                      <div className="bg-[#FAF7F0] p-3 rounded-lg font-sans text-xs space-y-1">
-                        <div><span className="text-gray-500">Student Response: </span><strong className="text-gray-900">{formattedStudentAns}</strong></div>
-                        {revealedCorrectAns && item.status !== 'pending_review' && (
-                          <div><span className="text-[#3f6b4a]">Correct Key: </span><strong className="text-gray-900">{revealedCorrectAns}</strong></div>
-                        )}
-                      </div>
+                      {/* Details Summary Box (For numerical & short answer questions without option badges) */}
+                      {q.type !== 'mcq' && (
+                        <div className="bg-[#FAF7F0] p-3 rounded-lg font-sans text-xs space-y-1">
+                          <div><span className="text-gray-500">Student Response: </span><strong className="text-gray-900">{formattedStudentAns}</strong></div>
+                          {revealedCorrectAns && item.status !== 'pending_review' && (
+                            <div><span className="text-[#3f6b4a]">Correct Key: </span><strong className="text-gray-900">{revealedCorrectAns}</strong></div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
