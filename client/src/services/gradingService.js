@@ -1,11 +1,44 @@
 /**
- * Pure client-side grading engine for Student Test-Taking Pipeline (Phase 2).
- * 
- * Rules:
- * - MCQ: Exact option index match against question.correctAnswer.
- * - short_answer_numeric: Float parsing & inclusive range check against question.acceptedRange [min, max].
- * - short_answer_text & legacy bare short_answer: Routed to pendingReview, excluded from autoGraded.
- * - Missing/unset correctAnswer or malformed range: Routed to pendingReview.
+ * Single Source of Truth Grading Engine for Student Test-Taking & Teacher Dashboard.
+ */
+
+/**
+ * Evaluates a single question against student input.
+ */
+export function evaluateQuestion(question, studentAnswer) {
+  if (!question) return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
+
+  if (question.type === 'mcq') {
+    if (question.correctAnswer === null || question.correctAnswer === undefined || typeof question.correctAnswer !== 'number') {
+      return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
+    }
+    const isCorrect = studentAnswer === question.correctAnswer;
+    return { status: isCorrect ? 'correct' : 'incorrect', isAutoGraded: true, isCorrect };
+  }
+
+  if (question.type === 'short_answer_numeric') {
+    const range = question.acceptedRange;
+    const isValidRange = Array.isArray(range) && 
+      range.length === 2 && 
+      typeof range[0] === 'number' && Number.isFinite(range[0]) &&
+      typeof range[1] === 'number' && Number.isFinite(range[1]) &&
+      range[0] <= range[1];
+
+    if (!isValidRange || question.correctAnswer === null || question.correctAnswer === undefined) {
+      return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
+    }
+
+    const parsedInput = parseFloat(studentAnswer);
+    const isCorrect = !isNaN(parsedInput) && parsedInput >= range[0] && parsedInput <= range[1];
+    return { status: isCorrect ? 'correct' : 'incorrect', isAutoGraded: true, isCorrect };
+  }
+
+  // short_answer_text or unclassified legacy short_answer
+  return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
+}
+
+/**
+ * Evaluates an entire student attempt (used for initial student score).
  */
 export function gradeAttempt(questions = [], studentAnswers = {}) {
   let score = 0;
@@ -18,52 +51,11 @@ export function gradeAttempt(questions = [], studentAnswers = {}) {
     const qId = q.id || `q_${i}`;
     const studentAns = studentAnswers[qId];
 
-    let status = 'pending_review'; // 'correct' | 'incorrect' | 'pending_review'
-    let isAutoGraded = false;
-    let isCorrect = false;
-
-    if (q.type === 'mcq') {
-      if (q.correctAnswer === null || q.correctAnswer === undefined || typeof q.correctAnswer !== 'number') {
-        status = 'pending_review';
-        pendingReview.push(qId);
-      } else {
-        isAutoGraded = true;
-        total += 1;
-        if (studentAns === q.correctAnswer) {
-          isCorrect = true;
-          score += 1;
-          status = 'correct';
-        } else {
-          status = 'incorrect';
-        }
-      }
-    } else if (q.type === 'short_answer_numeric') {
-      const range = q.acceptedRange;
-      const isValidRange = Array.isArray(range) && 
-        range.length === 2 && 
-        typeof range[0] === 'number' && Number.isFinite(range[0]) &&
-        typeof range[1] === 'number' && Number.isFinite(range[1]) &&
-        range[0] <= range[1];
-
-      if (!isValidRange || q.correctAnswer === null || q.correctAnswer === undefined) {
-        status = 'pending_review';
-        pendingReview.push(qId);
-      } else {
-        isAutoGraded = true;
-        total += 1;
-        const parsedInput = parseFloat(studentAns);
-
-        if (!isNaN(parsedInput) && parsedInput >= range[0] && parsedInput <= range[1]) {
-          isCorrect = true;
-          score += 1;
-          status = 'correct';
-        } else {
-          status = 'incorrect';
-        }
-      }
+    const evalRes = evaluateQuestion(q, studentAns);
+    if (evalRes.isAutoGraded) {
+      total += 1;
+      if (evalRes.isCorrect) score += 1;
     } else {
-      // short_answer_text or unclassified legacy short_answer
-      status = 'pending_review';
       pendingReview.push(qId);
     }
 
@@ -74,9 +66,9 @@ export function gradeAttempt(questions = [], studentAnswers = {}) {
       studentAnswer: studentAns,
       correctAnswer: q.correctAnswer,
       acceptedRange: q.acceptedRange,
-      status,
-      isAutoGraded,
-      isCorrect
+      status: evalRes.status,
+      isAutoGraded: evalRes.isAutoGraded,
+      isCorrect: evalRes.isCorrect
     });
   }
 
@@ -87,6 +79,52 @@ export function gradeAttempt(questions = [], studentAnswers = {}) {
       percentage: total > 0 ? Math.round((score / total) * 100) : null
     },
     pendingReview,
+    perQuestion
+  };
+}
+
+/**
+ * Evaluates a full submission including teacher manual overrides (used in Teacher Submissions Dashboard).
+ */
+export function evaluateSubmission(questions = [], studentAnswers = {}, manualGrades = {}) {
+  let score = 0;
+  const total = questions.length;
+  const perQuestion = [];
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const qId = q.id || `q_${i}`;
+    const studentAns = studentAnswers[qId];
+    const manualInfo = manualGrades[qId];
+
+    const autoEval = evaluateQuestion(q, studentAns);
+    let status = autoEval.status;
+
+    // Teacher manual override takes precedence
+    if (manualInfo && manualInfo.status) {
+      status = manualInfo.status;
+    }
+
+    const isCorrect = status === 'correct';
+    if (isCorrect) score += 1;
+
+    perQuestion.push({
+      questionId: qId,
+      questionIndex: i,
+      type: q.type,
+      studentAnswer: studentAns,
+      autoStatus: autoEval.status,
+      effectiveStatus: status,
+      isCorrect
+    });
+  }
+
+  const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+
+  return {
+    score,
+    total,
+    percentage,
     perQuestion
   };
 }

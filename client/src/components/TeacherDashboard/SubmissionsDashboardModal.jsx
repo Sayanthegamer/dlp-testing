@@ -1,31 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import { fetchSubmissions, gradeSubmission } from '../../services/apiService';
+import { evaluateSubmission } from '../../services/gradingService';
 import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare } from 'lucide-react';
-
-function computeDisplayedScore(submission, manualGrades) {
-  if (!submission || !Array.isArray(submission.questions)) return '0 / 0';
-  let totalScore = 0;
-
-  submission.questions.forEach(q => {
-    const studentAns = submission.studentAnswers ? submission.studentAnswers[q.id] : undefined;
-    const manualInfo = manualGrades[q.id];
-
-    let isCorrect = false;
-    if (manualInfo && manualInfo.status) {
-      isCorrect = manualInfo.status === 'correct';
-    } else if (q.type === 'mcq') {
-      isCorrect = studentAns === q.correctAnswer;
-    } else if (q.type === 'short_answer_numeric' && Array.isArray(q.acceptedRange)) {
-      const val = parseFloat(studentAns);
-      isCorrect = !isNaN(val) && val >= q.acceptedRange[0] && val <= q.acceptedRange[1];
-    }
-
-    if (isCorrect) totalScore += 1;
-  });
-
-  return `${totalScore} / ${submission.questions.length}`;
-}
 
 export default function SubmissionsDashboardModal({ onClose }) {
   const [submissions, setSubmissions] = useState([]);
@@ -273,69 +250,61 @@ export default function SubmissionsDashboardModal({ onClose }) {
 
           {/* Right Column: Submission Detail & Manual Grading Inspector */}
           <div className="flex-1 flex flex-col bg-[#FAF7F0] overflow-hidden">
-            {selectedSubmission ? (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                
-                {/* Inspector Banner */}
-                <div className="p-4 sm:p-6 border-b border-[#e2d8ca] bg-[#fcfbfa] flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#8c4a17]">
-                        Candidate Scorecard
-                      </span>
-                      {selectedSubmission.status === 'pending_review' ? (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold">
-                          Pending Review ({selectedSubmission.pendingCount} items)
+            {selectedSubmission ? (() => {
+              const evaluation = evaluateSubmission(selectedSubmission.questions, selectedSubmission.studentAnswers, manualGrades);
+
+              return (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  
+                  {/* Inspector Banner */}
+                  <div className="p-4 sm:p-6 border-b border-[#e2d8ca] bg-[#fcfbfa] flex items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#8c4a17]">
+                          Candidate Scorecard
                         </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-semibold">
-                          Reviewed
-                        </span>
-                      )}
+                        {selectedSubmission.status === 'pending_review' ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold">
+                            Pending Review ({selectedSubmission.pendingCount} items)
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-semibold">
+                            Reviewed
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="font-serif font-bold text-xl sm:text-2xl text-[#1c1b18]">
+                        {selectedSubmission.studentName}
+                      </h2>
+                      <p className="text-xs text-[#786f63]">
+                        Test: {selectedSubmission.testTitle} • Submitted {new Date(selectedSubmission.submittedAt).toLocaleString()}
+                      </p>
                     </div>
-                    <h2 className="font-serif font-bold text-xl sm:text-2xl text-[#1c1b18]">
-                      {selectedSubmission.studentName}
-                    </h2>
-                    <p className="text-xs text-[#786f63]">
-                      Test: {selectedSubmission.testTitle} • Submitted {new Date(selectedSubmission.submittedAt).toLocaleString()}
-                    </p>
+
+                    <div className="text-right space-y-1">
+                      <div className="text-xs text-gray-500 font-medium">Final Score</div>
+                      <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18]">
+                        {evaluation.score} / {evaluation.total}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveGrades}
+                        disabled={saving}
+                        className="px-4 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 ml-auto"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>{saving ? 'Saving...' : 'Save & Finalize Grades'}</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="text-right space-y-1">
-                    <div className="text-xs text-gray-500 font-medium">Final Score</div>
-                    <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18]">
-                      {computeDisplayedScore(selectedSubmission, manualGrades)}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSaveGrades}
-                      disabled={saving}
-                      className="px-4 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50 ml-auto"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>{saving ? 'Saving...' : 'Save & Finalize Grades'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Itemized Questions & Manual Grade Form */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-                  {selectedSubmission.questions.map((q, idx) => {
-                    const studentAns = selectedSubmission.studentAnswers[q.id];
-                    const gradeInfo = manualGrades[q.id] || {};
-                    
-                    let autoStatus = null;
-                    if (q.type === 'mcq') {
-                      autoStatus = studentAns === q.correctAnswer ? 'correct' : 'incorrect';
-                    } else if (q.type === 'short_answer_numeric' && Array.isArray(q.acceptedRange)) {
-                      const val = parseFloat(studentAns);
-                      autoStatus = (!isNaN(val) && val >= q.acceptedRange[0] && val <= q.acceptedRange[1]) ? 'correct' : 'incorrect';
-                    } else {
-                      autoStatus = 'pending_review';
-                    }
-
-                    // Combined current status (manual override takes precedence for pending review items)
-                    const effectiveStatus = gradeInfo.status || autoStatus;
+                  {/* Itemized Questions & Manual Grade Form */}
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                    {selectedSubmission.questions.map((q, idx) => {
+                      const studentAns = selectedSubmission.studentAnswers[q.id];
+                      const gradeInfo = manualGrades[q.id] || {};
+                      const qEval = evaluation.perQuestion[idx] || {};
+                      const effectiveStatus = qEval.effectiveStatus || 'pending_review';
 
                     let formattedStudentAns = 'No response provided';
                     if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
@@ -435,7 +404,8 @@ export default function SubmissionsDashboardModal({ onClose }) {
                 </div>
 
               </div>
-            ) : (
+              );
+            })() : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400 space-y-3 font-serif">
                 <FileText className="w-12 h-12 text-gray-300" />
                 <p className="text-base text-gray-600">Select a student submission from the left list to inspect answers and perform manual grading.</p>
