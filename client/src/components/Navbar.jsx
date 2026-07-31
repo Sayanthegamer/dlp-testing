@@ -64,7 +64,7 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, on
           <button
             type="button"
             onClick={onOpenSubmissions}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-[#fbf9f5] text-xs font-semibold shadow-xs transition-all active:scale-95"
+            className="btn-shimmer flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-[#fbf9f5] text-xs font-semibold shadow-xs transition-all active:scale-95"
             title="Open Teacher Submissions Dashboard"
           >
             <Award className="w-4 h-4 text-[#e6cca6]" />
@@ -75,7 +75,7 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, on
           <button
             type="button"
             onClick={onPublishExam}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
+            className="btn-shimmer flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
             title="Freeze exam and generate shareable student link"
           >
             <Share2 className="w-4 h-4 text-emerald-200" />

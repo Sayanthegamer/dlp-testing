@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import { ChevronLeft, ChevronRight, CheckSquare, CheckCircle } from 'lucide-react';
@@ -52,87 +53,98 @@ export default function TestQuestionView({
           </div>
         </div>
 
-        {/* Exam Question Card */}
-        <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl p-4 sm:p-10 shadow-sm space-y-6 sm:space-y-8">
-          
-          {/* Question Stem */}
-          <div className="space-y-2">
-            <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#8c4a17] block">
-              Question {currentIndex + 1}
-            </span>
-            <div className="font-serif text-lg sm:text-2xl text-[#232323] leading-relaxed">
-              <MathRenderer text={questionText} readOnly={true} />
-            </div>
-          </div>
-
-          {/* MCQ Options */}
-          {type === 'mcq' && (
-            <div className="space-y-3 pt-2">
-              <span className="text-xs font-sans font-semibold text-[#5c5346] block">
-                Select your choice:
+        {/* Animated Exam Question Card (Framer Motion) */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={id || currentIndex}
+            initial={{ opacity: 0, y: 12, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.99 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl p-4 sm:p-10 shadow-sm space-y-6 sm:space-y-8"
+          >
+            
+            {/* Question Stem */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#8c4a17] block">
+                Question {currentIndex + 1}
               </span>
-              <div
-                className={
-                  isLongOptions
-                    ? 'space-y-2.5 sm:space-y-3'
-                    : 'grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5'
-                }
-              >
-                {(options || []).map((opt, optIdx) => {
-                  const isSelected = currentAnswer === optIdx;
-                  const letter = optionLetters[optIdx] || (optIdx + 1).toString();
-
-                  return (
-                    <button
-                      key={optIdx}
-                      type="button"
-                      onClick={() => onAnswerChange(id, optIdx)}
-                      className={`w-full text-left flex items-start gap-3 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all active:scale-[0.99] ${
-                        isSelected
-                          ? 'bg-[#232323] text-white border-[#232323] shadow-md scale-[1.01]'
-                          : 'bg-white text-[#232323] border-[#DCD5C4] hover:border-[#b8ad99] hover:bg-[#faf7f2]'
-                      }`}
-                    >
-                      <span
-                        className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center font-sans font-bold text-xs shrink-0 mt-0.5 transition-colors ${
-                          isSelected
-                            ? 'bg-white text-[#232323]'
-                            : 'bg-[#f0e6d8] text-[#5c5346]'
-                        }`}
-                      >
-                        {letter}
-                      </span>
-                      <div className="flex-1 min-w-0 pt-0.5 font-serif text-sm sm:text-base leading-snug">
-                        <MathRenderer text={opt} readOnly={true} />
-                      </div>
-                      {isSelected && (
-                        <CheckCircle className="w-5 h-5 text-white shrink-0 mt-0.5" />
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="font-serif text-lg sm:text-2xl text-[#232323] leading-relaxed">
+                <MathRenderer text={questionText} readOnly={true} />
               </div>
             </div>
-          )}
 
-          {/* Short Answer Input (Numeric, Text, or Legacy) */}
-          {(type === 'short_answer_numeric' || type === 'short_answer_text' || type === 'short_answer') && (
-            <div className="space-y-3 pt-2">
-              <label className="block text-xs font-sans font-semibold text-[#5c5346]">
-                Type your answer below:
-              </label>
-              <input
-                type="text"
-                value={currentAnswer !== undefined && currentAnswer !== null ? currentAnswer : ''}
-                onChange={(e) => onAnswerChange(id, e.target.value)}
-                placeholder="Enter numerical value (integer or decimal, e.g. 15, -3.5)..."
-                autoFocus
-                className="w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-[#DCD5C4] bg-white font-serif text-base sm:text-lg text-[#232323] focus:outline-none focus:ring-2 focus:ring-[#232323] shadow-inner"
-              />
-            </div>
-          )}
+            {/* MCQ Options */}
+            {type === 'mcq' && (
+              <div className="space-y-3 pt-2">
+                <span className="text-xs font-sans font-semibold text-[#5c5346] block">
+                  Select your choice:
+                </span>
+                <div
+                  className={
+                    isLongOptions
+                      ? 'space-y-2.5 sm:space-y-3'
+                      : 'grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5'
+                  }
+                >
+                  {(options || []).map((opt, optIdx) => {
+                    const isSelected = currentAnswer === optIdx;
+                    const letter = optionLetters[optIdx] || (optIdx + 1).toString();
 
-        </div>
+                    return (
+                      <motion.button
+                        key={optIdx}
+                        type="button"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => onAnswerChange(id, optIdx)}
+                        className={`w-full text-left flex items-start gap-3 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all ${
+                          isSelected
+                            ? 'bg-[#232323] text-white border-[#232323] shadow-md'
+                            : 'bg-white text-[#232323] border-[#DCD5C4] hover:border-[#b8ad99] hover:bg-[#faf7f2]'
+                        }`}
+                      >
+                        <span
+                          className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center font-sans font-bold text-xs shrink-0 mt-0.5 transition-colors ${
+                            isSelected
+                              ? 'bg-white text-[#232323]'
+                              : 'bg-[#f0e6d8] text-[#5c5346]'
+                          }`}
+                        >
+                          {letter}
+                        </span>
+                        <div className="flex-1 min-w-0 pt-0.5 font-serif text-sm sm:text-base leading-snug">
+                          <MathRenderer text={opt} readOnly={true} />
+                        </div>
+                        {isSelected && (
+                          <CheckCircle className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Short Answer Input */}
+            {(type === 'short_answer_numeric' || type === 'short_answer_text' || type === 'short_answer') && (
+              <div className="space-y-3 pt-2">
+                <label className="block text-xs font-sans font-semibold text-[#5c5346]">
+                  Type your answer below:
+                </label>
+                <input
+                  type="text"
+                  value={currentAnswer !== undefined && currentAnswer !== null ? currentAnswer : ''}
+                  onChange={(e) => onAnswerChange(id, e.target.value)}
+                  placeholder="Enter numerical value (integer or decimal, e.g. 15, -3.5)..."
+                  autoFocus
+                  className="w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-[#DCD5C4] bg-white font-serif text-base sm:text-lg text-[#232323] focus:outline-none focus:ring-2 focus:ring-[#232323] shadow-inner"
+                />
+              </div>
+            )}
+
+          </motion.div>
+        </AnimatePresence>
 
         {/* Bottom Navigation Buttons */}
         <div className="flex items-center justify-between pt-2 gap-3">
@@ -150,7 +162,7 @@ export default function TestQuestionView({
             <button
               type="button"
               onClick={onReview}
-              className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 min-h-[44px]"
+              className="btn-shimmer px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 min-h-[44px]"
             >
               <span>Review Answers</span>
               <CheckSquare className="w-4 h-4" />
@@ -159,7 +171,7 @@ export default function TestQuestionView({
             <button
               type="button"
               onClick={onNext}
-              className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 min-h-[44px]"
+              className="btn-shimmer px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5 sm:gap-2 active:scale-95 min-h-[44px]"
             >
               <span>Next Question</span>
               <ChevronRight className="w-4 h-4" />
