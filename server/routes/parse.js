@@ -201,7 +201,8 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
     model: modelName,
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.1
+      temperature: 0.1,
+      maxOutputTokens: 16384
     }
   });
 
@@ -252,7 +253,7 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
 
   const response = await anthropic.messages.create({
     model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
-    max_tokens: 2048,
+    max_tokens: 16384,
     system: SYSTEM_PROMPT,
     messages
   });
