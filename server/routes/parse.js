@@ -124,7 +124,7 @@ function validateJsonSchema(data) {
 }
 
 function getGeminiModelName() {
-  return process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  return process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 }
 
 // POST /api/parse-question with Automatic Key Fallback & Failover
