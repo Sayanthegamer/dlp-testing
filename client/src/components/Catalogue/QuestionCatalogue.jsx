@@ -58,12 +58,12 @@ export default function QuestionCatalogue({
       )}
 
       {/* Test Title Header */}
-      <div className="exam-paper rounded-2xl p-6 sm:p-8 space-y-3">
-        <div className="flex items-center justify-between text-xs text-[#786f63] font-sans border-b border-[#e5dcd0] pb-2">
+      <div className="exam-paper rounded-2xl p-4 sm:p-8 space-y-2 sm:space-y-3">
+        <div className="flex flex-wrap items-center justify-between text-xs text-[#786f63] font-sans border-b border-[#e5dcd0] pb-2 gap-1">
           <span className="font-semibold uppercase tracking-wider text-[11px] text-[#8c4a17]">
             Test Paper Catalogue Title
           </span>
-          <span>Google Forms Style Catalogue</span>
+          <span className="hidden sm:inline text-[11px]">Google Forms Style Catalogue</span>
         </div>
 
         <input
@@ -71,10 +71,10 @@ export default function QuestionCatalogue({
           value={testTitle || 'Mathematics Practice Quiz'}
           onChange={(e) => onUpdateTestTitle(e.target.value)}
           placeholder="Enter test paper title..."
-          className="w-full font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18] bg-transparent border-b border-transparent hover:border-[#dcd0be] focus:border-[#8c4a17] focus:outline-none py-1 transition-colors"
+          className="w-full font-serif font-bold text-xl sm:text-3xl text-[#1c1b18] bg-transparent border-b border-transparent hover:border-[#dcd0be] focus:border-[#8c4a17] focus:outline-none py-1 leading-snug transition-colors"
         />
-        <p className="text-xs text-[#736c62] font-sans">
-          Click any text to edit inline. Click any math formula to open the floating visual equation popover.
+        <p className="text-[11px] sm:text-xs text-[#736c62] font-sans leading-normal">
+          Click any text to edit inline. Click any math formula to open the visual equation editor.
         </p>
       </div>
 

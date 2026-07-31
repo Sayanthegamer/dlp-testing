@@ -539,8 +539,11 @@ export default function App() {
         <div className="bg-[#f2ece2] border border-[#e2d8ca] rounded-2xl p-4">
           <details className="group">
             <summary className="text-xs font-semibold text-[#736a5c] uppercase tracking-wider cursor-pointer list-none flex items-center justify-between">
-              <span>🔍 View Full Catalogue JSON Pipeline Schema (Developer Verification)</span>
-              <span className="group-open:rotate-180 transition-transform text-[#9c907e]">▼</span>
+              <span>
+                <span className="hidden sm:inline">🔍 View Full Catalogue JSON Pipeline Schema (Developer Verification)</span>
+                <span className="sm:hidden text-[11px]">🔍 View Catalogue JSON Pipeline Schema</span>
+              </span>
+              <span className="group-open:rotate-180 transition-transform text-[#9c907e] ml-2">▼</span>
             </summary>
             <pre className="mt-3 p-4 bg-[#1c1b18] text-[#81c784] rounded-xl text-xs font-mono overflow-x-auto">
               {JSON.stringify({ testTitle, questions }, null, 2)}

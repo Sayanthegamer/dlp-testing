@@ -64,7 +64,7 @@ export default function QuestionCard({
           <select
             value={type === 'short_answer_text' || type === 'short_answer' ? 'short_answer_numeric' : type}
             onChange={(e) => onUpdateQuestion(id, { ...question, type: e.target.value })}
-            className="text-xs px-2 sm:px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer max-w-[180px] sm:max-w-none truncate"
+            className="text-xs px-2 sm:px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer"
           >
             <option value="mcq">MCQ</option>
             <option value="short_answer_numeric">Numerical Question</option>
@@ -112,32 +112,31 @@ export default function QuestionCard({
       </div>
 
       {/* Question Stem Text (Direct Inline Editing) */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between text-xs text-[#8c8275] mb-1.5 font-sans">
-          <span className="font-semibold uppercase tracking-wider text-[11px]">Question Stem</span>
-          <button
-            type="button"
-            onClick={() => setIsEditingStem(!isEditingStem)}
-            className="text-[#a86e2d] hover:underline flex items-center gap-1 font-medium"
-          >
-            <Type className="w-3.5 h-3.5" />
-            {isEditingStem ? 'Done Editing Text' : 'Edit Text Inline'}
-          </button>
+      <div className="mb-5 sm:mb-6">
+        <div className="flex items-center justify-between text-xs text-[#786f63] font-sans mb-1">
+          <span className="font-semibold uppercase tracking-wider text-[10px] text-[#8c4a17]">
+            Question Stem
+          </span>
+          <span className="text-[11px] text-[#8c4a17] font-medium flex items-center gap-1">
+            <Type className="w-3 h-3" />
+            <span>Edit Text Inline</span>
+          </span>
         </div>
 
         {isEditingStem ? (
           <textarea
-            rows={3}
             value={questionText}
-            onChange={(e) => handleStemChange(e.target.value)}
-            className="w-full p-3 rounded-xl border border-[#a86e2d] bg-white font-serif text-base text-[#1c1b18] focus:outline-none shadow-inner"
-            placeholder="Type question stem text here..."
+            onChange={(e) => onUpdateQuestion(id, { ...question, questionText: e.target.value })}
+            onBlur={() => setIsEditingStem(false)}
+            rows={3}
+            className="w-full p-3 rounded-xl border border-[#a86e2d] bg-white font-serif text-lg text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+            autoFocus
           />
         ) : (
           <div
             onClick={() => setIsEditingStem(true)}
-            className="font-serif text-lg sm:text-xl text-[#22201c] leading-relaxed cursor-pointer p-2 -mx-2 rounded-lg hover:bg-amber-50/50 transition-colors"
-            title="Click to edit text directly"
+            className="font-serif text-lg sm:text-xl text-[#1c1b18] leading-relaxed cursor-pointer p-2 rounded-xl border border-transparent hover:border-[#e5dcd0] hover:bg-[#faf7f2] transition-colors"
+            title="Click to edit question text directly inline"
           >
             <MathRenderer
               text={questionText}
@@ -152,11 +151,11 @@ export default function QuestionCard({
       {type === 'mcq' && (
         <div className="space-y-3 mt-4">
           <div className="flex items-center justify-between text-xs text-[#786f63] font-sans">
-            <span>Options (Click letter badge to set Correct Key):</span>
+            <span className="text-[11px] sm:text-xs">Options (Click letter badge to set Correct Key):</span>
             <button
               type="button"
               onClick={handleAddOption}
-              className="text-[#a86e2d] font-semibold hover:underline"
+              className="text-[#a86e2d] font-semibold hover:underline text-xs"
             >
               + Add Option
             </button>
@@ -165,8 +164,8 @@ export default function QuestionCard({
           <div
             className={
               isLongOptions
-                ? 'space-y-3'
-                : 'grid grid-cols-1 sm:grid-cols-2 gap-3'
+                ? 'space-y-2.5 sm:space-y-3'
+                : 'grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3'
             }
           >
             {(options || []).map((opt, optIdx) => {
@@ -177,7 +176,7 @@ export default function QuestionCard({
               return (
                 <div
                   key={optIdx}
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all ${
+                  className={`flex items-start gap-2.5 sm:gap-3 p-3 sm:p-3.5 rounded-xl border transition-all ${
                     isCorrect
                       ? 'bg-[#f4f9f4] border-[#81c784] shadow-xs'
                       : 'bg-[#faf7f2] border-[#e2d8ca] hover:border-[#cbbfad]'
@@ -198,7 +197,7 @@ export default function QuestionCard({
                   </button>
 
                   {/* Inline Option Text / Math */}
-                  <div className="flex-1 min-w-0 pt-0.5">
+                  <div className="flex-1 min-w-0 pt-0.5 overflow-x-auto max-w-full">
                     {isEditingThisOpt ? (
                       <input
                         type="text"
@@ -211,7 +210,7 @@ export default function QuestionCard({
                     ) : (
                       <div
                         onClick={() => setEditingOptionIdx(optIdx)}
-                        className="font-serif text-base text-[#2c2825] leading-normal cursor-pointer hover:underline truncate"
+                        className="font-serif text-base text-[#2c2825] leading-normal cursor-pointer hover:underline"
                         title="Click to edit option text"
                       >
                         <MathRenderer
