@@ -54,7 +54,7 @@ app.get('/api/health', (req, res) => {
       gemini: hasGemini ? 'active' : 'inactive',
       anthropic: hasAnthropic ? 'active' : 'inactive'
     },
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
   });
 });
 
@@ -77,7 +77,7 @@ if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
 
     console.log(`=================================`);
     console.log(`Math Pipeline Server running on http://localhost:${PORT}`);
-    console.log(`Gemini API (${process.env.GEMINI_MODEL || 'gemini-1.5-flash'}): ${hasGemini ? 'ACTIVE' : 'OFF'}`);
+    console.log(`Gemini API (${process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'}): ${hasGemini ? 'ACTIVE' : 'OFF'}`);
     console.log(`Anthropic API: ${hasAnthropic ? 'ACTIVE' : 'OFF'}`);
     console.log(`Mode: ${hasGemini || hasAnthropic ? 'Live API (with failover)' : 'Smart Demo Fallback Mode'}`);
     console.log(`=================================`);
