@@ -5,6 +5,7 @@ import QuestionCatalogue from './components/Catalogue/QuestionCatalogue';
 import FloatingMathPopover from './components/VisualMathEditor/FloatingMathPopover';
 import PrintViewModal from './components/Common/PrintViewModal';
 import LoadingSpinner from './components/Common/LoadingSpinner';
+import AccessGateModal from './components/Common/AccessGateModal';
 import StudentAccessGateModal from './components/Student/StudentAccessGateModal';
 import StudentNameCapture from './components/Student/StudentNameCapture';
 import TestIntroScreen from './components/Student/TestIntroScreen';
