@@ -188,20 +188,20 @@ export default function App() {
     }
   };
 
-  // Process imported photo
-  const handleSubmitImage = async (imageBase64, mediaType) => {
+  // Process imported photo / multi-image / PDF documents
+  const handleSubmitImage = async (payload, mediaType) => {
     setIsLoading(true);
     setIsJustParsed(false);
-    setLoadingMessage('Transcribing test page photo with AI Vision...');
+    setLoadingMessage('Transcribing photos & PDF document pages with AI Vision...');
     try {
-      const parsed = await parseQuestionImage(imageBase64, mediaType);
+      const parsed = await parseQuestionImage(payload, mediaType);
       if (parsed.questions && parsed.questions.length > 0) {
         setQuestions(parsed.questions);
         if (parsed.testTitle) setTestTitle(parsed.testTitle);
         setIsJustParsed(true);
       }
     } catch (err) {
-      alert(`Image transcription error: ${err.message}`);
+      alert(`Transcription error: ${err.message}`);
     } finally {
       setIsLoading(false);
     }

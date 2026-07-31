@@ -81,11 +81,21 @@ export async function parseQuestionText(rawText) {
   return handleApiResponse(response);
 }
 
-export async function parseQuestionImage(imageBase64, mediaType = 'image/jpeg') {
+export async function parseQuestionImage(imageBase64OrFiles, mediaType = 'image/jpeg') {
+  let bodyData = { type: 'image' };
+
+  if (Array.isArray(imageBase64OrFiles)) {
+    bodyData = { type: 'media', mediaFiles: imageBase64OrFiles };
+  } else if (imageBase64OrFiles && typeof imageBase64OrFiles === 'object' && imageBase64OrFiles.mediaFiles) {
+    bodyData = { type: 'media', mediaFiles: imageBase64OrFiles.mediaFiles };
+  } else {
+    bodyData = { type: 'image', imageBase64: imageBase64OrFiles, mediaType };
+  }
+
   const response = await fetch('/api/parse-question', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-    body: JSON.stringify({ type: 'image', imageBase64, mediaType })
+    body: JSON.stringify(bodyData)
   });
   return handleApiResponse(response);
 }

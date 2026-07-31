@@ -158,7 +158,7 @@ function getGeminiModelName() {
 
 // POST /api/parse-question with Automatic Key Fallback & Failover
 router.post('/parse-question', async (req, res) => {
-  const { type, rawText, imageBase64, mediaType, docxStructure } = req.body;
+  const { type, rawText, imageBase64, mediaType, mediaFiles, docxStructure } = req.body;
 
   const geminiKey = process.env.GEMINI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -179,13 +179,14 @@ router.post('/parse-question', async (req, res) => {
     try {
       if (provider.name === 'gemini') {
         const activeModel = getGeminiModelName();
-        console.log(`[Parser] Attempting Gemini API (${activeModel})...`);
+        console.log(`[Parser] Attempting Gemini API (${activeModel}) for multi-media/PDF...`);
         const data = await parseWithGemini({
           geminiKey: provider.key,
           type,
           rawText,
           imageBase64,
           mediaType,
+          mediaFiles,
           docxStructure
         });
         if (!validateJsonSchema(data)) {
@@ -195,13 +196,14 @@ router.post('/parse-question', async (req, res) => {
       }
 
       if (provider.name === 'anthropic') {
-        console.log('[Parser] Attempting Anthropic Claude API...');
+        console.log('[Parser] Attempting Anthropic Claude API for multi-media/PDF...');
         const data = await parseWithClaude({
           anthropicKey: provider.key,
           type,
           rawText,
           imageBase64,
           mediaType,
+          mediaFiles,
           docxStructure
         });
         if (!validateJsonSchema(data)) {
@@ -235,8 +237,8 @@ router.post('/parse-question', async (req, res) => {
   });
 });
 
-// Google Gemini Parser Implementation
-async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, docxStructure }) {
+// Google Gemini Parser Implementation (Native PDF & Multi-Image support)
+async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, mediaFiles, docxStructure }) {
   const genAI = new GoogleGenerativeAI(geminiKey);
   const modelName = getGeminiModelName();
   const model = genAI.getGenerativeModel({
@@ -252,14 +254,26 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
 
   if (type === 'text') {
     promptParts.push(`Convert this teacher input into the math test catalogue JSON schema:\n\n"${rawText}"`);
-  } else if (type === 'image') {
-    promptParts.push({
-      inlineData: {
-        data: imageBase64,
-        mimeType: mediaType || 'image/jpeg'
-      }
+  } else if (type === 'image' || type === 'media') {
+    // Process array of media files (Images or PDFs)
+    const filesToProcess = Array.isArray(mediaFiles) && mediaFiles.length > 0
+      ? mediaFiles
+      : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
+
+    filesToProcess.forEach((file, index) => {
+      promptParts.push({
+        inlineData: {
+          data: file.data || file.base64 || file.imageBase64,
+          mimeType: file.mimeType || file.mediaType || 'image/jpeg'
+        }
+      });
     });
-    promptParts.push('Transcribe all exam questions visible in this image into separate objects in the "questions" array. Split each numbered question (Question 1, Question 2, etc.) into its own distinct question block with its own questionText, type, and options. Place all math inside <math>LaTeX</math> tags.');
+
+    promptParts.push(
+      `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. ` +
+      `Extract every numbered question (Question 1, Question 2, etc.) into its own distinct question block with questionText, type, options, and correctAnswer. ` +
+      `Place all mathematical formulas and expressions inside <math>LaTeX</math> tags.`
+    );
   } else if (type === 'docx_structure') {
     promptParts.push(`Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.`);
   }
@@ -272,29 +286,49 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
   return parsedData;
 }
 
-// Anthropic Claude Parser Implementation
-async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, mediaType, docxStructure }) {
+// Anthropic Claude Parser Implementation (PDF Document & Multi-Image support)
+async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, mediaType, mediaFiles, docxStructure }) {
   const anthropic = new Anthropic({ apiKey: anthropicKey });
   let messages = [];
 
   if (type === 'text') {
     messages = [{ role: 'user', content: `Convert this teacher input into the math test catalogue JSON schema:\n\n"${rawText}"` }];
-  } else if (type === 'image') {
-    messages = [
-      {
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: 'Transcribe all exam questions visible in this image into separate objects in the "questions" array. Split each numbered question (Question 1, Question 2, etc.) into its own distinct question block with its own questionText, type, and options. Place all math inside <math>LaTeX</math> tags.' }
-        ]
+  } else if (type === 'image' || type === 'media') {
+    const filesToProcess = Array.isArray(mediaFiles) && mediaFiles.length > 0
+      ? mediaFiles
+      : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
+
+    const contentBlocks = [];
+
+    filesToProcess.forEach(file => {
+      const mime = file.mimeType || file.mediaType || 'image/jpeg';
+      const data = file.data || file.base64 || file.imageBase64;
+
+      if (mime === 'application/pdf') {
+        contentBlocks.push({
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data }
+        });
+      } else {
+        contentBlocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: mime, data }
+        });
       }
-    ];
+    });
+
+    contentBlocks.push({
+      type: 'text',
+      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question (Question 1, Question 2, etc.) into its own distinct question block. Place all math inside <math>LaTeX</math> tags.`
+    });
+
+    messages = [{ role: 'user', content: contentBlocks }];
   } else if (type === 'docx_structure') {
     messages = [{ role: 'user', content: `Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.` }];
   }
 
   const response = await anthropic.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+    model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
     max_tokens: 16384,
     system: SYSTEM_PROMPT,
     messages

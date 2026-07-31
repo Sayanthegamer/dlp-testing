@@ -15,7 +15,7 @@ export default function InputTabs({
 
   const tabs = [
     { id: 'text', label: '1. Messy Text', icon: FileText, desc: 'Type/paste informal math' },
-    { id: 'photo', label: '2. Photo Upload', icon: ImageIcon, desc: 'Phone photo/whiteboard' },
+    { id: 'photo', label: '2. Photos & PDFs', icon: ImageIcon, desc: 'Multi-image / PDF pages' },
     { id: 'docx', label: '3. Word .docx', icon: FileCode, desc: 'Native OMML equations' }
   ];
 
