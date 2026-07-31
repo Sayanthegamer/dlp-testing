@@ -1,5 +1,6 @@
 import React from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import { Printer, X } from 'lucide-react';
 
 export default function PrintViewModal({ testTitle, questions, onClose }) {
@@ -59,8 +60,7 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
           {/* Questions List */}
           <div className="space-y-8">
             {questions.map((q, idx) => {
-              const totalOptionsLength = (q.options || []).reduce((acc, opt) => acc + (opt || '').length, 0);
-              const isLongOptions = totalOptionsLength > 100 || (q.options || []).some(o => (o || '').length > 40);
+              const isLongOptions = isLongOptionsLayout(q.options);
 
               return (
                 <div key={q.id || idx} className="space-y-3 page-break-inside-avoid">

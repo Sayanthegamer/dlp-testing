@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import { computeNeedsReview } from '../../services/reviewEvaluator';
+import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import { Check, Edit2, Copy, Trash2, CheckCircle2, Circle, Type, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 export default function QuestionCard({
@@ -23,8 +24,7 @@ export default function QuestionCard({
   const reviewReasons = reviewEvaluation.reasons;
 
   // Smart options layout classifier: 2-column grid if short, 1-column list if long
-  const totalOptionsLength = (options || []).reduce((acc, opt) => acc + (opt || '').length, 0);
-  const isLongOptions = totalOptionsLength > 100 || (options || []).some(o => (o || '').length > 40);
+  const isLongOptions = isLongOptionsLayout(options);
 
   const handleStemChange = (val) => {
     onUpdateQuestion(id, { ...question, questionText: val });
