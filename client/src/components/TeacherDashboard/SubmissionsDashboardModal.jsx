@@ -282,7 +282,13 @@ export default function SubmissionsDashboardModal({ onClose }) {
                     </div>
 
                     <div className="text-right space-y-1">
-                      <div className="text-xs text-gray-500 font-medium">Final Score</div>
+                      <div className="text-xs text-gray-500 font-medium">
+                        {evaluation.pendingCount > 0 ? (
+                          <span className="text-amber-800 font-semibold">Provisional Score ({evaluation.pendingCount} pending)</span>
+                        ) : (
+                          <span>Final Score</span>
+                        )}
+                      </div>
                       <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18]">
                         {evaluation.score} / {evaluation.total}
                       </div>

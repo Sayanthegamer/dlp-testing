@@ -85,9 +85,12 @@ export function gradeAttempt(questions = [], studentAnswers = {}) {
 
 /**
  * Evaluates a full submission including teacher manual overrides (used in Teacher Submissions Dashboard).
+ * Note: Unlike gradeAttempt (where total = auto-gradable questions only), evaluateSubmission uses total = all questions
+ * in the paper so every question (including text items) counts toward the final 100% scorecard grade when reviewed.
  */
 export function evaluateSubmission(questions = [], studentAnswers = {}, manualGrades = {}) {
   let score = 0;
+  let pendingCount = 0;
   const total = questions.length;
   const perQuestion = [];
 
@@ -103,6 +106,10 @@ export function evaluateSubmission(questions = [], studentAnswers = {}, manualGr
     // Teacher manual override takes precedence
     if (manualInfo && manualInfo.status) {
       status = manualInfo.status;
+    }
+
+    if (status === 'pending_review') {
+      pendingCount += 1;
     }
 
     const isCorrect = status === 'correct';
@@ -124,6 +131,7 @@ export function evaluateSubmission(questions = [], studentAnswers = {}, manualGr
   return {
     score,
     total,
+    pendingCount,
     percentage,
     perQuestion
   };
