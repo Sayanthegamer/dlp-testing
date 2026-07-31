@@ -490,26 +490,32 @@ export default function App() {
 
   // Teacher Catalogue Mode (Default)
   return (
-    <div className="min-h-screen bg-[#f7f4ee] flex flex-col font-sans">
+    <div className="min-h-dvh bg-[#f7f4ee] flex flex-col font-sans">
       {/* Navbar */}
       <Navbar
         onReset={handleReset}
         onOpenPrintView={() => setShowPrintModal(true)}
         onOpenSubmissions={() => setShowSubmissionsModal(true)}
         onPublishExam={handlePublishExam}
+        onScrollToInput={() => {
+          const drawer = document.getElementById('input-drawer-container');
+          if (drawer) drawer.scrollIntoView({ behavior: 'smooth' });
+        }}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8 print:hidden">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 sm:pb-8 space-y-6 sm:space-y-8 print:hidden">
         
         {/* Top Import Drawer */}
-        <InputDrawer
-          onSubmitText={handleSubmitText}
-          onSubmitImage={handleSubmitImage}
-          onSubmitDocx={handleSubmitDocx}
-          isLoading={isLoading}
-          onLoadDocxSample={handleLoadDocxSample}
-        />
+        <div id="input-drawer-container">
+          <InputDrawer
+            onSubmitText={handleSubmitText}
+            onSubmitImage={handleSubmitImage}
+            onSubmitDocx={handleSubmitDocx}
+            isLoading={isLoading}
+            onLoadDocxSample={handleLoadDocxSample}
+          />
+        </div>
 
         {/* Processing Spinner */}
         {isLoading ? (

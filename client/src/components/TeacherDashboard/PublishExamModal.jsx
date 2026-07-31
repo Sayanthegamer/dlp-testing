@@ -13,8 +13,8 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 overflow-y-auto">
-      <div className="bg-[#FAF7F0] border border-[#dcd2c4] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 font-sans text-[#1c1b18] my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/50 overflow-y-auto">
+      <div className="bg-[#FAF7F0] border border-[#dcd2c4] rounded-2xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-2xl space-y-5 sm:space-y-6 font-sans text-[#1c1b18] my-auto">
         
         {/* Modal Header */}
         <div className="flex items-start justify-between gap-4 border-b border-[#e2d8ca] pb-4">
