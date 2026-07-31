@@ -78,6 +78,90 @@ function isTeacherAuthorized(req) {
 }
 
 /**
+ * Helper to count submissions per exam snapshot
+ */
+function readSubmissionsForMetrics() {
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
+  const filePath = isVercel ? path.join('/tmp', 'submissions.json') : path.join(__dirname, '..', 'data', 'submissions.json');
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(raw) || [];
+  } catch (e) {
+    try {
+      const rawTmp = fs.readFileSync('/tmp/submissions.json', 'utf8');
+      return JSON.parse(rawTmp) || [];
+    } catch (tmpErr) {
+      return [];
+    }
+  }
+}
+
+/**
+ * PROTECTED Teacher Endpoint: GET /api/exams
+ * Returns list of all published exam snapshots with submission metrics.
+ */
+router.get('/exams', (req, res) => {
+  if (!isTeacherAuthorized(req)) {
+    return res.status(401).json({ error: 'Unauthorized: Teacher password required' });
+  }
+
+  const exams = readExams();
+  const submissions = readSubmissionsForMetrics();
+
+  const formatted = exams.map(e => {
+    const subCount = submissions.filter(s => s.examId === e.id || s.testTitle === e.testTitle).length;
+    return {
+      id: e.id,
+      testTitle: e.testTitle,
+      questionCount: Array.isArray(e.questions) ? e.questions.length : 0,
+      createdAt: e.createdAt,
+      status: e.status || 'active',
+      submissionCount: subCount
+    };
+  });
+
+  return res.json({
+    success: true,
+    exams: formatted
+  });
+});
+
+/**
+ * PROTECTED Teacher Endpoint: PATCH /api/exams/:id/status
+ * Toggles or sets exam active/closed status.
+ */
+router.patch('/exams/:id/status', (req, res) => {
+  if (!isTeacherAuthorized(req)) {
+    return res.status(401).json({ error: 'Unauthorized: Teacher password required' });
+  }
+
+  const targetId = req.params.id;
+  const { status } = req.body || {};
+
+  const exams = readExams();
+  const examIndex = exams.findIndex(e => e.id === targetId);
+
+  if (examIndex === -1) {
+    return res.status(404).json({ error: 'Exam snapshot not found' });
+  }
+
+  const target = exams[examIndex];
+  const newStatus = status ? status : (target.status === 'closed' ? 'active' : 'closed');
+  
+  target.status = newStatus;
+  target.updatedAt = new Date().toISOString();
+  exams[examIndex] = target;
+
+  writeExams(exams);
+
+  return res.json({
+    success: true,
+    examId: target.id,
+    status: target.status
+  });
+});
+
+/**
  * PROTECTED Teacher Endpoint: POST /api/exams/publish
  * Freezes the current test title & questions into a permanent exam snapshot.
  */
@@ -98,7 +182,8 @@ router.post('/exams/publish', (req, res) => {
     id: serverGeneratedId,
     testTitle: typeof testTitle === 'string' && testTitle.trim() ? testTitle.trim() : 'Mathematics Practice Test',
     questions,
-    createdAt
+    createdAt,
+    status: 'active'
   };
 
   const list = readExams();
@@ -109,7 +194,8 @@ router.post('/exams/publish', (req, res) => {
     success: written,
     examId: serverGeneratedId,
     testTitle: examSnapshot.testTitle,
-    createdAt
+    createdAt,
+    status: 'active'
   });
 });
 
@@ -126,13 +212,23 @@ router.get('/exams/:id', (req, res) => {
     return res.status(404).json({ error: 'Exam paper snapshot not found or link has expired.' });
   }
 
+  // Check if exam is closed by teacher
+  if (exam.status === 'closed') {
+    return res.status(403).json({
+      success: false,
+      isClosed: true,
+      error: 'This exam has been closed by the instructor and is no longer accepting submissions.'
+    });
+  }
+
   return res.json({
     success: true,
     exam: {
       id: exam.id,
       testTitle: exam.testTitle,
       questions: exam.questions,
-      createdAt: exam.createdAt
+      createdAt: exam.createdAt,
+      status: exam.status || 'active'
     }
   });
 });

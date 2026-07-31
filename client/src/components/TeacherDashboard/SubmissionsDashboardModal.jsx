@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import PublishedExamsList from './PublishedExamsList';
 import { fetchSubmissions, gradeSubmission } from '../../services/apiService';
 import { evaluateSubmission } from '../../services/gradingService';
-import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare, Users } from 'lucide-react';
 
 export default function SubmissionsDashboardModal({ onClose }) {
+  const [activeTab, setActiveTab] = useState('submissions'); // 'submissions' | 'published_exams'
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -99,15 +101,15 @@ export default function SubmissionsDashboardModal({ onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-xs overflow-y-auto">
       <div className="bg-[#FAF7F0] border border-[#dcd2c4] rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto font-sans text-[#1c1b18]">
         
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e2d8ca] bg-[#f5efe4]">
-          <div className="flex items-center gap-3">
+        {/* Header Bar with Main Tabs */}
+        <div className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-[#e2d8ca] bg-[#f5efe4] gap-4">
+          <div className="flex items-center gap-4">
             <div className="w-9 h-9 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center shadow-xs">
               <Award className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-serif font-bold text-lg text-[#1c1b18] leading-tight">
-                Teacher Submissions & Grading Dashboard
+                Teacher Management Portal
               </h3>
               <p className="text-xs text-[#786f63]">
                 {submissions.length} Total Submissions • {unreviewedCount} Pending Teacher Review
@@ -115,15 +117,45 @@ export default function SubmissionsDashboardModal({ onClose }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Main Navigation Tabs */}
+          <div className="flex items-center gap-1.5 bg-[#e8decb] p-1 rounded-2xl">
             <button
               type="button"
-              onClick={loadSubmissions}
-              className="p-2 rounded-xl text-[#786f63] hover:bg-[#e8decb] transition-colors"
-              title="Refresh submissions"
+              onClick={() => setActiveTab('submissions')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'submissions'
+                  ? 'bg-[#1c1b18] text-white shadow-xs'
+                  : 'text-[#5c5346] hover:bg-[#dcd0be]'
+              }`}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <Users className="w-3.5 h-3.5" />
+              <span>Student Submissions</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('published_exams')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'published_exams'
+                  ? 'bg-[#1c1b18] text-white shadow-xs'
+                  : 'text-[#5c5346] hover:bg-[#dcd0be]'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Published Exams</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {activeTab === 'submissions' && (
+              <button
+                type="button"
+                onClick={loadSubmissions}
+                className="p-2 rounded-xl text-[#786f63] hover:bg-[#e8decb] transition-colors"
+                title="Refresh submissions"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -134,20 +166,22 @@ export default function SubmissionsDashboardModal({ onClose }) {
           </div>
         </div>
 
-        {/* Modal Main Content (Split view if candidate selected) */}
-        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-          
-          {/* Left Column: Submissions List */}
-          <div className={`${selectedSubmission ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 border-r border-[#e2d8ca] bg-[#fcfbfa]`}>
-            {/* Filter Tabs */}
-            <div className="p-3 border-b border-[#e2d8ca] flex items-center gap-1.5 bg-[#f5efe4]">
-              <button
-                type="button"
-                onClick={() => setFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                  filter === 'all' ? 'bg-[#2c2825] text-white shadow-xs' : 'text-[#5c5346] hover:bg-[#e8decb]'
-                }`}
-              >
+        {/* Modal Body Switcher */}
+        {activeTab === 'published_exams' ? (
+          <PublishedExamsList />
+        ) : (
+          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+            {/* Left Column: Submissions List */}
+            <div className={`${selectedSubmission ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 border-r border-[#e2d8ca] bg-[#fcfbfa]`}>
+              {/* Filter Tabs */}
+              <div className="p-3 border-b border-[#e2d8ca] flex items-center gap-1.5 bg-[#f5efe4]">
+                <button
+                  type="button"
+                  onClick={() => setFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                    filter === 'all' ? 'bg-[#2c2825] text-white shadow-xs' : 'text-[#5c5346] hover:bg-[#e8decb]'
+                  }`}
+                >
                 All ({submissions.length})
               </button>
               <button
@@ -423,10 +457,9 @@ export default function SubmissionsDashboardModal({ onClose }) {
               </div>
             )}
           </div>
-
         </div>
-
-      </div>
+      )}
     </div>
-  );
+  </div>
+);
 }

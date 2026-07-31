@@ -177,6 +177,31 @@ export async function fetchExamSnapshot(examId) {
   return await response.json();
 }
 
+export async function fetchExamsList() {
+  const response = await fetch('/api/exams', {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch published exams (${response.status})`);
+  }
+  return await response.json();
+}
+
+export async function toggleExamStatus(examId, status) {
+  const response = await fetch(`/api/exams/${examId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify({ status })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to update exam status (${response.status})`);
+  }
+  return await response.json();
+}
+
 async function handleApiResponse(response) {
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
