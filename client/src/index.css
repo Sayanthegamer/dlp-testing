@@ -53,10 +53,10 @@
 /* Print Stylesheet Rules */
 @media print {
   /* Hide main app UI, navbar, drawer, cards, dev inspector when print modal is open */
-  body > main,
-  body header,
-  body footer,
+  main,
   nav,
+  header,
+  footer,
   .print\:hidden {
     display: none !important;
   }
