@@ -231,7 +231,7 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
         mimeType: mediaType || 'image/jpeg'
       }
     });
-    promptParts.push('Transcribe all exam questions from this image into the questions array JSON schema. Place all math inside <math>LaTeX</math> tags.');
+    promptParts.push('Transcribe all exam questions visible in this image into separate objects in the "questions" array. Split each numbered question (Question 1, Question 2, etc.) into its own distinct question block with its own questionText, type, and options. Place all math inside <math>LaTeX</math> tags.');
   } else if (type === 'docx_structure') {
     promptParts.push(`Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.`);
   }
@@ -257,7 +257,7 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: 'Transcribe all exam questions from this image into the questions array JSON schema. Place all math inside <math>LaTeX</math> tags.' }
+          { type: 'text', text: 'Transcribe all exam questions visible in this image into separate objects in the "questions" array. Split each numbered question (Question 1, Question 2, etc.) into its own distinct question block with its own questionText, type, and options. Place all math inside <math>LaTeX</math> tags.' }
         ]
       }
     ];
