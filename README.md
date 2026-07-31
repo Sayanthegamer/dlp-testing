@@ -21,7 +21,6 @@
 
 ## 📖 Table of Contents
 - [✨ Features](#-features)
-- [📸 Sneak Peek](#-sneak-peek)
 - [🏗 Architecture & Flow](#-architecture--flow)
 - [🛠 Tech Stack](#-tech-stack)
 - [💻 Developer Setup (No more headaches!)](#-developer-setup-no-more-headaches)
@@ -29,7 +28,6 @@
   - [2. Environment Variables](#2-environment-variables)
   - [3. Run the App](#3-run-the-app)
 - [🧠 Project Philosophy](#-project-philosophy)
-- [📄 License](#-license)
 
 ---
 
@@ -46,47 +44,21 @@
 
 ---
 
-## 📸 Sneak Peek
-
-*(Add your awesome GIFs here to show off the pipeline!)*
-
-<div align="center">
-  <img src="https://via.placeholder.com/800x450.png?text=Add+App+Demo+GIF+Here" alt="Demo GIF placeholder" />
-  <p><i>The intuitive math block editor in action.</i></p>
-</div>
-
----
-
 ## 🏗 Architecture & Flow
 
 The DLP testing pipeline standardizes all inputs (Text, Images, DOCX) into a single unified JSON schema.
 
 ```mermaid
 graph TD
-    %% Inputs
     A1[Messy Text] -->|Gemini/Claude API| C{Backend Normalization}
     A2[Photo Upload] -->|Multimodal AI| C
     A3[Word .docx] -->|JSZip XML Parse| C
-
-    %% Backend
     C -->|Unified JSON Schema| D[(Frontend State)]
-
-    %% Frontend
     D --> E[Teacher Block Editor]
     E -->|Visual KaTeX Editing| E
     E -->|Teacher Review Gate| F(Confirmed Exam)
-
-    %% Outputs
     F --> G[Live Student Portal]
     F --> H[1-Click PDF Export]
-
-    classDef input fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef processing fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px;
-    classDef output fill:#e8f5e9,stroke:#4caf50,stroke-width:2px;
-
-    class A1,A2,A3 input;
-    class C,D,E processing;
-    class G,H output;
 ```
 
 ---
@@ -167,12 +139,6 @@ Boom! 🚀 You are ready to develop.
 - **Exam-Native, Not App-Native:** The UI mimics an actual printed exam paper. No generic SaaS drop-shadows, no flashy gamification. Warm paper whites (`#FAF7F0`) and soft blacks (`#232323`).
 - **Quiet & Reliable:** Trustworthiness comes from feeling boring and reliable, like a good photocopier.
 - **Zero LaTeX Exposure:** Teachers shouldn't need to learn markup. If a math block fails to render, we show a plain English error ("this formula needs a check"), never a stack trace.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 <div align="center">
