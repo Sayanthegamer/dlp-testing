@@ -126,13 +126,16 @@ export function evaluateSubmission(questions = [], studentAnswers = {}, manualGr
     });
   }
 
+  const evaluatedTotal = total - pendingCount;
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+  const provisionalPercentage = evaluatedTotal > 0 ? Math.round((score / evaluatedTotal) * 100) : 0;
 
   return {
     score,
     total,
     pendingCount,
     percentage,
+    provisionalPercentage,
     perQuestion
   };
 }
