@@ -38,6 +38,9 @@ export function evaluateQuestion(question, studentAnswer) {
     const isCorrect = !isNaN(parsedInput) && parsedInput >= range[0] && parsedInput <= range[1];
     return { status: isCorrect ? 'correct' : 'incorrect', isAutoGraded: true, isCorrect };
   }
+
+  // Fallback for unclassified or legacy question types
+  return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
 }
 
 /**

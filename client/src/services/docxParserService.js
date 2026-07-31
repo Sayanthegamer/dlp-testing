@@ -101,11 +101,12 @@ function processDocxLines(lines, allMathSpans) {
 
   return {
     questionText,
-    type: isMcq ? "mcq" : "short_answer_text",
+    type: isMcq ? "mcq" : "short_answer_numeric",
     options: isMcq ? options : [],
     correctAnswer: null,
     mathSpans: allMathSpans,
     confidenceScore: 0.98,
+    numericalConfirmed: false,
     needsReview: true,
     rawLines: lines
   };

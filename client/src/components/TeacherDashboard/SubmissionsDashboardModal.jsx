@@ -398,7 +398,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
                           </div>
 
                           {/* Teacher Manual Grading Action Controls for short answers / text */}
-                          {(q.type === 'short_answer_text' || autoStatus === 'pending_review' || q.type === 'short_answer') && (
+                          {(qEval.autoStatus === 'pending_review' || q.type === 'short_answer_text' || q.type === 'short_answer') && (
                             <div className="pt-2 border-t border-[#e2d8ca] space-y-2">
                               <span className="font-bold text-[#8c4a17] block">Teacher Manual Evaluation:</span>
                               <div className="flex items-center gap-2">

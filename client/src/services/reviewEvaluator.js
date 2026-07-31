@@ -20,9 +20,9 @@ export function computeNeedsReview(question) {
     if (!Array.isArray(question.options) || question.options.length < 2) {
       reasons.push('Fewer than 2 MCQ Options');
     }
-  } else if (question.type === 'short_answer') {
-    // Bare legacy short_answer type
-    reasons.push('Unclassified Answer Type');
+  } else if (question.type === 'short_answer' || question.type === 'short_answer_text') {
+    // Legacy non-numeric question type handles
+    reasons.push('Legacy Answer Type (Convert to Numerical)');
   } else if (question.type === 'short_answer_numeric') {
     const range = question.acceptedRange;
     const isValidRange = Array.isArray(range) && 

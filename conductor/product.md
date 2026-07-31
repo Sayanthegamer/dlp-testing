@@ -49,19 +49,17 @@ given question.
   silently guesses its own answer key is not trustworthy — this is a
   hard rule, not a nice-to-have.
 
-### 4. Review, Not Confidence Scores
-- A question block is flagged `needsReview` based on concrete, checkable
-  conditions — not an AI-reported confidence number (self-reported model
-  confidence isn't reliable enough to build UI around). Flag when:
-  - `correctAnswer` is missing/unset
-  - An MCQ block has fewer than 2 options, or option count looks wrong
-  - KaTeX itself throws a render error on a math span (this is a real,
-    concrete signal — trust it over anything the model says about itself)
-  - OCR/vision transcription returned very short or empty text for a
-    question that should have content
-- Flagged blocks get a soft amber highlight and float to the top of the
-  list until resolved. Nothing else about "AI confidence" is surfaced to
-  the teacher — it would just be noise they can't act on.
+### 4. 2-Type Question Model & Mandatory Range Review Gate
+- Questions are strictly classified into 2 types:
+  - **Multiple Choice Questions (`mcq`)**: Options array with 0-indexed correct answer key.
+  - **Numerical Questions (`short_answer_numeric`)**: Integer or decimal numerical answers ($-\infty$ to $+\infty$) with accepted range `[min, max]`. There are NO free-text subjective questions.
+- **AI Answer Range Estimation & Human Confirmation**: AI ingestion parsers solve and estimate numerical answers and suggest `[min, max]` ranges. Every numerical question defaults to unconfirmed (`numericalConfirmed: false`) and is flagged `needsReview: true` until the teacher explicitly checks and confirms the answer range in the editor.
+- **Publishing Lock Invariant**: Exams cannot be published or shared until all MCQ keys and numerical ranges are confirmed by the teacher (`needsReview: false`).
+- **Review Flag Conditions**: A block is flagged `needsReview` when:
+  - MCQ `correctAnswer` is unset or option count is invalid.
+  - Numerical `numericalConfirmed` is false or `acceptedRange` is unset/invalid.
+  - KaTeX throws a render error on a math span.
+  - Question stem is missing or shorter than 3 characters.
 
 ### 5. 1-Click PDF Exam Export
 - Printable exam-paper layout view, generated from the same question
