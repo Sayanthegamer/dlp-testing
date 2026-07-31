@@ -58,39 +58,50 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
 
           {/* Questions List */}
           <div className="space-y-8">
-            {questions.map((q, idx) => (
-              <div key={q.id || idx} className="space-y-3 page-break-inside-avoid">
-                <div className="flex items-start gap-2 text-base sm:text-lg text-[#1c1b18]">
-                  <span className="font-bold">{idx + 1}.</span>
-                  <div className="flex-1">
-                    <MathRenderer text={q.questionText} />
-                  </div>
-                </div>
+            {questions.map((q, idx) => {
+              const totalOptionsLength = (q.options || []).reduce((acc, opt) => acc + (opt || '').length, 0);
+              const isLongOptions = totalOptionsLength > 100 || (q.options || []).some(o => (o || '').length > 40);
 
-                {/* MCQ Options */}
-                {q.type === 'mcq' && q.options && q.options.length > 0 && (
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 pl-6 pt-1 text-base">
-                    {q.options.map((opt, optIdx) => (
-                      <div key={optIdx} className="flex items-start gap-2">
-                        <span className="font-bold text-[#4a443b]">
-                          ({optionLetters[optIdx] || optIdx + 1})
-                        </span>
-                        <div>
-                          <MathRenderer text={opt} />
+              return (
+                <div key={q.id || idx} className="space-y-3 page-break-inside-avoid">
+                  <div className="flex items-start gap-2 text-base sm:text-lg text-[#1c1b18]">
+                    <span className="font-bold">{idx + 1}.</span>
+                    <div className="flex-1">
+                      <MathRenderer text={q.questionText} />
+                    </div>
+                  </div>
+
+                  {/* MCQ Options (Smart Layout: 2-column for short, 1-column stack for long options) */}
+                  {q.type === 'mcq' && q.options && q.options.length > 0 && (
+                    <div
+                      className={
+                        isLongOptions
+                          ? 'space-y-2 pl-6 pt-1 text-base'
+                          : 'grid grid-cols-2 gap-x-8 gap-y-2 pl-6 pt-1 text-base'
+                      }
+                    >
+                      {q.options.map((opt, optIdx) => (
+                        <div key={optIdx} className="flex items-start gap-2">
+                          <span className="font-bold text-[#4a443b] shrink-0">
+                            ({optionLetters[optIdx] || optIdx + 1})
+                          </span>
+                          <div>
+                            <MathRenderer text={opt} />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
 
-                {/* Short Answer blank line */}
-                {q.type === 'short_answer' && (
-                  <div className="pl-6 pt-2">
-                    <div className="border-b border-dashed border-gray-400 w-64 h-6"></div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  {/* Short Answer blank line */}
+                  {q.type === 'short_answer' && (
+                    <div className="pl-6 pt-2">
+                      <div className="border-b border-dashed border-gray-400 w-64 h-6"></div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Exam Footer */}
