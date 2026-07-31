@@ -181,11 +181,11 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
 
           {/* LONG STYLE (Detailed Itemized Report with Stems) */}
           {printStyle === 'long' && (
-            <div className="space-y-6 pt-2">
+            <div className="space-y-4 pt-2">
               <h2 className="font-sans font-bold text-xs uppercase tracking-wider text-[#5c5346]">
                 Itemized Question & Evaluation Report
               </h2>
-              <div className="space-y-6">
+              <div className="space-y-4 print:space-y-3">
                 {questions.map((q, idx) => {
                   const item = perQuestion[idx] || {};
                   const studentAns = studentAnswers[q.id];
@@ -213,7 +213,7 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
                   }
 
                   return (
-                    <div key={q.id || idx} className="border border-gray-300 rounded-xl p-5 space-y-3 page-break-inside-avoid">
+                    <div key={q.id || idx} className="border border-gray-300 rounded-xl p-3.5 sm:p-4 space-y-2.5 page-break-inside-avoid">
                       <div className="flex items-center justify-between font-sans text-xs border-b border-gray-200 pb-2">
                         <span className="font-bold text-gray-900">Question #{idx + 1}</span>
                         <span className="font-bold">
@@ -234,7 +234,7 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
                           <span className="text-[11px] font-sans font-semibold text-gray-500 uppercase tracking-wider block">
                             Options:
                           </span>
-                          <div className="space-y-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {q.options.map((opt, optIdx) => {
                               const letter = optionLetters[optIdx] || optIdx + 1;
                               const isCandidateChoice = studentAns === optIdx;

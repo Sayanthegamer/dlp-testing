@@ -87,6 +87,7 @@
   }
 
   .print-modal-container {
+    display: block !important;
     background: #ffffff !important;
     border: none !important;
     box-shadow: none !important;
@@ -101,6 +102,7 @@
 
   #printable-exam-paper,
   #printable-result-paper {
+    display: block !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #ffffff !important;
