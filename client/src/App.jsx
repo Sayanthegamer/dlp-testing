@@ -156,7 +156,7 @@ export default function App() {
 
   // Catalogue mutation handlers
   const handleUpdateQuestion = (questionId, updatedData) => {
-    setQuestions(prev => prev.map(q => q.id === questionId ? updatedData : q));
+    setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, ...updatedData } : q));
   };
 
   const handleDeleteQuestion = (questionId) => {

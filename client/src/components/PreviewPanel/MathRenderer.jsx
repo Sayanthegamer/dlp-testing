@@ -51,14 +51,26 @@ export default function MathRenderer({ text = '', needsReview = false, onSelectM
         try {
           renderedHtml = katex.renderToString(cleanMathContent, {
             displayMode: false,
-            throwOnError: false,
-            errorColor: '#c97a2b'
+            throwOnError: true
           });
         } catch (e) {
           isError = true;
         }
 
         const isHighlighted = needsReview || isError;
+
+        if (isError) {
+          return (
+            <span
+              key={idx}
+              onClick={() => onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
+              className="inline-block font-sans text-xs font-semibold mx-1 cursor-pointer rounded px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 hover:bg-amber-200 transition-all"
+              title="Math formula syntax needs review — click to edit visually"
+            >
+              [Math Formula Needs Review]
+            </span>
+          );
+        }
 
         return (
           <span
@@ -70,7 +82,7 @@ export default function MathRenderer({ text = '', needsReview = false, onSelectM
                 : 'hover:bg-amber-100/50 hover:underline'
             }`}
             title="Click to edit formula visually"
-            dangerouslySetInnerHTML={{ __html: renderedHtml || cleanMathContent }}
+            dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
         );
       })}

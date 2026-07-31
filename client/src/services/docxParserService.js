@@ -99,21 +99,14 @@ function processDocxLines(lines, allMathSpans) {
     }
   }
 
-  // If no explicit options found by regex, check if subsequent lines look like options
-  if (!isMcq && lines.length >= 5) {
-    questionText = lines[0];
-    options.push(lines[1], lines[2], lines[3], lines[4]);
-    isMcq = true;
-  }
-
   return {
     questionText,
     type: isMcq ? "mcq" : "short_answer",
-    options: isMcq ? (options.length ? options : ["Option A", "Option B", "Option C", "Option D"]) : [],
-    correctAnswer: 0,
+    options: isMcq ? options : [],
+    correctAnswer: null,
     mathSpans: allMathSpans,
     confidenceScore: 0.98,
-    needsReview: false,
+    needsReview: true,
     rawLines: lines
   };
 }
