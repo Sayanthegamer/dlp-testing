@@ -114,6 +114,7 @@ function extractAndParseJson(text) {
 // Validate shape of parsed JSON structure
 function validateJsonSchema(data) {
   if (!data || typeof data !== 'object') return false;
+  if (data.testTitle && typeof data.testTitle !== 'string') return false;
   if (!Array.isArray(data.questions) || data.questions.length === 0) return false;
   
   for (const q of data.questions) {
@@ -265,7 +266,7 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
   }
 
   const response = await anthropic.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
     max_tokens: 16384,
     system: SYSTEM_PROMPT,
     messages
