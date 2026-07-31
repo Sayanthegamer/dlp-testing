@@ -23,14 +23,17 @@ export default function QuestionCatalogue({
     }
   }, [isJustParsed]);
 
-  // Sort questions so flagged items (needsReview === true) float to top of list until resolved
-  const sortedQuestions = [...questions].sort((a, b) => {
-    const aNeeds = computeNeedsReview(a).needsReview;
-    const bNeeds = computeNeedsReview(b).needsReview;
-    if (aNeeds && !bNeeds) return -1;
-    if (!aNeeds && bNeeds) return 1;
-    return 0;
-  });
+  // Sort questions so flagged items (needsReview === true) float to top of list until resolved,
+  // preserving their original exam index so numbering stays consistent with print view.
+  const sortedQuestions = questions
+    .map((question, originalIdx) => ({ question, originalIdx }))
+    .sort((a, b) => {
+      const aNeeds = computeNeedsReview(a.question).needsReview;
+      const bNeeds = computeNeedsReview(b.question).needsReview;
+      if (aNeeds && !bNeeds) return -1;
+      if (!aNeeds && bNeeds) return 1;
+      return a.originalIdx - b.originalIdx;
+    });
 
   return (
     <div ref={topRef} className="space-y-6">
@@ -75,13 +78,13 @@ export default function QuestionCatalogue({
         </p>
       </div>
 
-      {/* Stacked Question Cards (Flagged Items Floating to Top) */}
+      {/* Stacked Question Cards (Flagged Items Floating to Top, Preserving Exam Numbering) */}
       <div className="space-y-6">
-        {sortedQuestions.map((question, idx) => (
+        {sortedQuestions.map(({ question, originalIdx }) => (
           <QuestionCard
-            key={question.id || idx}
+            key={question.id || originalIdx}
             question={question}
-            index={idx}
+            index={originalIdx}
             onUpdateQuestion={onUpdateQuestion}
             onDeleteQuestion={onDeleteQuestion}
             onDuplicateQuestion={onDuplicateQuestion}
