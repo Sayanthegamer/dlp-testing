@@ -159,11 +159,7 @@ function validateJsonSchema(data) {
 }
 
 function getGeminiModelName() {
-  const model = process.env.GEMINI_MODEL;
-  if (model && typeof model === 'string' && !model.includes('3.5') && !model.includes('your_')) {
-    return model;
-  }
-  return 'gemini-1.5-flash';
+  return process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 }
 
 // POST /api/parse-question with Automatic Key Fallback & Failover
