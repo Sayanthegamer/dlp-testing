@@ -188,6 +188,22 @@ router.post('/exams/session/start', async (req, res) => {
     return res.status(400).json({ error: 'examId is required to start a test session' });
   }
 
+  // Check if target exam is closed
+  if (isConfigured()) {
+    try {
+      const { data: examData } = await supabase.from('exams').select('status').eq('id', examId).single();
+      if (examData && examData.status === 'closed') {
+        return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Please re-open the exam first.' });
+      }
+    } catch (e) {}
+  } else {
+    const list = readExamsLocal();
+    const localExam = list.find(e => e.id === examId);
+    if (localExam && localExam.status === 'closed') {
+      return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Please re-open the exam first.' });
+    }
+  }
+
   const rollingCode = generate6DigitCode();
   const createdAt = new Date().toISOString();
 
@@ -209,6 +225,7 @@ router.post('/exams/session/start', async (req, res) => {
       console.warn('[Supabase Session Insert Warning]:', dbErr.message);
     }
   }
+
 
   activeRollingSessions.set(rollingCode, {
     examId,
