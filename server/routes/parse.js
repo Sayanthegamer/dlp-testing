@@ -273,29 +273,23 @@ router.post('/parse-question', async (req, res) => {
     }
   }
 
-  // If API keys were provided but failed (e.g. rate limit / network error), log warning and gracefully fall back to Smart Demo Mode
+  // If API keys were provided but failed, return explicit error details to client instead of silent fallback
   if (providers.length > 0) {
     const errDetails = errors.map(e => `[${e.provider}]: ${e.error}`).join(' | ');
-    console.warn(`[Parser Warning] All API providers failed (${errDetails}). Falling back to Smart Demo Mode.`);
-    const simulatedResult = generateLocalFallback(type, rawText, docxStructure);
-    return res.json({
-      success: true,
-      data: simulatedResult,
-      mode: 'demo_fallback',
-      warning: `AI API call failed (${errDetails}). Served Smart Demo Fallback response.`
+    console.error(`[Parser Error] All API providers failed: ${errDetails}`);
+    return res.status(500).json({
+      success: false,
+      error: `AI Vision Transcription failed: ${errDetails}. Please check your API key in Vercel Environment Variables.`
     });
   }
 
-  // If no keys configured at all, gracefully fall back to local smart demo response
-  console.log('[Parser Info] No API keys configured. Using Smart Demo Fallback.');
-  const simulatedResult = generateLocalFallback(type, rawText, docxStructure);
-  
-  return res.json({
-    success: true,
-    data: simulatedResult,
-    mode: 'demo_fallback'
+  // If no keys configured at all, return clear missing key error
+  return res.status(400).json({
+    success: false,
+    error: 'No GEMINI_API_KEY configured in server environment variables. Please add GEMINI_API_KEY in Vercel Project Settings.'
   });
 });
+
 
 function stripBase64Header(str) {
   if (typeof str !== 'string') return str || '';
