@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { attachCroppedDiagrams } = require('../services/diagramCropService');
 
 const SYSTEM_PROMPT = `You are an expert math test parser for tuition teachers.
 Your task is to parse input (informal text, photo of exam paper, or document structure) representing one or more math exam questions and convert them into strict JSON adhering to this exact schema:
@@ -30,7 +31,12 @@ CRITICAL RULES:
 4. For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq", with "correctAnswer" as the 0-indexed integer of the correct option if identifiable.
 5. ALL non-MCQ questions MUST be "type": "short_answer_numeric". There are NO free-text subjective questions. The answer is ALWAYS a numerical value (integer or decimal from -infinity to +infinity).
 6. ALWAYS SOLVE/ESTIMATE THE NUMERICAL ANSWER for numerical questions: output an estimated "correctAnswer" (numeric float/integer) AND a suggested "acceptedRange": [min, max] (e.g. [14.5, 15.5] or ±1% tolerance around the estimated answer).
-7. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+7. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.
+8. CHEMISTRY EQUATIONS & FORMULAS: wrap in <math>\ce{...}</math> using mhchem syntax — balanced reactions, state symbols (s)/(l)/(g)/(aq), equilibrium arrows (<=>, <=>>), ionic charges (Fe^3+), coordination formulas ([Co(NH3)6]^3+).
+9. NUCLEAR NOTATION (Chemistry radioactivity AND Physics Modern Physics): isotopes as <math>\ce{^238_92U}</math> via mhchem — identical syntax serves both subjects.
+10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\pu{...}</math>, e.g. <math>\pu{9.8 m/s^2}</math>, <math>\pu{6.63e-34 J s}</math>.
+11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\nCr{n}{r}</math> / <math>\nPr{n}{r}</math> custom macros, not raw \binom.
+12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.`;
 
 function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');
@@ -192,6 +198,9 @@ router.post('/parse-question', async (req, res) => {
         if (!validateJsonSchema(data)) {
           throw new Error('Gemini response failed JSON schema shape validation');
         }
+        if (Array.isArray(data.questions)) {
+          data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+        }
         return res.json({ success: true, data, mode: 'live_gemini' });
       }
 
@@ -208,6 +217,9 @@ router.post('/parse-question', async (req, res) => {
         });
         if (!validateJsonSchema(data)) {
           throw new Error('Claude response failed JSON schema shape validation');
+        }
+        if (Array.isArray(data.questions)) {
+          data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
         }
         return res.json({ success: true, data, mode: 'live_anthropic' });
       }

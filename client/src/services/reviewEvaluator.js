@@ -69,6 +69,17 @@ export function computeNeedsReview(question) {
     reasons.push('Math Formula Syntax Error');
   }
 
+  // Structural Diagram Leakage Detector (Structural drawings shouldn't be raw text LaTeX)
+  const structuralHints = /benzene ring|skeletal structure|wedge.?dash|orbital diagram|circuit diagram/i;
+  if (structuralHints.test(fullTextToTest)) {
+    reasons.push('Possible Structural Diagram — Verify Not Misrendered as Text');
+  }
+
+  // AI-cropped diagrams always require teacher confirmation
+  if (Array.isArray(question.diagrams) && question.diagrams.length > 0 && !question.diagramsConfirmed) {
+    reasons.push('Diagram Needs Review');
+  }
+
   return {
     needsReview: reasons.length > 0,
     reasons

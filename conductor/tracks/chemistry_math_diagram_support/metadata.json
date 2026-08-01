@@ -2,6 +2,7 @@
   "id": "chemistry_math_diagram_support",
   "name": "Chemistry & Math Full-Syllabus Equation Rendering + AI-Cropped Diagram Pipeline",
   "type": "feature",
-  "status": "new",
-  "createdAt": "2026-08-01T12:55:00Z"
+  "status": "completed",
+  "createdAt": "2026-08-01T12:55:00Z",
+  "completedAt": "2026-08-01T13:01:00Z"
 }

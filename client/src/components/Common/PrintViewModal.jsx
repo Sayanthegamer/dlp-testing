@@ -1,5 +1,6 @@
 import React from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import { Printer, X } from 'lucide-react';
 
@@ -75,6 +76,7 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
                     <span className="font-bold">{idx + 1}.</span>
                     <div className="flex-1">
                       <MathRenderer text={q.questionText} />
+                      <DiagramBlock diagrams={q.diagrams} diagramImages={q.diagramImages} />
                     </div>
                   </div>
 

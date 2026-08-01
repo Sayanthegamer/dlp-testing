@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import { ChevronLeft, ChevronRight, CheckSquare, CheckCircle, AlertTriangle } from 'lucide-react';
 
@@ -72,6 +73,7 @@ export default function TestQuestionView({
               <div className="font-serif text-lg sm:text-2xl text-[#232323] leading-relaxed">
                 <MathRenderer text={questionText} readOnly={true} />
               </div>
+              <DiagramBlock diagrams={question.diagrams} diagramImages={question.diagramImages} />
             </div>
 
             {/* MCQ Options */}

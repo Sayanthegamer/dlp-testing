@@ -1,5 +1,6 @@
 import React from 'react';
 import katex from 'katex';
+import 'katex/contrib/mhchem';
 
 export default function MathRenderer({ text = '', needsReview = false, readOnly = false, onSelectMathForEdit }) {
   if (!text || text.trim() === '') {
@@ -51,7 +52,13 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         try {
           renderedHtml = katex.renderToString(cleanMathContent, {
             displayMode: false,
-            throwOnError: true
+            throwOnError: true,
+            trust: true,
+            macros: {
+              "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
+              "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
+              "\\vhat": "\\hat{\\mathbf{#1}}"
+            }
           });
         } catch (e) {
           isError = true;

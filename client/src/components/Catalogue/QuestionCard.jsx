@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import { computeNeedsReview } from '../../services/reviewEvaluator';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import { Check, Edit2, Copy, Trash2, CheckCircle2, Circle, Type, ShieldCheck, AlertTriangle } from 'lucide-react';
@@ -72,6 +73,23 @@ export default function QuestionCard({
             <option value="mcq">MCQ</option>
             <option value="short_answer_numeric">Numerical Question</option>
           </select>
+
+          {/* Diagram Confirmation Badge */}
+          {Array.isArray(question.diagrams) && question.diagrams.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onUpdateQuestion(id, { ...question, diagramsConfirmed: !question.diagramsConfirmed })}
+              className={`flex items-center gap-1 text-[11px] font-sans font-semibold px-2.5 py-0.5 rounded-full transition-all shrink-0 ${
+                question.diagramsConfirmed
+                  ? 'bg-emerald-50 border border-emerald-300 text-emerald-800'
+                  : 'bg-amber-100 border border-amber-300 text-amber-900 hover:bg-amber-200 cursor-pointer'
+              }`}
+              title="Click to toggle diagram verification status"
+            >
+              <ShieldCheck className="w-3 h-3 text-amber-700 shrink-0" />
+              <span>{question.diagramsConfirmed ? 'Diagram Verified' : 'Confirm Diagram'}</span>
+            </button>
+          )}
 
           {/* Deterministic Review Badge */}
           {needsReview ? (
@@ -148,6 +166,9 @@ export default function QuestionCard({
             />
           </div>
         )}
+
+        {/* Cropped Diagram Block */}
+        <DiagramBlock diagrams={question.diagrams} diagramImages={question.diagramImages} />
       </div>
 
       {/* Options (MCQ mode) */}

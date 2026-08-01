@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import { gradeAttempt } from '../../services/gradingService';
 import { Printer, X, FileText, AlignLeft } from 'lucide-react';
 
@@ -236,6 +237,7 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
                       {/* Stem */}
                       <div className="font-serif text-base text-[#1c1b18]">
                         <MathRenderer text={q.questionText} readOnly={true} />
+                        <DiagramBlock diagrams={q.diagrams} diagramImages={q.diagramImages} />
                       </div>
 
                       {/* MCQ Options with Full Content & Math */}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
+import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import ResultPrintModal from './ResultPrintModal';
 import { gradeAttempt } from '../../services/gradingService';
 import { submitStudentTest } from '../../services/apiService';
@@ -197,6 +198,7 @@ export default function TestResultScreen({
                 {/* Question Stem */}
                 <div className="font-serif text-lg text-[#232323] leading-relaxed">
                   <MathRenderer text={q.questionText} readOnly={true} />
+                  <DiagramBlock diagrams={q.diagrams} diagramImages={q.diagramImages} />
                 </div>
 
                 {/* MCQ Options with Visual Badges */}
