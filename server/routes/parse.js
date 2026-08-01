@@ -159,7 +159,11 @@ function validateJsonSchema(data) {
 }
 
 function getGeminiModelName() {
-  return process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const model = process.env.GEMINI_MODEL;
+  if (model && typeof model === 'string' && !model.includes('3.5') && !model.includes('your_')) {
+    return model;
+  }
+  return 'gemini-1.5-flash';
 }
 
 // POST /api/parse-question with Automatic Key Fallback & Failover
@@ -229,12 +233,16 @@ router.post('/parse-question', async (req, res) => {
     }
   }
 
-  // If API keys were provided but failed, throw explicit error so the user knows what went wrong
+  // If API keys were provided but failed (e.g. rate limit / network error), log warning and gracefully fall back to Smart Demo Mode
   if (providers.length > 0) {
     const errDetails = errors.map(e => `[${e.provider}]: ${e.error}`).join(' | ');
-    return res.status(500).json({
-      success: false,
-      error: `AI API call failed: ${errDetails}`
+    console.warn(`[Parser Warning] All API providers failed (${errDetails}). Falling back to Smart Demo Mode.`);
+    const simulatedResult = generateLocalFallback(type, rawText, docxStructure);
+    return res.json({
+      success: true,
+      data: simulatedResult,
+      mode: 'demo_fallback',
+      warning: `AI API call failed (${errDetails}). Served Smart Demo Fallback response.`
     });
   }
 

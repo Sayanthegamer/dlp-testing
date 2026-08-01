@@ -67,7 +67,7 @@ app.get('/api/health', (req, res) => {
       gemini: hasGemini ? 'active' : 'inactive',
       anthropic: hasAnthropic ? 'active' : 'inactive'
     },
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
+    geminiModel: (process.env.GEMINI_MODEL && !process.env.GEMINI_MODEL.includes('3.5')) ? process.env.GEMINI_MODEL : 'gemini-1.5-flash'
   });
 });
 
