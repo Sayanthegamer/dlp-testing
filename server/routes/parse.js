@@ -6,30 +6,49 @@ const { attachCroppedDiagrams } = require('../services/diagramCropService');
 const { extractCandidateFigures } = require('../services/layoutExtractorService');
 const { matchDiagramsToQuestions } = require('../services/diagramMatcherService');
 
+/**
+ * REVIEW & INVARIANT CONTRACT (Aligned with client/src/services/reviewEvaluator.js):
+ * - Needs Review is flagged by client when:
+ *   1. Answer key is unset (correctAnswer is null/undefined)
+ *   2. Numeric question has invalid range (acceptedRange missing or min > max)
+ *   3. MCQ question has fewer than 2 options
+ *   4. Question stem is empty or contains invalid math syntax
+ * - TEACHER CONFIRMATION FLAGS:
+ *   "numericalConfirmed" and "diagramsConfirmed" are client-side teacher confirmation toggles ONLY.
+ *   The AI model MUST NEVER set or output "numericalConfirmed" or "diagramsConfirmed".
+ */
 const SYSTEM_PROMPT = `You are an expert math test parser for tuition teachers.
-Your task is to parse input (informal text, photo of exam paper, or document structure) representing one or more math exam questions and convert them into strict JSON adhering to this exact schema:
+Your task is to parse input (informal text, photo of exam paper, or document structure) representing one or more math exam questions and convert them into strict JSON adhering to this exact schema format:
 
 {
   "testTitle": "Mathematics Test Paper",
   "questions": [
     {
       "id": "q1",
-      "questionText": "Question stem text with math enclosed in <math>LaTeX</math> tags. E.g. Solve for x: <math>x^2 + 2x - 3 = 0</math>",
+      "questionText": "Solve for <math>x</math>: <math>x^2 + 2x - 3 = 0</math>",
       "type": "mcq",
-      "options": ["<math>Option A</math>", "<math>Option B</math>", "<math>Option C</math>", "<math>Option D</math>"],
+      "options": ["<math>x = 1, -3</math>", "<math>x = -1, 3</math>", "<math>x = 2, -3</math>", "<math>x = -2, 1</math>"],
       "correctAnswer": 0,
-      "acceptedRange": [1.99, 2.01],
+      "confidenceScore": 0.95,
+      "needsReview": false
+    },
+    {
+      "id": "q2",
+      "questionText": "Calculate the equivalent resistance across terminals A and B in the circuit.",
+      "type": "short_answer_numeric",
+      "options": [],
+      "correctAnswer": 15,
+      "acceptedRange": [14.85, 15.15],
       "diagrams": [
         {
           "id": "diag_1",
           "sourceFileIndex": 0,
           "pageIndex": 0,
-          "bbox": [0.10, 0.20, 0.40, 0.30],
-          "caption": "Circuit Diagram / Figure"
+          "bbox": [0.20, 0.15, 0.50, 0.85],
+          "caption": "Resistor Bridge Circuit Diagram"
         }
       ],
-      "mathSpans": ["x^2 + 2x - 3 = 0"],
-      "confidenceScore": 0.95,
+      "confidenceScore": 0.92,
       "needsReview": false
     }
   ]
@@ -43,14 +62,17 @@ CRITICAL RULES:
 5. ALL non-MCQ questions MUST be "type": "short_answer_numeric". There are NO free-text subjective questions. The answer is ALWAYS a numerical value (integer or decimal from -infinity to +infinity).
 6. ALWAYS SOLVE/ESTIMATE THE NUMERICAL ANSWER for numerical questions: output an estimated "correctAnswer" (numeric float/integer) AND a suggested "acceptedRange": [min, max] (e.g. [14.5, 15.5] or ±1% tolerance around the estimated answer).
 7. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.
-8. CHEMISTRY EQUATIONS & FORMULAS: wrap in <math>\ce{...}</math> using mhchem syntax — balanced reactions, state symbols (s)/(l)/(g)/(aq), equilibrium arrows (<=>, <=>>), ionic charges (Fe^3+), coordination formulas ([Co(NH3)6]^3+).
-9. NUCLEAR NOTATION (Chemistry radioactivity AND Physics Modern Physics): isotopes as <math>\ce{^238_92U}</math> via mhchem — identical syntax serves both subjects.
-10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\pu{...}</math>, e.g. <math>\pu{9.8 m/s^2}</math>, <math>\pu{6.63e-34 J s}</math>.
-11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\nCr{n}{r}</math> / <math>\nPr{n}{r}</math> custom macros, not raw \binom.
+8. CHEMISTRY EQUATIONS & FORMULAS: wrap in <math>\\ce{...}</math> using mhchem syntax — balanced reactions, state symbols (s)/(l)/(g)/(aq), equilibrium arrows (<=>, <=>>), ionic charges (Fe^3+), coordination formulas ([Co(NH3)6]^3+).
+9. NUCLEAR NOTATION (Chemistry radioactivity AND Physics Modern Physics): isotopes as <math>\\ce{^238_92U}</math> via mhchem — identical syntax serves both subjects.
+10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\\pu{...}</math>, e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{6.63e-34 J s}</math>.
+11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\\nCr{n}{r}</math> / <math>\\nPr{n}{r}</math> custom macros, not raw \\binom.
 12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.
 13. DIAGRAM BOUNDING BOXES: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, populate the "diagrams" array containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}. ymin, xmin, ymax, xmax MUST be 4 normalized floats between 0.0 and 1.0 tightly enclosing the full diagram drawing and its labels. DO NOT output diagrams array for text-only questions.
 14. MATCH THE FOLLOWING QUESTIONS: If the input contains a "Match the Following" question (matching Column I items with Column II items), format Column I and Column II cleanly in "questionText" as a structured 2-column list or table. Set "type": "match_following" (or "mcq"), and provide the matching combination choices (e.g. ["A: (i)-p, (ii)-q, (iii)-r, (iv)-s", ...]) in the "options" array.
 15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.`;
+
+const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
+
 
 
 
@@ -233,18 +255,56 @@ function repairMissingMathBackslashes(text) {
   };
 }
 
-// Validate shape of parsed JSON structure
+// Validate shape & invariants of parsed JSON structure
 function validateJsonSchema(data) {
   if (!data || typeof data !== 'object') return false;
   if (data.testTitle && typeof data.testTitle !== 'string') return false;
   if (!Array.isArray(data.questions) || data.questions.length === 0) return false;
-  
+
+  const validTypes = new Set(['mcq', 'short_answer_numeric', 'match_following']);
+
   for (const q of data.questions) {
-    if (!q.questionText || typeof q.questionText !== 'string') return false;
-    if (!Array.isArray(q.options)) return false;
+    if (!q || typeof q !== 'object') return false;
+    if (!q.questionText || typeof q.questionText !== 'string' || !q.questionText.trim()) return false;
+
+    // Type invariant: must be mcq, short_answer_numeric, or match_following
+    if (!validTypes.has(q.type)) return false;
+
+    // MCQ & match_following invariants
+    if (q.type === 'mcq' || q.type === 'match_following') {
+      if (!Array.isArray(q.options) || q.options.length < 2) return false;
+      if (q.correctAnswer !== null && q.correctAnswer !== undefined) {
+        if (!Number.isInteger(q.correctAnswer) || q.correctAnswer < 0 || q.correctAnswer >= q.options.length) {
+          return false;
+        }
+      }
+    }
+
+    // short_answer_numeric invariants
+    if (q.type === 'short_answer_numeric') {
+      if (Array.isArray(q.options) && q.options.length > 0) return false;
+      if (q.acceptedRange !== undefined && q.acceptedRange !== null) {
+        if (!Array.isArray(q.acceptedRange) || q.acceptedRange.length !== 2) return false;
+        const [rMin, rMax] = q.acceptedRange.map(Number);
+        if (!Number.isFinite(rMin) || !Number.isFinite(rMax) || rMin > rMax) return false;
+      }
+    }
+
+    // Diagrams invariants
+    if (Array.isArray(q.diagrams)) {
+      for (const diag of q.diagrams) {
+        if (!diag || typeof diag !== 'object') return false;
+        if (!Array.isArray(diag.bbox) || diag.bbox.length !== 4) return false;
+        if (diag.bbox.some(v => typeof v !== 'number' || isNaN(v) || v < 0.0 || v > 1.0)) {
+          return false;
+        }
+      }
+    }
   }
+
   return true;
 }
+
 
 function getGeminiModelName() {
   return process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
@@ -393,9 +453,7 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
     promptParts.push(
       `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. ` +
       `Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ` +
-      `CRITICAL DIAGRAM INSTRUCTION: If any question contains a diagram, figure, circuit, benzene ring, organic structure, graph, plot, or apparatus drawing in the source image, ` +
-      `YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [x, y, width, height], "caption": "description"}, ` +
-      `where bbox contains 4 normalized floats [left, top, width, height] between 0.0 and 1.0 bounding the diagram area on sourceFileIndex.`
+      DIAGRAM_PROMPT_INSTRUCTION
     );
   } else if (type === 'docx_structure') {
     promptParts.push(`Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.`);
@@ -444,8 +502,9 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
 
     contentBlocks.push({
       type: 'text',
-      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. CRITICAL DIAGRAM INSTRUCTION: If any question contains a diagram, figure, circuit, benzene ring, organic structure, graph, plot, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [x, y, width, height], "caption": "description"}, where bbox contains 4 normalized floats [left, top, width, height] between 0.0 and 1.0 bounding the diagram area on sourceFileIndex.`
+      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ${DIAGRAM_PROMPT_INSTRUCTION}`
     });
+
 
     messages = [{ role: 'user', content: contentBlocks }];
   } else if (type === 'docx_structure') {
