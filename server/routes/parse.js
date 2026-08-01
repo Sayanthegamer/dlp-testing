@@ -199,7 +199,11 @@ router.post('/parse-question', async (req, res) => {
           throw new Error('Gemini response failed JSON schema shape validation');
         }
         if (Array.isArray(data.questions)) {
-          data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+          try {
+            data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+          } catch (diagErr) {
+            console.warn('[Diagram attach skipped]:', diagErr.message);
+          }
         }
         return res.json({ success: true, data, mode: 'live_gemini' });
       }
@@ -219,7 +223,11 @@ router.post('/parse-question', async (req, res) => {
           throw new Error('Claude response failed JSON schema shape validation');
         }
         if (Array.isArray(data.questions)) {
-          data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+          try {
+            data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+          } catch (diagErr) {
+            console.warn('[Diagram attach skipped]:', diagErr.message);
+          }
         }
         return res.json({ success: true, data, mode: 'live_anthropic' });
       }
