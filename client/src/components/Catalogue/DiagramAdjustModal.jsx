@@ -8,10 +8,13 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
   const currentDiagram = diagrams[0] || null;
   const currentImage = currentDiagram ? diagramImages.find(i => i && i.id === currentDiagram.id) : null;
 
+  const initialSource = currentImage?.sourcePageImage || currentImage?.dataUrl || '';
+
   const [caption, setCaption] = useState(currentDiagram?.caption || '');
-  const [sourceImageSrc, setSourceImageSrc] = useState(currentImage?.dataUrl || '');
+  const [sourceImageSrc, setSourceImageSrc] = useState(initialSource);
   const [croppedDataUrl, setCroppedDataUrl] = useState(currentImage?.dataUrl || '');
   const [isUploading, setIsUploading] = useState(false);
+
 
   // Normalized crop rectangle relative to rendered image (x, y, w, h from 0.0 to 1.0)
   const initialBbox = (currentDiagram && Array.isArray(currentDiagram.bbox) && currentDiagram.bbox.length === 4)
@@ -190,9 +193,11 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
     const updatedImages = [
       {
         id: diagId,
-        dataUrl: croppedDataUrl || sourceImageSrc
+        dataUrl: croppedDataUrl || sourceImageSrc,
+        sourcePageImage: sourceImageSrc
       }
     ];
+
 
     onUpdateQuestion(question.id, {
       ...question,
