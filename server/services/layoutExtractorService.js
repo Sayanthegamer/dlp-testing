@@ -1,12 +1,61 @@
 /**
  * Deterministic Layout Extractor Service.
  * Stage 1 of the Document Diagram Pipeline.
- * Detects both embedded image XObjects AND vector path drawings (circuits, graphs, shapes) from PDF pages / images.
+ * Detects embedded image XObjects AND vector path drawings (circuits, graphs, shapes) from PDF pages / images,
+ * and generates visual diagnostic overlays for layout validation.
  */
+
+const fs = require('fs');
+const path = require('path');
 
 function stripBase64Header(str) {
   if (typeof str !== 'string') return str || '';
   return str.replace(/^data:[^;]+;base64,/, '').trim();
+}
+
+/**
+ * Generates an SVG visual diagnostic overlay with labeled bounding boxes for detected candidate figures
+ * and saves it to server/data/debug_layout_{fileLabel}.png for visual inspection.
+ */
+async function generateDiagnosticOverlay(sourceBuffer, pageCandidates, fileLabel) {
+  if (!pageCandidates || pageCandidates.length === 0) return;
+
+  try {
+    const sharp = require('sharp');
+    const meta = await sharp(sourceBuffer).metadata();
+    const width = meta.width || 800;
+    const height = meta.height || 600;
+
+    let svgElements = '';
+    pageCandidates.forEach((c, idx) => {
+      const color = idx % 2 === 0 ? '#10b981' : '#f59e0b';
+      const [x, y, w, h] = c.bbox || [0, 0, 1, 1];
+      const left = Math.round(x * width);
+      const top = Math.round(y * height);
+      const rectW = Math.round(w * width);
+      const rectH = Math.round(h * height);
+
+      svgElements += `
+        <rect x="${left}" y="${top}" width="${rectW}" height="${rectH}" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="6,4"/>
+        <rect x="${left}" y="${Math.max(0, top - 24)}" width="${Math.min(320, rectW)}" height="24" fill="${color}" opacity="0.95"/>
+        <text x="${left + 6}" y="${Math.max(16, top - 7)}" font-family="sans-serif" font-size="12" font-weight="bold" fill="#ffffff">${c.id} (${c.type || 'fig'})</text>
+      `;
+    });
+
+    const svgOverlay = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svgElements}</svg>`;
+    const annotatedBuffer = await sharp(sourceBuffer)
+      .composite([{ input: Buffer.from(svgOverlay), top: 0, left: 0 }])
+      .png()
+      .toBuffer();
+
+    const debugDir = path.join(__dirname, '../data');
+    if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+    const debugFilePath = path.join(debugDir, `debug_layout_${fileLabel}.png`);
+    fs.writeFileSync(debugFilePath, annotatedBuffer);
+    console.log(`[Diagnostic Overlay Log] Saved visual layout diagnostic to: ${debugFilePath}`);
+  } catch (err) {
+    console.warn('[Diagnostic Overlay Warning] Could not render overlay image:', err.message);
+  }
 }
 
 /**
@@ -99,6 +148,15 @@ async function extractCandidateFigures(mediaFiles) {
             );
 
             candidates.push(...pageCandidates);
+
+            // Rasterize PDF page & save diagnostic visual overlay
+            try {
+              const { rasterizePdfPage } = require('./diagramCropService');
+              const pagePngBuffer = await rasterizePdfPage(cleanStr, pIndex);
+              await generateDiagnosticOverlay(pagePngBuffer, pageCandidates, `file${fileIdx}_page_${pIndex + 1}`);
+            } catch (ovErr) {
+              console.warn('[Layout Extractor Warning] Overlay generation skipped:', ovErr.message);
+            }
           }
         } catch (pdfErr) {
           console.warn('[Layout Extractor Warning] PDF candidate extraction skipped:', pdfErr.message);
@@ -112,7 +170,7 @@ async function extractCandidateFigures(mediaFiles) {
           
           if (meta.width > 50 && meta.height > 50) {
             const figId = `fig_${fileIdx}_img_1`;
-            candidates.push({
+            const imageCandidate = {
               id: figId,
               sourceFileIndex: fileIdx,
               pageIndex: 0,
@@ -121,8 +179,11 @@ async function extractCandidateFigures(mediaFiles) {
               bbox: [0.0, 0.0, 1.0, 1.0],
               width: meta.width,
               height: meta.height
-            });
+            };
+            candidates.push(imageCandidate);
             console.log(`[Layout Extractor] Image upload (file index ${fileIdx}): Candidate figure ${figId} registered (${meta.width}x${meta.height}).`);
+
+            await generateDiagnosticOverlay(buffer, [imageCandidate], `file${fileIdx}_img`);
           }
         } catch (imgErr) {
           console.warn('[Layout Extractor Warning] Image candidate extraction skipped:', imgErr.message);
@@ -137,4 +198,4 @@ async function extractCandidateFigures(mediaFiles) {
   return candidates;
 }
 
-module.exports = { extractCandidateFigures, stripBase64Header };
+module.exports = { extractCandidateFigures, generateDiagnosticOverlay, stripBase64Header };
