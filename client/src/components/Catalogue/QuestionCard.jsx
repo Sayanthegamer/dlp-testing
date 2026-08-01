@@ -62,10 +62,13 @@ export default function QuestionCard({
 
           {/* Question Type Switcher */}
           <select
-            value={type === 'short_answer_text' || type === 'short_answer' ? 'short_answer_numeric' : type}
+            value={type === 'mcq' ? 'mcq' : type === 'short_answer_numeric' ? 'short_answer_numeric' : ''}
             onChange={(e) => onUpdateQuestion(id, { ...question, type: e.target.value })}
             className="text-xs px-2 sm:px-2.5 py-1 rounded-lg bg-[#f0e6d8] border border-[#dcd0be] text-[#4a4237] font-sans font-medium focus:outline-none focus:ring-2 focus:ring-[#8c4a17] cursor-pointer"
           >
+            {!['mcq', 'short_answer_numeric'].includes(type) && (
+              <option value="" disabled>Select Type (Unclassified)</option>
+            )}
             <option value="mcq">MCQ</option>
             <option value="short_answer_numeric">Numerical Question</option>
           </select>
