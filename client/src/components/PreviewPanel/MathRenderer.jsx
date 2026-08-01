@@ -40,6 +40,9 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
         if (!cleanMathContent) return null;
 
+        // Fix unescaped physical unit tags e.g. pu{10cm} -> \mathrm{10cm}
+        cleanMathContent = cleanMathContent.replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
+
         // Fix fill-in-the-blank underscores inside \text{} or standalone consecutive underscores
         cleanMathContent = cleanMathContent
           .replace(/\\text\{([^{}]*)\}/g, (_, inner) => `\\text{${inner.replace(/(?<!\\)_/g, '\\_')}}`)
@@ -60,6 +63,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
             throwOnError: true,
             trust: true,
             macros: {
+              "\\pu": "\\mathrm{#1}",
               "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
               "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
               "\\vhat": "\\hat{\\mathbf{#1}}"
