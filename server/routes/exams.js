@@ -236,58 +236,67 @@ router.post('/exams/student-access', async (req, res) => {
     return res.status(400).json({ error: 'Student Name is required.' });
   }
 
-  if (!rollingCode || !rollingCode.trim()) {
-    return res.status(400).json({ error: 'Rolling Passcode is required.' });
-  }
-
-  const cleanCode = rollingCode.trim();
+  const cleanCode = (rollingCode || '').trim();
   let matchedSession = null;
+  let targetExamId = examId || null;
 
-  if (isConfigured()) {
-    try {
-      let query = supabase
-        .from('exam_sessions')
-        .select('id, exam_id, rolling_code, is_active')
-        .eq('rolling_code', cleanCode)
-        .eq('is_active', true);
+  if (cleanCode) {
+    if (isConfigured()) {
+      try {
+        let query = supabase
+          .from('exam_sessions')
+          .select('id, exam_id, rolling_code, is_active')
+          .eq('rolling_code', cleanCode)
+          .eq('is_active', true);
 
-      if (examId) {
-        query = query.eq('exam_id', examId);
+        if (examId) {
+          query = query.eq('exam_id', examId);
+        }
+
+        const { data, error } = await query;
+        if (!error && Array.isArray(data) && data.length > 0) {
+          matchedSession = data[0];
+          targetExamId = matchedSession.exam_id;
+        }
+      } catch (dbErr) {
+        console.warn('[Supabase Session Check Warning]:', dbErr.message);
       }
+    }
 
-      const { data, error } = await query;
-      if (!error && Array.isArray(data) && data.length > 0) {
-        matchedSession = data[0];
-      }
-    } catch (dbErr) {
-      console.warn('[Supabase Session Check Warning]:', dbErr.message);
+    if (!matchedSession && activeRollingSessions.has(cleanCode)) {
+      matchedSession = activeRollingSessions.get(cleanCode);
+      targetExamId = matchedSession.examId || matchedSession.exam_id;
+    }
+
+    if (!matchedSession) {
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid or expired Rolling Passcode. Please ask your instructor for the current live passcode.'
+      });
     }
   }
 
-  if (!matchedSession && activeRollingSessions.has(cleanCode)) {
-    matchedSession = activeRollingSessions.get(cleanCode);
+  if (!targetExamId) {
+    return res.status(400).json({ error: 'Exam link or Rolling Code is required.' });
   }
 
-  // If no live rolling code match found, return clear security message
-  if (!matchedSession) {
-    return res.status(403).json({
-      success: false,
-      error: 'Invalid or expired Rolling Passcode. Please ask your instructor for the current live passcode.'
-    });
-  }
-
-  const targetExamId = matchedSession.exam_id || matchedSession.examId;
   let examPayload = null;
 
   if (isConfigured()) {
     try {
       const { data, error } = await supabase
         .from('exams')
-        .select('snapshot_data')
+        .select('snapshot_data, status')
         .eq('id', targetExamId)
         .single();
 
       if (!error && data?.snapshot_data) {
+        if (data.status === 'closed') {
+          return res.status(403).json({
+            success: false,
+            error: 'This exam has been closed by the instructor.'
+          });
+        }
         examPayload = data.snapshot_data;
       }
     } catch (e) {}
@@ -295,20 +304,30 @@ router.post('/exams/student-access', async (req, res) => {
 
   if (!examPayload) {
     const list = readExamsLocal();
-    examPayload = list.find(e => e.id === targetExamId);
+    const localExam = list.find(e => e.id === targetExamId);
+    if (localExam) {
+      if (localExam.status === 'closed') {
+        return res.status(403).json({
+          success: false,
+          error: 'This exam has been closed by the instructor.'
+        });
+      }
+      examPayload = localExam;
+    }
   }
 
   if (!examPayload) {
-    return res.status(404).json({ error: 'Exam payload not found.' });
+    return res.status(404).json({ error: 'Exam paper snapshot not found or link has expired.' });
   }
 
   return res.json({
     success: true,
     exam: examPayload,
     studentName: studentName.trim(),
-    rollingCodeUsed: cleanCode
+    rollingCodeUsed: cleanCode || 'DIRECT_LINK'
   });
 });
+
 
 /**
  * PUBLIC Student Endpoint: GET /api/exams/:id
