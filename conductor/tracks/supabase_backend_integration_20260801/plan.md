@@ -31,3 +31,11 @@
 - [x] Task: Run production client build (`npm run build` in `client/`) to confirm zero compilation errors.
 - [x] Task: Verify full workflow: Teacher login -> Exam Creation -> Diagram Crop & Supabase Storage upload -> Publish -> Start Rolling Code Session -> Student Name + Rolling Code login -> Submit -> Grade -> Teacher Analytics Dashboard display.
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
+
+## Phase 6: Post-Review Fixes & Hardening
+- [x] Task: Fix teacher auth verification service to strictly validate APP_PASSWORD or Supabase JWTs (7651abc)
+- [x] Task: Enforce strict examId foreign key validation in server/routes/submissions.js (8a97093)
+- [x] Task: Add safeMount defensive route loading in api/index.js for Vercel serverless cold-starts (81f4353)
+- [x] Task: Upgrade interactive visual diagram cropper with 1:1 image overlay and full page un-cropping (d8211bf)
+- [x] Task: Implement 5-minute TOTP auto-rolling passcode engine with live UI countdown timer (7651abc)
+
