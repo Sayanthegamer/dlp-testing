@@ -55,15 +55,17 @@ export default function TestQuestionView({
         </div>
 
         {/* Animated Exam Question Card (Framer Motion) */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={id || currentIndex}
+            layout
             initial={{ opacity: 0, y: 12, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.99 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl p-4 sm:p-10 shadow-sm space-y-6 sm:space-y-8"
           >
+
             
             {/* Question Stem */}
             <div className="space-y-2">
