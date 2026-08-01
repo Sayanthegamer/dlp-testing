@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 function stripBase64Header(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/^data:[^;]+;base64,/, '').trim();
@@ -25,34 +28,62 @@ async function rasterizePdfPage(pdfBase64, pageIndex) {
   }
 }
 
-async function cropDiagram(sourceBuffer, bbox) {
+async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
   try {
     const sharp = require('sharp');
-    const [x, y, w, h] = bbox;
     const meta = await sharp(sourceBuffer).metadata();
     const imgWidth = meta.width || 800;
     const imgHeight = meta.height || 600;
 
-    // Detect if coordinates are normalized ratios (0-1) or absolute pixel values
-    const isPixel = bbox.some(val => val > 1.0);
+    let [v1, v2, v3, v4] = bbox.map(v => parseFloat(v) || 0);
+
+    // If coordinates are in 0-1000 scale (standard Gemini Vision format), normalize to 0-1
+    if (bbox.some(v => v > 1.0 && v <= 1000)) {
+      v1 = v1 / 1000;
+      v2 = v2 / 1000;
+      v3 = v3 / 1000;
+      v4 = v4 / 1000;
+    }
 
     let left, top, width, height;
-    if (isPixel) {
-      left = Math.max(0, Math.min(imgWidth - 10, Math.round(x)));
-      top = Math.max(0, Math.min(imgHeight - 10, Math.round(y)));
-      width = Math.max(10, Math.min(imgWidth - left, Math.round(w)));
-      height = Math.max(10, Math.min(imgHeight - top, Math.round(h)));
+
+    // Check if format is [ymin, xmin, ymax, xmax] (Gemini standard: ymax > ymin and xmax > xmin)
+    if (v3 > v1 && v4 > v2 && v3 <= 1.0 && v4 <= 1.0) {
+      top = Math.max(0, Math.min(imgHeight - 10, Math.round(v1 * imgHeight)));
+      left = Math.max(0, Math.min(imgWidth - 10, Math.round(v2 * imgWidth)));
+      height = Math.max(10, Math.min(imgHeight - top, Math.round((v3 - v1) * imgHeight)));
+      width = Math.max(10, Math.min(imgWidth - left, Math.round((v4 - v2) * imgWidth)));
+    } else if (bbox.some(v => v > 1000)) {
+      // Absolute pixel values
+      left = Math.max(0, Math.min(imgWidth - 10, Math.round(v1)));
+      top = Math.max(0, Math.min(imgHeight - 10, Math.round(v2)));
+      width = Math.max(10, Math.min(imgWidth - left, Math.round(v3)));
+      height = Math.max(10, Math.min(imgHeight - top, Math.round(v4)));
     } else {
-      left = Math.max(0, Math.min(imgWidth - 10, Math.round(x * imgWidth)));
-      top = Math.max(0, Math.min(imgHeight - 10, Math.round(y * imgHeight)));
-      width = Math.max(10, Math.min(imgWidth - left, Math.round(w * imgWidth)));
-      height = Math.max(10, Math.min(imgHeight - top, Math.round(h * imgHeight)));
+      // Standard [left, top, width, height] normalized ratios
+      left = Math.max(0, Math.min(imgWidth - 10, Math.round(v1 * imgWidth)));
+      top = Math.max(0, Math.min(imgHeight - 10, Math.round(v2 * imgHeight)));
+      width = Math.max(10, Math.min(imgWidth - left, Math.round(v3 * imgWidth)));
+      height = Math.max(10, Math.min(imgHeight - top, Math.round(v4 * imgHeight)));
     }
+
+    console.log(`[Diagram Crop Debug] Image size: ${imgWidth}x${imgHeight} | Raw bbox: ${JSON.stringify(bbox)} | Computed crop rect: { left: ${left}, top: ${top}, width: ${width}, height: ${height} }`);
 
     const cropped = await sharp(sourceBuffer)
       .extract({ left, top, width, height })
       .png()
       .toBuffer();
+
+    // Save debug crop PNG to server/data/ directory for visual inspection
+    try {
+      const debugDir = path.join(__dirname, '../data');
+      if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+      const debugFilePath = path.join(debugDir, `debug_crop_${debugLabel}.png`);
+      fs.writeFileSync(debugFilePath, cropped);
+      console.log(`[Diagram Crop Debug] Saved debug crop image to: ${debugFilePath}`);
+    } catch (saveErr) {
+      console.warn('[Diagram Crop Debug Warning] Could not write debug crop file:', saveErr.message);
+    }
 
     return `data:image/png;base64,${cropped.toString('base64')}`;
   } catch (err) {
@@ -112,9 +143,9 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
             const cleanStr = stripBase64Header(rawData);
             sourceBuffer = Buffer.from(cleanStr, 'base64');
           }
-          const dataUrl = await cropDiagram(sourceBuffer, d.bbox);
+          const diagId = d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const dataUrl = await cropDiagram(sourceBuffer, d.bbox, `q${i + 1}_${diagId}`);
           if (dataUrl) {
-            const diagId = d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
             diagramImages.push({ id: diagId, dataUrl });
             console.log(`[Diagram Crop Pipeline] Question #${i + 1}: Successfully cropped and attached image for diagram ${diagId}.`);
           } else {

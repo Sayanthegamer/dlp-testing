@@ -330,6 +330,7 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
   console.log('[Gemini Response Raw]:', responseText ? responseText.substring(0, 200) + '...' : 'EMPTY');
 
   const parsedData = extractAndParseJson(responseText);
+  console.log('[Parser Info] Normalized questions parsed:', JSON.stringify(parsedData ? parsedData.questions : null, null, 2));
   return parsedData;
 }
 
