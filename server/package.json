@@ -11,6 +11,7 @@
     "@anthropic-ai/sdk": "^0.36.0",
     "@google/generative-ai": "^0.21.0",
     "@napi-rs/canvas": "^1.0.3",
+    "@supabase/supabase-js": "^2.111.0",
     "canvas": "^3.2.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

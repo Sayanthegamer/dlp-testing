@@ -1,11 +1,11 @@
 # Implementation Plan: Supabase Backend Integration (`supabase_backend_integration`)
 
 ## Phase 1: Database Setup & Supabase Client Initialization
-- [ ] Task: Install `@supabase/supabase-js` dependency in `server/package.json` and `client/package.json`.
-- [ ] Task: Add Supabase environment variables (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) to `server/.env.example` and `server/.env`.
-- [ ] Task: Create `server/services/supabaseClient.js` service initialized with service role key for backend DB operations.
-- [ ] Task: Write SQL migration script / schema file (`server/db/schema.sql`) for PostgreSQL tables: `teachers`, `exams`, `questions`, `submissions`, `exam_sessions`.
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md).
+- [x] Task: Install `@supabase/supabase-js` dependency in `server/package.json` and `client/package.json`.
+- [x] Task: Add Supabase environment variables (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) to `server/.env.example` and `server/.env`.
+- [x] Task: Create `server/services/supabaseClient.js` service initialized with service role key for backend DB operations.
+- [x] Task: Write SQL migration script / schema file (`server/db/schema.sql`) for PostgreSQL tables: `teachers`, `exams`, `questions`, `submissions`, `exam_sessions`.
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 2: Teacher Auth & Multi-Tenant Security
 - [ ] Task: Implement Supabase Auth routes in `server/routes/auth.js` (signup, login, session check).
