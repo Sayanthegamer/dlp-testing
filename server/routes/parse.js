@@ -13,10 +13,19 @@ Your task is to parse input (informal text, photo of exam paper, or document str
     {
       "id": "q1",
       "questionText": "Question stem text with math enclosed in <math>LaTeX</math> tags. E.g. Solve for x: <math>x^2 + 2x - 3 = 0</math>",
-      "type": "mcq" | "short_answer_numeric",
+      "type": "mcq",
       "options": ["<math>Option A</math>", "<math>Option B</math>", "<math>Option C</math>", "<math>Option D</math>"],
       "correctAnswer": 0,
       "acceptedRange": [1.99, 2.01],
+      "diagrams": [
+        {
+          "id": "diag_1",
+          "sourceFileIndex": 0,
+          "pageIndex": 0,
+          "bbox": [0.10, 0.20, 0.40, 0.30],
+          "caption": "Circuit Diagram / Figure"
+        }
+      ],
       "mathSpans": ["x^2 + 2x - 3 = 0"],
       "confidenceScore": 0.95,
       "needsReview": false
@@ -36,7 +45,8 @@ CRITICAL RULES:
 9. NUCLEAR NOTATION (Chemistry radioactivity AND Physics Modern Physics): isotopes as <math>\ce{^238_92U}</math> via mhchem — identical syntax serves both subjects.
 10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\pu{...}</math>, e.g. <math>\pu{9.8 m/s^2}</math>, <math>\pu{6.63e-34 J s}</math>.
 11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\nCr{n}{r}</math> / <math>\nPr{n}{r}</math> custom macros, not raw \binom.
-12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.`;
+12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.
+13. DIAGRAM BOUNDING BOXES: Whenever a question contains a diagram, figure, circuit, benzene ring, or graph in the source image/page, populate the "diagrams" array with an object containing "bbox": [x, y, width, height] as normalized floats between 0.0 and 1.0 relative to sourceFileIndex image bounds.`;
 
 function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');

@@ -40,6 +40,11 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
         if (!cleanMathContent) return null;
 
+        // Fix fill-in-the-blank underscores inside \text{} or standalone consecutive underscores
+        cleanMathContent = cleanMathContent
+          .replace(/\\text\{([^{}]*)\}/g, (_, inner) => `\\text{${inner.replace(/(?<!\\)_/g, '\\_')}}`)
+          .replace(/(?<!\\)_{2,}/g, (match) => `\\underline{\\hspace{${match.length * 0.5}em}}`);
+
         // If math content is purely plain English text words without math symbols, wrap in \text{} so spaces are preserved
         if (/^[a-zA-Z\s]{3,}$/.test(cleanMathContent) && !cleanMathContent.includes('\\')) {
           cleanMathContent = `\\text{${cleanMathContent}}`;
