@@ -87,19 +87,27 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
     let left, top, width, height;
 
     if (bbox.some(v => v > 1000)) {
-      // Absolute pixel values [top, left, width, height]
-      top = Math.round(v1);
-      left = Math.round(v2);
-      width = Math.round(v3);
-      height = Math.round(v4);
-    } else if (v3 > v1 && v4 > v2 && v3 <= 1.0 && v4 <= 1.0 && (v3 - v1) > 0.04 && (v4 - v2) > 0.04) {
-      // Normalized [ymin, xmin, ymax, xmax] (0.0 to 1.0)
+      if (v3 > v1 && v4 > v2) {
+        // Absolute pixel values [ymin, xmin, ymax, xmax]
+        top = Math.round(v1);
+        left = Math.round(v2);
+        height = Math.round(v3 - v1);
+        width = Math.round(v4 - v2);
+      } else {
+        // Absolute pixel values [ymin, xmin, width, height]
+        top = Math.round(v1);
+        left = Math.round(v2);
+        width = Math.round(v3);
+        height = Math.round(v4);
+      }
+    } else if (v3 > v1 && v4 > v2) {
+      // Standard normalized [ymin, xmin, ymax, xmax]
       top = Math.round(v1 * imgHeight);
       left = Math.round(v2 * imgWidth);
       height = Math.round((v3 - v1) * imgHeight);
       width = Math.round((v4 - v2) * imgWidth);
     } else {
-      // Normalized [ymin, xmin, width, height] (0.0 to 1.0)
+      // Normalized [ymin, xmin, width, height]
       top = Math.round(v1 * imgHeight);
       left = Math.round(v2 * imgWidth);
       width = Math.round(v3 * imgWidth);
@@ -112,9 +120,9 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
     width = Math.max(20, Math.min(imgWidth - left, width));
     height = Math.max(20, Math.min(imgHeight - top, height));
 
-    // Add 10% safety margin padding to prevent clipping diagram elements
-    const padX = Math.max(10, Math.round(width * 0.10));
-    const padY = Math.max(10, Math.round(height * 0.10));
+    // Add subtle 3% safety margin padding to prevent clipping diagram elements without grabbing text
+    const padX = Math.max(4, Math.round(width * 0.03));
+    const padY = Math.max(4, Math.round(height * 0.03));
 
     const finalLeft = Math.max(0, left - padX);
     const finalTop = Math.max(0, top - padY);
