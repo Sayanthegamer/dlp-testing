@@ -67,11 +67,14 @@ CRITICAL RULES:
 10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\\pu{...}</math>, e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{6.63e-34 J s}</math>.
 11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\\nCr{n}{r}</math> / <math>\\nPr{n}{r}</math> custom macros, not raw \\binom.
 12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.
-13. DIAGRAM BOUNDING BOXES: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, populate the "diagrams" array containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}. ymin, xmin, ymax, xmax MUST be 4 normalized floats between 0.0 and 1.0 tightly enclosing the full diagram drawing and its labels. DO NOT output diagrams array for text-only questions.
 14. MATCH THE FOLLOWING QUESTIONS: If the input contains a "Match the Following" question (matching Column I items with Column II items), format Column I and Column II cleanly in "questionText" as a structured 2-column list or table. Set "type": "match_following" (or "mcq"), and provide the matching combination choices (e.g. ["A: (i)-p, (ii)-q, (iii)-r, (iv)-s", ...]) in the "options" array.
-15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.`;
+15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.
+16. LATEX BACKSLASH & SPACING DISCIPLINE: Every LaTeX command inside <math> tags MUST include its leading backslash and proper braces — NEVER emit bare command words run together with variables. WRONG: "frac3pilambdar8". CORRECT: "\\frac{3\\pi\\lambda r}{8}". Always wrap numerator/denominator in \\frac{...}{...} with explicit braces, always precede pi/lambda/theta/alpha/etc. with a backslash, and always insert a space or brace boundary between a command and the variable that follows it (e.g. "\\pi r" not "\\pir", "\\lambda r" not "\\lambdar"). If you are unsure whether a symbol needs a backslash, default to including it — a missing backslash silently renders as plain italic letters with no error, which is worse than an occasional harmless extra backslash.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
+
+const { hasBareCommandRun, repairMissingMathBackslashes } = require('../services/mathSanitizerService');
+
 
 
 
@@ -167,27 +170,8 @@ function extractAndParseJson(text) {
     ];
   }
 
-function repairMissingMathBackslashes(text) {
-  if (typeof text !== 'string') return text;
-  const greekNames = 'alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Omega|Delta|Theta|Lambda|Gamma|Sigma|Phi|Psi';
-  const opNames = 'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|lim|log|ln|sin|cos|tan|cot|sec|csc';
-
-  return text.replace(/<math>(.*?)<\/math>/g, (m, inner) => {
-    let clean = inner
-      .replace(/(?<!\\)\bsqrt\s*\(?\s*([0-9a-zA-Z]+)\s*\)?/gi, '\\sqrt{$1}')
-      .replace(/(?<!\\)\bsqrt\s*\{([^}]+)\}/gi, '\\sqrt{$1}')
-      .replace(/(?<!\\)\bfrac([a-zA-Z0-9_\{\}\+\-\*\/\^\.\s]+)/g, (match, body) => {
-        if (body.startsWith('{')) return `\\frac${body}`;
-        return `\\frac{${body}}`;
-      })
-      .replace(new RegExp(`(?<!\\\\)\\b(${greekNames})\\b`, 'g'), '\\$1')
-      .replace(new RegExp(`(?<!\\\\)\\b(${opNames})\\b`, 'g'), '\\$1');
-    return `<math>${clean}</math>`;
-  });
-
-}
-
   // Normalize each question
+
   questions = questions.map((q, idx) => {
     const rawQuestionText = q.questionText || `Question ${idx + 1}`;
     const questionText = repairMissingMathBackslashes(rawQuestionText);
@@ -269,6 +253,13 @@ function validateJsonSchema(data) {
 
     // Type invariant: must be mcq, short_answer_numeric, or match_following
     if (!validTypes.has(q.type)) return false;
+
+    // Reject malformed LaTeX bare command runs (missing leading backslash)
+    if (hasBareCommandRun(q.questionText)) return false;
+    if (Array.isArray(q.options) && q.options.some(opt => hasBareCommandRun(typeof opt === 'string' ? opt : ''))) {
+      return false;
+    }
+
 
     // MCQ & match_following invariants
     if (q.type === 'mcq' || q.type === 'match_following') {

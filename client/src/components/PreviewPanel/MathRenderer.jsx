@@ -1,6 +1,7 @@
 import React from 'react';
 import katex from 'katex';
 import 'katex/contrib/mhchem';
+import { repairMissingMathBackslashes } from '../../services/mathSanitizerService';
 
 export default function MathRenderer({ text = '', needsReview = false, readOnly = false, onSelectMathForEdit }) {
   if (!text || text.trim() === '') {
@@ -36,23 +37,10 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
           return <span key={idx}>{part.content}</span>;
         }
 
-        // Clean math content: strip residual nested <math> tags
-        let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
+        // Clean & repair math content using shared mathSanitizerService
+        let cleanMathContent = repairMissingMathBackslashes(part.content.replace(/<\/?math>/gi, '')).trim();
         if (!cleanMathContent) return null;
 
-        // Auto-repair unescaped LaTeX backslashes e.g. frac -> \frac, Omega -> \Omega, alpha -> \alpha, times -> \times
-        const greekNames = 'alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Omega|Delta|Theta|Lambda|Gamma|Sigma|Phi|Psi';
-        const opNames = 'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|lim|log|ln|sin|cos|tan|cot|sec|csc';
-
-        cleanMathContent = cleanMathContent
-          .replace(/(?<!\\)\bsqrt\s*\(?\s*([0-9a-zA-Z]+)\s*\)?/gi, '\\sqrt{$1}')
-          .replace(/(?<!\\)\bsqrt\s*\{([^}]+)\}/gi, '\\sqrt{$1}')
-          .replace(/(?<!\\)\bfrac([a-zA-Z0-9_\{\}\+\-\*\/\^\.\s]+)/g, (match, body) => {
-            if (body.startsWith('{')) return `\\frac${body}`;
-            return `\\frac{${body}}`;
-          })
-          .replace(new RegExp(`(?<!\\\\)\\b(${greekNames})\\b`, 'g'), '\\$1')
-          .replace(new RegExp(`(?<!\\\\)\\b(${opNames})\\b`, 'g'), '\\$1');
 
 
         // Fix unescaped physical unit tags e.g. pu{10cm} -> \mathrm{10cm}

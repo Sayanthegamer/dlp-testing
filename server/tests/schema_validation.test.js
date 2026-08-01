@@ -87,4 +87,21 @@ describe('Strict JSON Schema Invariant Validation', () => {
     };
     expect(validateJsonSchema(invalidDiagram)).toBe(false);
   });
+
+  it('should reject questions with unescaped bare command runs (e.g. frac3pilambdar8)', () => {
+    const invalidBareCommand = {
+      testTitle: 'Test Paper',
+      questions: [
+        {
+          id: 'q1',
+          questionText: 'Simplify <math>frac3pilambdar8</math>',
+          type: 'mcq',
+          options: ['<math>frac3pilambdar8</math>', '<math>2</math>'],
+          correctAnswer: 0
+        }
+      ]
+    };
+    expect(validateJsonSchema(invalidBareCommand)).toBe(false);
+  });
 });
+

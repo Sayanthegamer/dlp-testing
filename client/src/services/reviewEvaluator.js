@@ -1,4 +1,6 @@
 import katex from 'katex';
+import { hasBareCommandRun } from './mathSanitizerService';
+
 
 /**
  * Computes deterministic needsReview status and concrete reasons based on product invariants.
@@ -74,6 +76,12 @@ export function computeNeedsReview(question) {
   if (structuralHints.test(fullTextToTest)) {
     reasons.push('Possible Structural Diagram — Verify Not Misrendered as Text');
   }
+
+  // Bare LaTeX command run detector (missing leading backslash)
+  if (hasBareCommandRun(fullTextToTest)) {
+    reasons.push('Possible Malformed LaTeX (Missing Backslash)');
+  }
+
 
   // AI-cropped diagrams always require teacher confirmation
   if (Array.isArray(question.diagrams) && question.diagrams.length > 0 && !question.diagramsConfirmed) {
