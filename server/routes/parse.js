@@ -3,6 +3,8 @@ const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { attachCroppedDiagrams } = require('../services/diagramCropService');
+const { extractCandidateFigures } = require('../services/layoutExtractorService');
+const { matchDiagramsToQuestions } = require('../services/diagramMatcherService');
 
 const SYSTEM_PROMPT = `You are an expert math test parser for tuition teachers.
 Your task is to parse input (informal text, photo of exam paper, or document structure) representing one or more math exam questions and convert them into strict JSON adhering to this exact schema:
@@ -193,6 +195,9 @@ router.post('/parse-question', async (req, res) => {
     ? mediaFiles
     : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
 
+  // Stage 1: Deterministic Layout & Candidate Figure Extraction (Zero AI)
+  const candidateFigures = await extractCandidateFigures(effectiveMediaFiles);
+
   const errors = [];
 
   // Try each configured API provider sequentially
@@ -215,9 +220,10 @@ router.post('/parse-question', async (req, res) => {
         }
         if (Array.isArray(data.questions)) {
           try {
-            data.questions = await attachCroppedDiagrams(data.questions, effectiveMediaFiles);
+            // Stage 3: Spatial & Semantic Diagram Matcher
+            data.questions = await matchDiagramsToQuestions(data.questions, candidateFigures, effectiveMediaFiles);
           } catch (diagErr) {
-            console.warn('[Diagram attach skipped]:', diagErr.message);
+            console.warn('[Diagram matcher skipped]:', diagErr.message);
           }
         }
         return res.json({ success: true, data, mode: 'live_gemini' });
@@ -239,9 +245,10 @@ router.post('/parse-question', async (req, res) => {
         }
         if (Array.isArray(data.questions)) {
           try {
-            data.questions = await attachCroppedDiagrams(data.questions, effectiveMediaFiles);
+            // Stage 3: Spatial & Semantic Diagram Matcher
+            data.questions = await matchDiagramsToQuestions(data.questions, candidateFigures, effectiveMediaFiles);
           } catch (diagErr) {
-            console.warn('[Diagram attach skipped]:', diagErr.message);
+            console.warn('[Diagram matcher skipped]:', diagErr.message);
           }
         }
         return res.json({ success: true, data, mode: 'live_anthropic' });
