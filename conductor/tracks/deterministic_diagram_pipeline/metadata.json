@@ -1,0 +1,7 @@
+{
+  "id": "deterministic_diagram_pipeline",
+  "name": "Deterministic Document Layout & Diagram Matching Pipeline",
+  "type": "architecture_refactor",
+  "status": "new",
+  "createdAt": "2026-08-01T14:06:00Z"
+}
