@@ -100,8 +100,8 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
                     </div>
                   )}
 
-                  {/* Short Answer / Numerical Question blank line */}
-                  {(q.type === 'short_answer_numeric' || q.type === 'short_answer' || q.type === 'short_answer_text') && (
+                  {/* Numerical Question blank line */}
+                  {q.type === 'short_answer_numeric' && (
                     <div className="pl-6 pt-2">
                       <div className="border-b border-dashed border-gray-400 w-64 h-6"></div>
                     </div>
