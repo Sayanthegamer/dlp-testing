@@ -100,31 +100,25 @@ router.post('/submissions', async (req, res) => {
         if (existing && existing.id) {
           targetExamId = existing.id;
         } else {
-          targetExamId = null;
+          // If rawExamId was specified but not found in DB, return clear 400 error instead of misattributing
+          return res.status(400).json({ error: `Invalid examId '${rawExamId}': Exam snapshot not found in database.` });
         }
       } else {
-        targetExamId = null;
-      }
-
-      if (!targetExamId) {
-        const { data: recentExams } = await supabase.from('exams').select('id').order('created_at', { ascending: false }).limit(1);
-        if (recentExams && recentExams.length > 0) {
-          targetExamId = recentExams[0].id;
-        } else {
-          targetExamId = 'exam_default';
-          await supabase.from('exams').upsert({
-            id: targetExamId,
-            title: testTitle,
-            status: 'published',
-            question_count: questions.length,
-            snapshot_data: { id: targetExamId, testTitle, questions }
-          });
-        }
+        // Fallback for default exam testing: ensure exam_default row exists in exams table
+        targetExamId = 'exam_default';
+        await supabase.from('exams').upsert({
+          id: targetExamId,
+          title: testTitle,
+          status: 'published',
+          question_count: questions.length,
+          snapshot_data: { id: targetExamId, testTitle, questions }
+        });
       }
     } catch (e) {
       console.warn('[Exam FK Resolution Warning]:', e.message);
     }
   }
+
 
   const submissionObj = {
     id: serverGeneratedId,
