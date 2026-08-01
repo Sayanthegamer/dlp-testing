@@ -56,7 +56,7 @@ async function cropDiagram(sourceBuffer, bbox) {
 
     return `data:image/png;base64,${cropped.toString('base64')}`;
   } catch (err) {
-    console.warn('[Diagram Crop Unavailable]:', err.message);
+    console.warn('[Diagram Crop Error]:', err.message);
     return null;
   }
 }
@@ -69,22 +69,39 @@ async function cropDiagram(sourceBuffer, bbox) {
  */
 async function attachCroppedDiagrams(questions, mediaFiles) {
   if (!Array.isArray(questions) || !Array.isArray(mediaFiles) || mediaFiles.length === 0) {
+    console.log('[Diagram Crop Pipeline] Skipped: No questions array or media files provided.');
     return questions || [];
   }
 
   try {
-    for (const q of questions) {
-      if (!Array.isArray(q.diagrams) || q.diagrams.length === 0) continue;
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!Array.isArray(q.diagrams) || q.diagrams.length === 0) {
+        console.log(`[Diagram Crop Pipeline] Question #${i + 1} (${q.id}): 0 diagrams declared.`);
+        continue;
+      }
 
+      console.log(`[Diagram Crop Pipeline] Question #${i + 1} (${q.id}): ${q.diagrams.length} diagram(s) declared:`, JSON.stringify(q.diagrams));
       const diagramImages = [];
+
       for (const d of q.diagrams) {
-        if (!d || !Array.isArray(d.bbox) || d.bbox.length !== 4) continue;
+        if (!d || !Array.isArray(d.bbox) || d.bbox.length !== 4) {
+          console.warn(`[Diagram Crop Pipeline] Question #${i + 1}: Skipping invalid bbox metadata:`, d);
+          continue;
+        }
+
         const fileIdx = (typeof d.sourceFileIndex === 'number' && mediaFiles[d.sourceFileIndex]) ? d.sourceFileIndex : 0;
         const file = mediaFiles[fileIdx];
-        if (!file) continue;
+        if (!file) {
+          console.warn(`[Diagram Crop Pipeline] Question #${i + 1}: Source file index ${fileIdx} not found in mediaFiles.`);
+          continue;
+        }
 
         const rawData = file.data || file.base64 || file.imageBase64;
-        if (!rawData) continue;
+        if (!rawData) {
+          console.warn(`[Diagram Crop Pipeline] Question #${i + 1}: Empty base64 payload for file index ${fileIdx}.`);
+          continue;
+        }
 
         try {
           let sourceBuffer;
@@ -97,14 +114,20 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
           }
           const dataUrl = await cropDiagram(sourceBuffer, d.bbox);
           if (dataUrl) {
-            diagramImages.push({ id: d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, dataUrl });
+            const diagId = d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            diagramImages.push({ id: diagId, dataUrl });
+            console.log(`[Diagram Crop Pipeline] Question #${i + 1}: Successfully cropped and attached image for diagram ${diagId}.`);
+          } else {
+            console.warn(`[Diagram Crop Pipeline] Question #${i + 1}: cropDiagram returned null for diagram ${d.id}.`);
           }
         } catch (err) {
-          console.warn(`[Diagram Crop Warning] Failed for diagram ${d.id}:`, err.message);
+          console.warn(`[Diagram Crop Pipeline Warning] Question #${i + 1} crop failed for diagram ${d.id}:`, err.message);
         }
       }
+
       q.diagramImages = diagramImages;
       q.diagramsConfirmed = false; // Always force teacher review pass for cropped diagrams
+      console.log(`[Diagram Crop Pipeline] Question #${i + 1}: Attached ${diagramImages.length} cropped image(s) total.`);
     }
   } catch (err) {
     console.warn('[attachCroppedDiagrams soft-degrade]:', err.message);

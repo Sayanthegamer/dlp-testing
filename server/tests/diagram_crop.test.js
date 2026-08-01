@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { attachCroppedDiagrams } from '../services/diagramCropService.js';
 
 describe('Diagram Crop Pipeline Integration', () => {
-  it('should process mediaFiles and attach diagram object schema gracefully', async () => {
+  it('should process mediaFiles and preserve diagram metadata schema', async () => {
     const mockQuestions = [
       {
         id: 'q1',
@@ -13,7 +13,6 @@ describe('Diagram Crop Pipeline Integration', () => {
       }
     ];
 
-    // Dummy base64 1x1 transparent PNG data URL
     const mockMediaFiles = [
       {
         data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -23,6 +22,8 @@ describe('Diagram Crop Pipeline Integration', () => {
 
     const processed = await attachCroppedDiagrams(mockQuestions, mockMediaFiles);
     expect(processed).toBeDefined();
+    expect(processed[0].diagrams).toBeDefined();
+    expect(processed[0].diagrams.length).toBe(1);
     expect(processed[0].diagramsConfirmed).toBe(false);
     expect(Array.isArray(processed[0].diagramImages)).toBe(true);
   });

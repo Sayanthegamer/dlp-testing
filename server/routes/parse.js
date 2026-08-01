@@ -136,6 +136,7 @@ function extractAndParseJson(text) {
       type,
       options,
       correctAnswer,
+      diagrams: Array.isArray(q.diagrams) ? q.diagrams : [],
       mathSpans,
       confidenceScore: q.confidenceScore || 0.95,
       numericalConfirmed: false,
