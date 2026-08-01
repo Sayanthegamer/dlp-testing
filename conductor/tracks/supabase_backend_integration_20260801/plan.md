@@ -27,7 +27,7 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 5: End-to-End Verification & Build Check
-- [ ] Task: Run automated server tests (`npm test` in `server/`) updated for Supabase backend mock/integration.
-- [ ] Task: Run production client build (`npm run build` in `client/`) to confirm zero compilation errors.
-- [ ] Task: Verify full workflow: Teacher login -> Exam Creation -> Diagram Crop & Supabase Storage upload -> Publish -> Start Rolling Code Session -> Student Name + Rolling Code login -> Submit -> Grade -> Teacher Analytics Dashboard display.
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md).
+- [x] Task: Run automated server tests (`npm test` in `server/`) updated for Supabase backend mock/integration.
+- [x] Task: Run production client build (`npm run build` in `client/`) to confirm zero compilation errors.
+- [x] Task: Verify full workflow: Teacher login -> Exam Creation -> Diagram Crop & Supabase Storage upload -> Publish -> Start Rolling Code Session -> Student Name + Rolling Code login -> Submit -> Grade -> Teacher Analytics Dashboard display.
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
