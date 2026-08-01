@@ -5,7 +5,7 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   const [copied, setCopied] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [rollingCode, setRollingCode] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(300);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?mode=student&testId=${examId}`;
 
@@ -13,6 +13,20 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   useEffect(() => {
     handleStartRollingSession();
   }, []);
+
+  // 1-Second Countdown Timer
+  useEffect(() => {
+    if (secondsRemaining <= 0) {
+      handleStartRollingSession();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setSecondsRemaining(prev => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [secondsRemaining]);
 
   function handleCopy() {
     navigator.clipboard.writeText(shareUrl);
@@ -38,6 +52,9 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
       const data = await response.json();
       if (data.success && data.rollingCode) {
         setRollingCode(data.rollingCode);
+        if (typeof data.secondsRemaining === 'number') {
+          setSecondsRemaining(data.secondsRemaining);
+        }
       }
     } catch (err) {
       console.error('[Start Rolling Session Error]:', err);
@@ -45,6 +62,13 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
       setIsGenerating(false);
     }
   }
+
+  const formatTimer = (totalSec) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
 
 
   return (
@@ -97,8 +121,11 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
           {rollingCode ? (
             <div className="p-4 bg-white border border-[#dcd2c4] rounded-2xl text-center space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#736c62] uppercase tracking-wider">
-                  Active Student Rolling Code
+                <span className="text-[11px] font-bold text-[#736c62] uppercase tracking-wider flex items-center gap-1">
+                  <span>Active 5-Min Passcode</span>
+                  <span className="text-[10px] text-[#8c4a17] bg-[#f8f3eb] border border-[#e8decb] px-2 py-0.5 rounded-full font-mono font-semibold">
+                    ⏱️ Auto-rolls in {formatTimer(secondsRemaining)}
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -124,10 +151,11 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
                 {rollingCode}
               </div>
               <p className="text-[11px] text-[#736c62]">
-                Students enter their full name + this active 6-digit code to access the test.
+                Code automatically refreshes every 5 minutes (with 5-min grace period for students).
               </p>
             </div>
           ) : (
+
             <div className="py-4 text-center">
               <p className="text-xs text-[#736c62]">
                 {isGenerating ? 'Generating active rolling passcode...' : 'Click Generate Code to create a live 6-digit passcode for your students.'}

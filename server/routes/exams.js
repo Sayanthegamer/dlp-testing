@@ -173,15 +173,35 @@ router.post('/exams/publish', async (req, res) => {
   });
 });
 
+const crypto = require('crypto');
+
+/**
+ * Computes deterministic 6-digit rolling passcode for a 5-minute time bucket (300 seconds).
+ */
+function get5MinRollingCode(examId, windowOffset = 0) {
+  if (!examId) return '849201';
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000)) + windowOffset;
+  const secret = process.env.APP_PASSWORD || 'rolling-passcode-secret-key';
+  const hash = crypto.createHmac('sha256', secret).update(`${examId}_${timeBucket}`).digest('hex');
+  const codeNum = (parseInt(hash.substring(0, 8), 16) % 900000) + 100000;
+  return codeNum.toString();
+}
+
+function get5MinSecondsRemaining() {
+  const currentMs = Date.now();
+  const windowMs = 5 * 60 * 1000;
+  const elapsedMs = currentMs % windowMs;
+  return Math.max(1, Math.ceil((windowMs - elapsedMs) / 1000));
+}
+
 /**
  * PROTECTED Teacher Endpoint: POST /api/exams/session/start
- * Generates an active 6-digit rolling code for live student test access.
+ * Generates/fetches the current 5-minute rolling code for live student test access.
  */
 router.post('/exams/session/start', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
-
 
   const { examId } = req.body || {};
   if (!examId) {
@@ -204,7 +224,8 @@ router.post('/exams/session/start', async (req, res) => {
     }
   }
 
-  const rollingCode = generate6DigitCode();
+  const rollingCode = get5MinRollingCode(examId, 0);
+  const secondsRemaining = get5MinSecondsRemaining();
   const createdAt = new Date().toISOString();
 
   if (isConfigured()) {
@@ -226,7 +247,6 @@ router.post('/exams/session/start', async (req, res) => {
     }
   }
 
-
   activeRollingSessions.set(rollingCode, {
     examId,
     rollingCode,
@@ -237,14 +257,16 @@ router.post('/exams/session/start', async (req, res) => {
     success: true,
     examId,
     rollingCode,
+    secondsRemaining,
+    intervalMinutes: 5,
     createdAt,
-    message: 'Active rolling session started successfully.'
+    message: 'Active 5-minute rolling session code fetched successfully.'
   });
 });
 
 /**
  * PUBLIC Student Endpoint: POST /api/exams/student-access
- * Validates Student Name + 6-Digit Rolling Code to unlock test payload.
+ * Validates Student Name + 6-Digit Rolling Code (Current 5-min window or 5-min grace window).
  */
 router.post('/exams/student-access', async (req, res) => {
   const { studentName, rollingCode, examId } = req.body || {};
@@ -258,7 +280,18 @@ router.post('/exams/student-access', async (req, res) => {
   let targetExamId = examId || null;
 
   if (cleanCode) {
-    if (isConfigured()) {
+    // 1. Check 5-minute TOTP auto-rolling codes (current window or 5-min grace window)
+    if (examId) {
+      const current5MinCode = get5MinRollingCode(examId, 0);
+      const grace5MinCode = get5MinRollingCode(examId, -1);
+
+      if (cleanCode === current5MinCode || cleanCode === grace5MinCode) {
+        matchedSession = { exam_id: examId, rolling_code: cleanCode };
+        targetExamId = examId;
+      }
+    }
+
+    if (!matchedSession && isConfigured()) {
       try {
         let query = supabase
           .from('exam_sessions')
@@ -288,10 +321,11 @@ router.post('/exams/student-access', async (req, res) => {
     if (!matchedSession) {
       return res.status(403).json({
         success: false,
-        error: 'Invalid or expired Rolling Passcode. Please ask your instructor for the current live passcode.'
+        error: 'Invalid or expired 6-Digit Passcode. Rolling codes automatically refresh every 5 minutes. Please ask your instructor for the current passcode.'
       });
     }
   }
+
 
   if (!targetExamId) {
     return res.status(400).json({ error: 'Exam link or Rolling Code is required.' });
