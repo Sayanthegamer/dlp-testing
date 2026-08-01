@@ -145,15 +145,38 @@ function extractAndParseJson(text) {
     ];
   }
 
+function repairMissingMathBackslashes(text) {
+  if (typeof text !== 'string') return text;
+  const greekNames = 'alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Omega|Delta|Theta|Lambda|Gamma|Sigma|Phi|Psi';
+  const opNames = 'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|lim|log|ln|sin|cos|tan|cot|sec|csc';
+
+  return text.replace(/<math>(.*?)<\/math>/g, (m, inner) => {
+    let clean = inner
+      .replace(/(?<!\\)\bfrac([a-zA-Z0-9_\{\}\+\-\*\/\^\.\s]+)/g, (match, body) => {
+        if (body.startsWith('{')) return `\\frac${body}`;
+        return `\\frac{${body}}`;
+      })
+      .replace(new RegExp(`(?<!\\\\)\\b(${greekNames})\\b`, 'g'), '\\$1')
+      .replace(new RegExp(`(?<!\\\\)\\b(${opNames})\\b`, 'g'), '\\$1');
+    return `<math>${clean}</math>`;
+  });
+}
+
   // Normalize each question
   questions = questions.map((q, idx) => {
-    const questionText = q.questionText || `Question ${idx + 1}`;
-    // Force non-MCQ questions to short_answer_numeric
+    const rawQuestionText = q.questionText || `Question ${idx + 1}`;
+    const questionText = repairMissingMathBackslashes(rawQuestionText);
+
+    // Force non-MCQ questions to short_answer_numeric unless match_following
     let type = q.type;
-    if (type !== 'mcq') {
+    if (type !== 'mcq' && type !== 'match_following') {
       type = 'short_answer_numeric';
     }
-    const options = type === 'mcq' ? (Array.isArray(q.options) ? q.options : []) : [];
+
+    const cleanOptions = (Array.isArray(q.options) ? q.options : []).map(opt => repairMissingMathBackslashes(typeof opt === 'string' ? opt : String(opt)));
+
+    const options = (type === 'mcq' || type === 'match_following') ? cleanOptions : [];
+
     
     // Auto-extract mathSpans
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];

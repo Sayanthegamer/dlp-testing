@@ -40,6 +40,18 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
         if (!cleanMathContent) return null;
 
+        // Auto-repair unescaped LaTeX backslashes e.g. frac -> \frac, Omega -> \Omega, alpha -> \alpha, times -> \times
+        const greekNames = 'alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Omega|Delta|Theta|Lambda|Gamma|Sigma|Phi|Psi';
+        const opNames = 'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|lim|log|ln|sin|cos|tan|cot|sec|csc';
+
+        cleanMathContent = cleanMathContent
+          .replace(/(?<!\\)\bfrac([a-zA-Z0-9_\{\}\+\-\*\/\^\.\s]+)/g, (match, body) => {
+            if (body.startsWith('{')) return `\\frac${body}`;
+            return `\\frac{${body}}`;
+          })
+          .replace(new RegExp(`(?<!\\\\)\\b(${greekNames})\\b`, 'g'), '\\$1')
+          .replace(new RegExp(`(?<!\\\\)\\b(${opNames})\\b`, 'g'), '\\$1');
+
         // Fix unescaped physical unit tags e.g. pu{10cm} -> \mathrm{10cm}
         cleanMathContent = cleanMathContent.replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
 
@@ -52,6 +64,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         if (/^[a-zA-Z\s]{3,}$/.test(cleanMathContent) && !cleanMathContent.includes('\\')) {
           cleanMathContent = `\\text{${cleanMathContent}}`;
         }
+
 
         // Render Math with KaTeX
         let renderedHtml = '';
