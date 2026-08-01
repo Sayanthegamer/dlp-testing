@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
-import { ChevronLeft, ChevronRight, CheckSquare, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckSquare, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function TestQuestionView({
   questions,
@@ -126,8 +126,8 @@ export default function TestQuestionView({
               </div>
             )}
 
-            {/* Short Answer / Numerical Input */}
-            {type !== 'mcq' && (
+            {/* Numerical Answer Input */}
+            {type === 'short_answer_numeric' && (
               <div className="space-y-3 pt-2">
                 <label className="block text-xs font-sans font-semibold text-[#5c5346]">
                   Type your answer below:
@@ -140,6 +140,19 @@ export default function TestQuestionView({
                   autoFocus
                   className="w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-[#DCD5C4] bg-white font-serif text-base sm:text-lg text-[#232323] focus:outline-none focus:ring-2 focus:ring-[#232323] shadow-inner"
                 />
+              </div>
+            )}
+
+            {/* Unclassified Question Notice */}
+            {type !== 'mcq' && type !== 'short_answer_numeric' && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-sans font-medium space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-950 text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Question Pending Teacher Classification</span>
+                </div>
+                <p className="text-[#6e5833]">
+                  This question requires teacher review in the catalogue before it can be auto-graded on a student exam paper.
+                </p>
               </div>
             )}
 
