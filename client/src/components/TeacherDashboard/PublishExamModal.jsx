@@ -1,17 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, Share2, ExternalLink, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
 
 export default function PublishExamModal({ examId, testTitle, questionsCount, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [rollingCode, setRollingCode] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?mode=student&testId=${examId}`;
 
+  // Automatically start/fetch live rolling passcode session on modal mount
+  useEffect(() => {
+    handleStartRollingSession();
+  }, []);
+
   function handleCopy() {
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
+  }
+
+  function handleCopyCode() {
+    if (!rollingCode) return;
+    navigator.clipboard.writeText(rollingCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2500);
   }
 
   async function handleStartRollingSession() {
@@ -32,6 +45,7 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
       setIsGenerating(false);
     }
   }
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/50 overflow-y-auto">
@@ -81,16 +95,46 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
           </div>
 
           {rollingCode ? (
-            <div className="text-center py-3 bg-white border border-[#dcd2c4] rounded-xl">
-              <span className="text-xs font-bold text-[#736c62] block mb-1 uppercase tracking-wider">Live Student Rolling Code</span>
-              <span className="font-mono font-bold text-3xl tracking-widest text-[#8c4a17]">{rollingCode}</span>
-              <p className="text-[11px] text-[#736c62] mt-1">Students type their Name + this 6-digit code to access the test</p>
+            <div className="p-4 bg-white border border-[#dcd2c4] rounded-2xl text-center space-y-2 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#736c62] uppercase tracking-wider">
+                  Active Student Rolling Code
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                    copiedCode ? 'bg-emerald-600 text-white' : 'bg-[#f0e6d8] hover:bg-[#e4d8c5] text-[#8c4a17]'
+                  }`}
+                >
+                  {copiedCode ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Code Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Code</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="font-mono font-extrabold text-4xl tracking-widest text-[#8c4a17] py-1">
+                {rollingCode}
+              </div>
+              <p className="text-[11px] text-[#736c62]">
+                Students enter their full name + this active 6-digit code to access the test.
+              </p>
             </div>
           ) : (
-            <p className="text-xs text-[#736c62]">
-              Click Generate Code to open an active test session protected by a dynamic 6-digit rolling code.
-            </p>
+            <div className="py-4 text-center">
+              <p className="text-xs text-[#736c62]">
+                {isGenerating ? 'Generating active rolling passcode...' : 'Click Generate Code to create a live 6-digit passcode for your students.'}
+              </p>
+            </div>
           )}
+
         </div>
 
         {/* Info Banner */}

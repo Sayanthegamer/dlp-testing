@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchExamsList, toggleExamStatus } from '../../services/apiService';
-import { Copy, Check, Power, RefreshCw, FileText, Search, ExternalLink, AlertCircle } from 'lucide-react';
+import { Copy, Check, Power, RefreshCw, FileText, Search, ExternalLink, AlertCircle, KeyRound } from 'lucide-react';
 
 export default function PublishedExamsList() {
   const [exams, setExams] = useState([]);
@@ -8,7 +8,10 @@ export default function PublishedExamsList() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [copiedCodeId, setCopiedCodeId] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [activeCodes, setActiveCodes] = useState({});
+  const [generatingCodeId, setGeneratingCodeId] = useState(null);
 
   async function loadExams() {
     setLoading(true);
@@ -36,6 +39,34 @@ export default function PublishedExamsList() {
     setCopiedId(examId);
     setTimeout(() => setCopiedId(null), 2500);
   };
+
+  const handleCopyCode = (examId, code) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCodeId(examId);
+    setTimeout(() => setCopiedCodeId(null), 2500);
+  };
+
+  const handleGenerateCode = async (examId) => {
+    setGeneratingCodeId(examId);
+    try {
+      const res = await fetch('/api/exams/session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examId })
+      });
+      const data = await res.json();
+      if (data.success && data.rollingCode) {
+        setActiveCodes(prev => ({ ...prev, [examId]: data.rollingCode }));
+      } else {
+        alert(data.error || 'Failed to generate rolling passcode.');
+      }
+    } catch (err) {
+      alert(`Error generating passcode: ${err.message}`);
+    } finally {
+      setGeneratingCodeId(null);
+    }
+  };
+
 
 
   const handleToggleStatus = async (examId, currentStatus) => {
@@ -177,7 +208,59 @@ export default function PublishedExamsList() {
                   <span>❓ Questions: <strong className="text-[#3c3730]">{exam.questionCount}</strong></span>
                   <span>📝 Submissions: <strong className="text-[#8c4a17]">{exam.submissionCount}</strong></span>
                 </div>
+
+                {/* Active Rolling Passcode Section */}
+                <div className="mt-2 p-3 bg-[#f8f3eb] rounded-xl border border-[#e2d8ca] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-[#8c4a17] shrink-0" />
+                    {activeCodes[exam.id] ? (
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-[#736c62] block leading-none">Live Passcode</span>
+                        <span className="font-mono font-extrabold text-base tracking-widest text-[#8c4a17]">
+                          {activeCodes[exam.id]}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-[#736c62] font-medium">
+                        {isClosed ? 'Exam closed' : 'No passcode active'}
+                      </span>
+                    )}
+                  </div>
+
+                  {activeCodes[exam.id] ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(exam.id, activeCodes[exam.id])}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                        copiedCodeId === exam.id ? 'bg-emerald-600 text-white' : 'bg-white text-[#8c4a17] border border-[#dcd2c4] hover:bg-[#FAF7F0]'
+                      }`}
+                    >
+                      {copiedCodeId === exam.id ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy Code</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateCode(exam.id)}
+                      disabled={isClosed || generatingCodeId === exam.id}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#8c4a17] text-white hover:bg-[#733c11] transition-all disabled:opacity-40 flex items-center gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${generatingCodeId === exam.id ? 'animate-spin' : ''}`} />
+                      <span>Generate Code</span>
+                    </button>
+                  )}
+                </div>
               </div>
+
 
               {/* Actions Footer */}
               <div className="flex items-center justify-between pt-3 border-t border-[#f0e6d8] gap-2">
