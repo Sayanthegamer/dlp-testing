@@ -5,7 +5,58 @@
 
 function getAuthHeader() {
   const pwd = localStorage.getItem('app_access_password') || '';
-  return { 'X-App-Password': pwd };
+  const token = localStorage.getItem('teacher_auth_token') || '';
+  const headers = { 'X-App-Password': pwd };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function loginTeacher(email, password, appPassword) {
+  let response;
+  try {
+    response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, appPassword })
+    });
+  } catch (networkErr) {
+    throw new Error('Network error: Cannot reach the server. Please check your connection.');
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Login failed.');
+  }
+
+  if (data.token) {
+    localStorage.setItem('teacher_auth_token', data.token);
+  }
+  return data;
+}
+
+export async function signupTeacher(email, password, fullName) {
+  let response;
+  try {
+    response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, fullName })
+    });
+  } catch (networkErr) {
+    throw new Error('Network error: Cannot reach the server. Please check your connection.');
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Registration failed.');
+  }
+
+  if (data.token || data.session?.access_token) {
+    localStorage.setItem('teacher_auth_token', data.token || data.session?.access_token);
+  }
+  return data;
 }
 
 export async function verifyPassword(password) {

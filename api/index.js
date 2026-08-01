@@ -5,8 +5,10 @@ require('dotenv').config();
 const parseRoutes = require('../server/routes/parse');
 const submissionsRoutes = require('../server/routes/submissions');
 const examsRoutes = require('../server/routes/exams');
+const authRoutes = require('../server/routes/auth');
 
 const app = express();
+
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -66,9 +68,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Submissions & Exams API routes
+// Submissions, Exams & Auth API routes
+app.use('/api/auth', authRoutes);
 app.use('/api', submissionsRoutes);
 app.use('/api', examsRoutes);
+
 
 // Protected: mount parse routes at /api with auth
 app.use('/api', authMiddleware, parseRoutes);

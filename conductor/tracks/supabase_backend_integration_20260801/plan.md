@@ -8,10 +8,10 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 2: Teacher Auth & Multi-Tenant Security
-- [ ] Task: Implement Supabase Auth routes in `server/routes/auth.js` (signup, login, session check).
-- [ ] Task: Update `client/src/services/apiService.js` to handle teacher auth tokens and login states.
-- [ ] Task: Update `client/src/components/Common/AccessGateModal.jsx` and Navbar to integrate Supabase Auth for teachers.
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md).
+- [x] Task: Implement Supabase Auth routes in `server/routes/auth.js` (signup, login, session check).
+- [x] Task: Update `client/src/services/apiService.js` to handle teacher auth tokens and login states.
+- [x] Task: Update `client/src/components/Common/AccessGateModal.jsx` and Navbar to integrate Supabase Auth for teachers.
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 3: Supabase Storage Integration for Diagrams
 - [ ] Task: Create public `diagram-media` bucket initialization in `server/services/supabaseClient.js`.
