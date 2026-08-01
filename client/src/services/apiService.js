@@ -214,10 +214,25 @@ export async function gradeSubmission(submissionId, manualGrades) {
 }
 
 export async function publishExam(payload) {
+  // Strip large sourcePageImage base64 strings to keep JSON payload lightweight (< 50KB) and prevent HTTP 413 Payload Too Large errors on Vercel
+  const cleanQuestions = (payload?.questions || []).map(q => {
+    const cleanDiagramImages = (q.diagramImages || []).map(img => {
+      if (!img || typeof img !== 'object') return img;
+      const { sourcePageImage, ...rest } = img;
+      return rest;
+    });
+    return {
+      ...q,
+      diagramImages: cleanDiagramImages
+    };
+  });
+
+  const cleanPayload = { ...payload, questions: cleanQuestions };
+
   const response = await fetch('/api/exams/publish', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(cleanPayload)
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -225,6 +240,7 @@ export async function publishExam(payload) {
   }
   return await response.json();
 }
+
 
 export async function fetchExamSnapshot(examId) {
   const response = await fetch(`/api/exams/${examId}`, {
