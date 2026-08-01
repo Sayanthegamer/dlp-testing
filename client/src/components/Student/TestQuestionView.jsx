@@ -126,8 +126,8 @@ export default function TestQuestionView({
               </div>
             )}
 
-            {/* Short Answer Input */}
-            {(type === 'short_answer_numeric' || type === 'short_answer_text' || type === 'short_answer') && (
+            {/* Short Answer / Numerical Input */}
+            {type !== 'mcq' && (
               <div className="space-y-3 pt-2">
                 <label className="block text-xs font-sans font-semibold text-[#5c5346]">
                   Type your answer below:
