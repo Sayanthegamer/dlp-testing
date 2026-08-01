@@ -148,17 +148,24 @@ router.post('/exams/publish', async (req, res) => {
 
   if (isConfigured()) {
     try {
-      await supabase.from('exams').insert({
+      const { error: insertErr } = await supabase.from('exams').insert({
         id: serverGeneratedId,
         title: cleanTitle,
         question_count: questions.length,
         status: 'active',
         snapshot_data: examSnapshot
-      });
+      }).select();
+
+      if (insertErr) {
+        console.warn('[Supabase Exam Insert Error]:', insertErr.message);
+      } else {
+        console.log(`[Supabase Exams] Successfully published exam ${serverGeneratedId} to database.`);
+      }
     } catch (dbErr) {
       console.warn('[Supabase Exam Insert Warning]:', dbErr.message);
     }
   }
+
 
   const list = readExamsLocal();
   list.unshift(examSnapshot);
