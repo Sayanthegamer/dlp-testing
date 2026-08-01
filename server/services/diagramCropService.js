@@ -106,10 +106,19 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
       height = Math.max(10, Math.min(imgHeight - top, Math.round(v4 * imgHeight)));
     }
 
-    console.log(`[Diagram Crop Debug] Image size: ${imgWidth}x${imgHeight} | Raw bbox: ${JSON.stringify(bbox)} | Computed crop rect: { left: ${left}, top: ${top}, width: ${width}, height: ${height} }`);
+    // Add 5% safety margin padding to prevent clipping diagram elements
+    const padX = Math.max(5, Math.round(width * 0.05));
+    const padY = Math.max(5, Math.round(height * 0.05));
+
+    const finalLeft = Math.max(0, left - padX);
+    const finalTop = Math.max(0, top - padY);
+    const finalWidth = Math.min(imgWidth - finalLeft, width + padX * 2);
+    const finalHeight = Math.min(imgHeight - finalTop, height + padY * 2);
+
+    console.log(`[Diagram Crop Debug] Image size: ${imgWidth}x${imgHeight} | Raw bbox: ${JSON.stringify(bbox)} | Padded crop rect: { left: ${finalLeft}, top: ${finalTop}, width: ${finalWidth}, height: ${finalHeight} }`);
 
     const cropped = await sharp(sourceBuffer)
-      .extract({ left, top, width, height })
+      .extract({ left: finalLeft, top: finalTop, width: finalWidth, height: finalHeight })
       .png()
       .toBuffer();
 
