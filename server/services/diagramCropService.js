@@ -121,10 +121,10 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
     const padX = Math.max(4, Math.round(width * 0.04));
     const padY = Math.max(4, Math.round(height * 0.04));
 
-    const finalLeft = Math.max(0, left - padX);
-    const finalTop = Math.max(0, top - padY);
-    const finalWidth = Math.min(imgWidth - finalLeft, width + padX * 2);
-    const finalHeight = Math.min(imgHeight - finalTop, height + padY * 2);
+    const finalLeft = Math.round(Math.max(0, left - padX));
+    const finalTop = Math.round(Math.max(0, top - padY));
+    const finalWidth = Math.round(Math.max(1, Math.min(imgWidth - finalLeft, width + padX * 2)));
+    const finalHeight = Math.round(Math.max(1, Math.min(imgHeight - finalTop, height + padY * 2)));
 
     console.log(`[Diagram Crop Debug] Image size: ${imgWidth}x${imgHeight} | Raw bbox: ${JSON.stringify(bbox)} | Padded crop rect: { left: ${finalLeft}, top: ${finalTop}, width: ${finalWidth}, height: ${finalHeight} }`);
 
@@ -132,6 +132,7 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
       .extract({ left: finalLeft, top: finalTop, width: finalWidth, height: finalHeight })
       .png()
       .toBuffer();
+
 
     // Save debug crop PNG to server/data/ directory for visual inspection
     try {
