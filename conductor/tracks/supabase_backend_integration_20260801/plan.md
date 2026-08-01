@@ -14,9 +14,9 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 3: Supabase Storage Integration for Diagrams
-- [ ] Task: Create public `diagram-media` bucket initialization in `server/services/supabaseClient.js`.
-- [ ] Task: Update `server/services/diagramCropService.js` to upload cropped PNG buffers to Supabase Storage and return CDN URLs instead of storing local base64 files.
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md).
+- [x] Task: Create public `diagram-media` bucket initialization in `server/services/supabaseClient.js`.
+- [x] Task: Update `server/services/diagramCropService.js` to upload cropped PNG buffers to Supabase Storage and return CDN URLs instead of storing local base64 files.
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 4: Exam Persistence & Dynamic Rolling Code System
 - [ ] Task: Refactor `server/routes/exams.js` to store drafts and published exam snapshots directly in Supabase PostgreSQL tables (replacing `/tmp/` file storage).

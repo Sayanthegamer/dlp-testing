@@ -144,7 +144,9 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
       console.warn('[Diagram Crop Debug Warning] Could not write debug crop file:', saveErr.message);
     }
 
-    return `data:image/png;base64,${cropped.toString('base64')}`;
+    const { uploadDiagramToStorage } = require('./supabaseClient');
+    const fileName = `${debugLabel}_${Date.now()}.png`;
+    return await uploadDiagramToStorage(cropped, fileName);
   } catch (err) {
     console.warn('[Diagram Crop Error]:', err.message);
     return null;
