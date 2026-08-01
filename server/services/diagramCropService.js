@@ -117,22 +117,32 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
     }
 
 
+    // Filter out tiny edge noise boxes (e.g. less than 30px width or height)
+    if (width < 30 || height < 30) {
+      console.warn(`[Diagram Crop Warning] BBox ${JSON.stringify(bbox)} produced tiny noise box (${width}x${height}). Expanding to safe default.`);
+      width = Math.max(150, width);
+      height = Math.max(150, height);
+      left = Math.max(0, left - 40);
+      top = Math.max(0, top - 40);
+    }
+
     // Bound coordinates inside image canvas
     left = Math.max(0, Math.min(imgWidth - 20, left));
     top = Math.max(0, Math.min(imgHeight - 20, top));
-    width = Math.max(20, Math.min(imgWidth - left, width));
-    height = Math.max(20, Math.min(imgHeight - top, height));
+    width = Math.max(40, Math.min(imgWidth - left, width));
+    height = Math.max(40, Math.min(imgHeight - top, height));
 
-    // Add subtle 4% safety margin padding
-    const padX = Math.max(4, Math.round(width * 0.04));
-    const padY = Math.max(4, Math.round(height * 0.04));
+    // Generous 12% safety margin padding + 16px minimum buffer so diagram edges & labels are NEVER cut off
+    const padX = Math.max(16, Math.round(width * 0.12));
+    const padY = Math.max(16, Math.round(height * 0.12));
 
     const finalLeft = Math.round(Math.max(0, left - padX));
     const finalTop = Math.round(Math.max(0, top - padY));
-    const finalWidth = Math.round(Math.max(1, Math.min(imgWidth - finalLeft, width + padX * 2)));
-    const finalHeight = Math.round(Math.max(1, Math.min(imgHeight - finalTop, height + padY * 2)));
+    const finalWidth = Math.round(Math.max(40, Math.min(imgWidth - finalLeft, width + padX * 2)));
+    const finalHeight = Math.round(Math.max(40, Math.min(imgHeight - finalTop, height + padY * 2)));
 
     console.log(`[Diagram Crop Debug] Image size: ${imgWidth}x${imgHeight} | Raw bbox: ${JSON.stringify(bbox)} | Padded crop rect: { left: ${finalLeft}, top: ${finalTop}, width: ${finalWidth}, height: ${finalHeight} }`);
+
 
     const cropped = await sharp(sourceBuffer)
       .extract({ left: finalLeft, top: finalTop, width: finalWidth, height: finalHeight })

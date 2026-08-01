@@ -48,9 +48,10 @@ CRITICAL RULES:
 10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\pu{...}</math>, e.g. <math>\pu{9.8 m/s^2}</math>, <math>\pu{6.63e-34 J s}</math>.
 11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\nCr{n}{r}</math> / <math>\nPr{n}{r}</math> custom macros, not raw \binom.
 12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.
-13. DIAGRAM BOUNDING BOXES: Whenever a question contains a diagram, figure, circuit, benzene ring, or graph in the source image/page, populate the "diagrams" array with an object containing "bbox": [ymin, xmin, ymax, xmax] as normalized floats between 0.0 and 1.0 relative to sourceFileIndex image bounds.
+13. DIAGRAM BOUNDING BOXES: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, populate the "diagrams" array containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}. ymin, xmin, ymax, xmax MUST be 4 normalized floats between 0.0 and 1.0 tightly enclosing the full diagram drawing and its labels. DO NOT output diagrams array for text-only questions.
 14. MATCH THE FOLLOWING QUESTIONS: If the input contains a "Match the Following" question (matching Column I items with Column II items), format Column I and Column II cleanly in "questionText" as a structured 2-column list or table. Set "type": "match_following" (or "mcq"), and provide the matching combination choices (e.g. ["A: (i)-p, (ii)-q, (iii)-r, (iv)-s", ...]) in the "options" array.
 15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.`;
+
 
 
 
