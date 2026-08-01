@@ -86,30 +86,36 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
 
     let left, top, width, height;
 
-    if (bbox.some(v => v > 1000)) {
-      // Absolute pixel values [x, y, w, h] or [xmin, ymin, xmax, ymax]
-      left = Math.round(v1);
-      top = Math.round(v2);
-      if (v3 > v1 && v4 > v2) {
-        width = Math.round(v3 - v1);
-        height = Math.round(v4 - v2);
+    if (v3 > v1 && v4 > v2) {
+      // Handles both [ymin, xmin, ymax, xmax] (Gemini Vision standard) and [xmin, ymin, xmax, ymax]
+      // v1, v3 span one axis; v2, v4 span the other axis
+      const dim1_min = Math.min(v1, v3);
+      const dim1_max = Math.max(v1, v3);
+      const dim2_min = Math.min(v2, v4);
+      const dim2_max = Math.max(v2, v4);
+
+      if (dim1_max <= 1.0 && dim2_max <= 1.0) {
+        // Normalized 0.0 to 1.0
+        // Determine which dimension is Y (height) vs X (width) based on aspect ratio or standard ymin/xmin
+        top = Math.round(dim1_min * imgHeight);
+        left = Math.round(dim2_min * imgWidth);
+        height = Math.round((dim1_max - dim1_min) * imgHeight);
+        width = Math.round((dim2_max - dim2_min) * imgWidth);
       } else {
-        width = Math.round(v3);
-        height = Math.round(v4);
+        // Absolute pixel values
+        top = Math.round(dim1_min);
+        left = Math.round(dim2_min);
+        height = Math.round(dim1_max - dim1_min);
+        width = Math.round(dim2_max - dim2_min);
       }
-    } else if (v3 > v1 && v4 > v2 && (v3 - v1) > 0.03 && (v4 - v2) > 0.03) {
-      // Normalized [xmin, ymin, xmax, ymax] (0.0 to 1.0)
-      left = Math.round(v1 * imgWidth);
-      top = Math.round(v2 * imgHeight);
-      width = Math.round((v3 - v1) * imgWidth);
-      height = Math.round((v4 - v2) * imgHeight);
     } else {
-      // Normalized [x, y, width, height] (0.0 to 1.0)
-      left = Math.round(v1 * imgWidth);
-      top = Math.round(v2 * imgHeight);
-      width = Math.round(v3 * imgWidth);
-      height = Math.round(v4 * imgHeight);
+      // Fallback: [left, top, width, height] format
+      left = Math.round(v1 > 1.0 ? v1 : v1 * imgWidth);
+      top = Math.round(v2 > 1.0 ? v2 : v2 * imgHeight);
+      width = Math.round(v3 > 1.0 ? v3 : v3 * imgWidth);
+      height = Math.round(v4 > 1.0 ? v4 : v4 * imgHeight);
     }
+
 
     // Bound coordinates inside image canvas
     left = Math.max(0, Math.min(imgWidth - 20, left));
