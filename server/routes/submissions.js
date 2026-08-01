@@ -88,36 +88,31 @@ router.post('/submissions', async (req, res) => {
   const pendingCount = typeof body.pendingCount === 'number' ? body.pendingCount : 0;
   const questions = body.questions || [];
   const studentAnswers = body.studentAnswers || {};
-  const rawExamId = body.examId || 'exam_default';
-  const rollingCodeUsed = body.rollingCodeUsed || '';
-
+  const rawExamId = (body.examId || '').trim();
+  const rollingCodeUsed = (body.rollingCodeUsed || '').trim();
   let targetExamId = rawExamId;
 
   if (isConfigured()) {
+    if (!rawExamId || rawExamId === 'exam_default') {
+      return res.status(400).json({ error: 'Missing examId: Submissions must be linked to a valid published exam.' });
+    }
+
     try {
-      if (rawExamId && rawExamId !== 'exam_default') {
-        const { data: existing } = await supabase.from('exams').select('id').eq('id', rawExamId).single();
-        if (existing && existing.id) {
-          targetExamId = existing.id;
-        } else {
-          // If rawExamId was specified but not found in DB, return clear 400 error instead of misattributing
-          return res.status(400).json({ error: `Invalid examId '${rawExamId}': Exam snapshot not found in database.` });
-        }
+      const { data: existing } = await supabase.from('exams').select('id').eq('id', rawExamId).single();
+      if (existing && existing.id) {
+        targetExamId = existing.id;
       } else {
-        // Fallback for default exam testing: ensure exam_default row exists in exams table
-        targetExamId = 'exam_default';
-        await supabase.from('exams').upsert({
-          id: targetExamId,
-          title: testTitle,
-          status: 'published',
-          question_count: questions.length,
-          snapshot_data: { id: targetExamId, testTitle, questions }
-        });
+        return res.status(400).json({ error: `Invalid examId '${rawExamId}': Exam snapshot not found in database.` });
       }
     } catch (e) {
       console.warn('[Exam FK Resolution Warning]:', e.message);
+      return res.status(400).json({ error: `Database error verifying examId '${rawExamId}'.` });
     }
+  } else {
+    // Unconfigured local dev mode fallback
+    targetExamId = rawExamId || 'exam_default';
   }
+
 
 
   const submissionObj = {
