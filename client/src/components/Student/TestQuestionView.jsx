@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
-import { ChevronLeft, ChevronRight, CheckSquare, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckSquare, CheckCircle, AlertTriangle, BookOpen } from 'lucide-react';
+
 
 export default function TestQuestionView({
   questions,
@@ -67,10 +68,23 @@ export default function TestQuestionView({
           >
 
             
+            {/* Reading Passage / Comprehension Block */}
+            {question.passageText && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#f4eee4] border border-[#e0d6c7] space-y-2">
+                <div className="flex items-center gap-2 font-serif font-bold text-sm text-[#8c4a17]">
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>{question.passageTitle || 'Comprehension Passage / Case Study'}</span>
+                </div>
+                <div className="text-xs sm:text-sm text-[#3c3730] font-sans leading-relaxed">
+                  <MathRenderer text={question.passageText} readOnly={true} />
+                </div>
+              </div>
+            )}
+
             {/* Question Stem */}
             <div className="space-y-2">
               <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#8c4a17] block">
-                Question {currentIndex + 1}
+                {type === 'match_following' ? 'Match the Following Question' : `Question ${currentIndex + 1}`}
               </span>
               <div className="font-serif text-lg sm:text-2xl text-[#232323] leading-relaxed">
                 <MathRenderer text={questionText} readOnly={true} />
@@ -78,12 +92,13 @@ export default function TestQuestionView({
               <DiagramBlock diagrams={question.diagrams} diagramImages={question.diagramImages} />
             </div>
 
-            {/* MCQ Options */}
-            {type === 'mcq' && (
+            {/* MCQ / Match the Following Options */}
+            {(type === 'mcq' || type === 'match_following') && (
               <div className="space-y-3 pt-2">
                 <span className="text-xs font-sans font-semibold text-[#5c5346] block">
-                  Select your choice:
+                  {type === 'match_following' ? 'Select the correct matching combination:' : 'Select your choice:'}
                 </span>
+
                 <div
                   className={
                     isLongOptions

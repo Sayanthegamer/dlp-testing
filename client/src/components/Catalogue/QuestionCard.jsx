@@ -137,15 +137,29 @@ export default function QuestionCard({
 
       {/* Question Stem Text (Direct Inline Editing) */}
       <div className="mb-5 sm:mb-6">
+        {/* Reading Passage / Comprehension Block */}
+        {question.passageText && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-[#f4eee4] border border-[#e0d6c7] space-y-1.5 mb-3">
+            <div className="flex items-center gap-2 font-serif font-bold text-xs sm:text-sm text-[#8c4a17]">
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span>{question.passageTitle || 'Comprehension Passage / Case Study'}</span>
+            </div>
+            <div className="text-xs text-[#3c3730] font-sans leading-relaxed">
+              <MathRenderer text={question.passageText} readOnly={true} />
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs text-[#786f63] font-sans mb-1">
           <span className="font-semibold uppercase tracking-wider text-[10px] text-[#8c4a17]">
-            Question Stem
+            {type === 'match_following' ? 'Match the Following Question Stem' : 'Question Stem'}
           </span>
           <span className="text-[11px] text-[#8c4a17] font-medium flex items-center gap-1">
             <Type className="w-3 h-3" />
             <span>Edit Text Inline</span>
           </span>
         </div>
+
 
         {isEditingStem ? (
           <textarea
