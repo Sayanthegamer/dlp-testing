@@ -61,18 +61,17 @@ app.post('/api/verify-student-password', (req, res) => {
   return res.status(401).json({ success: false, error: 'Incorrect student access password.' });
 });
 
-// 2. Safe Mount Defensive Helper to lazily load route modules without taking down serverless cold-start
-function safeMount(pathPrefix, modulePath, ...middleware) {
+// 2. Safe Mount Helper using literal require callbacks so Vercel's NFT AST tracer bundles the files
+function safeMount(pathPrefix, loadFn, ...middleware) {
   try {
-    const router = require(modulePath);
+    const router = loadFn();
     if (middleware.length > 0) {
       app.use(pathPrefix, ...middleware, router);
     } else {
       app.use(pathPrefix, router);
     }
-    console.log(`[Vercel Safe Mount] Successfully mounted route module: ${modulePath}`);
   } catch (err) {
-    console.error(`[Vercel Safe Mount Error] Failed to load module ${modulePath}:`, err.message);
+    console.error(`[Vercel Safe Mount Error]:`, err.message);
     app.use(pathPrefix, (req, res) => {
       res.status(503).json({
         success: false,
@@ -82,10 +81,10 @@ function safeMount(pathPrefix, modulePath, ...middleware) {
   }
 }
 
-// 3. Mount Application Routes Defensively
-safeMount('/api/auth', '../server/routes/auth');
-safeMount('/api', '../server/routes/submissions');
-safeMount('/api', '../server/routes/exams');
-safeMount('/api', '../server/routes/parse', authMiddleware);
+// 3. Defensively Mount Application Routes with Literal Require Strings for Vercel Tracing
+safeMount('/api/auth', () => require('../server/routes/auth'));
+safeMount('/api', () => require('../server/routes/submissions'));
+safeMount('/api', () => require('../server/routes/exams'));
+safeMount('/api', () => require('../server/routes/parse'), authMiddleware);
 
 module.exports = app;
