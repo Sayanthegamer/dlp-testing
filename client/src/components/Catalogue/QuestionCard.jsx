@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import DiagramBlock from '../PreviewPanel/DiagramBlock';
+import DiagramAdjustModal from './DiagramAdjustModal';
 import { computeNeedsReview } from '../../services/reviewEvaluator';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
-import { Check, Edit2, Copy, Trash2, CheckCircle2, Circle, Type, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Check, Edit2, Copy, Trash2, CheckCircle2, Circle, Type, ShieldCheck, AlertTriangle, Crop, ImagePlus } from 'lucide-react';
 
 export default function QuestionCard({
   question,
@@ -15,6 +16,8 @@ export default function QuestionCard({
 }) {
   const [isEditingStem, setIsEditingStem] = useState(false);
   const [editingOptionIdx, setEditingOptionIdx] = useState(null);
+  const [isAdjustingDiagram, setIsAdjustingDiagram] = useState(false);
+
 
   const { id, questionText, type, options, correctAnswer } = question;
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -167,9 +170,21 @@ export default function QuestionCard({
           </div>
         )}
 
-        {/* Cropped Diagram Block */}
-        <DiagramBlock diagrams={question.diagrams} diagramImages={question.diagramImages} />
+        {/* Cropped Diagram Block & Adjust Trigger */}
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <DiagramBlock diagrams={question.diagrams} diagramImages={question.diagramImages} />
+          <button
+            type="button"
+            onClick={() => setIsAdjustingDiagram(true)}
+            className="text-xs font-sans font-semibold px-3 py-1.5 rounded-xl border border-[#dcd0be] bg-[#f8f3eb] hover:bg-[#ede3d3] text-[#736c62] hover:text-[#232323] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Adjust, crop, or replace figure diagram for this question"
+          >
+            <Crop className="w-3.5 h-3.5 text-[#8c4a17]" />
+            <span>{Array.isArray(question.diagrams) && question.diagrams.length > 0 ? 'Adjust Diagram' : 'Attach Diagram'}</span>
+          </button>
+        </div>
       </div>
+
 
       {/* Options (MCQ mode) */}
       {type === 'mcq' && (
@@ -365,6 +380,15 @@ export default function QuestionCard({
           </div>
         </div>
       )}
+
+      {isAdjustingDiagram && (
+        <DiagramAdjustModal
+          question={{ ...question, index }}
+          onUpdateQuestion={onUpdateQuestion}
+          onClose={() => setIsAdjustingDiagram(false)}
+        />
+      )}
     </div>
   );
 }
+
