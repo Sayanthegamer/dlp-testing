@@ -275,6 +275,11 @@ router.post('/parse-question', async (req, res) => {
   });
 });
 
+function stripBase64Header(str) {
+  if (typeof str !== 'string') return str || '';
+  return str.replace(/^data:[^;]+;base64,/, '').trim();
+}
+
 // Google Gemini Parser Implementation (Native PDF & Multi-Image support)
 async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, mediaFiles, docxStructure }) {
   const genAI = new GoogleGenerativeAI(geminiKey);
@@ -298,10 +303,11 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
       ? mediaFiles
       : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
 
-    filesToProcess.forEach((file, index) => {
+    filesToProcess.forEach((file) => {
+      const rawData = file.data || file.base64 || file.imageBase64;
       promptParts.push({
         inlineData: {
-          data: file.data || file.base64 || file.imageBase64,
+          data: stripBase64Header(rawData),
           mimeType: file.mimeType || file.mediaType || 'image/jpeg'
         }
       });
@@ -309,8 +315,10 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
 
     promptParts.push(
       `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. ` +
-      `Extract every numbered question (Question 1, Question 2, etc.) into its own distinct question block with questionText, type, options, and correctAnswer. ` +
-      `Place all mathematical formulas and expressions inside <math>LaTeX</math> tags.`
+      `Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ` +
+      `CRITICAL DIAGRAM INSTRUCTION: If any question contains a diagram, figure, circuit, benzene ring, organic structure, graph, plot, or apparatus drawing in the source image, ` +
+      `YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [x, y, width, height], "caption": "description"}, ` +
+      `where bbox contains 4 normalized floats [left, top, width, height] between 0.0 and 1.0 bounding the diagram area on sourceFileIndex.`
     );
   } else if (type === 'docx_structure') {
     promptParts.push(`Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.`);
@@ -340,24 +348,25 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
 
     filesToProcess.forEach(file => {
       const mime = file.mimeType || file.mediaType || 'image/jpeg';
-      const data = file.data || file.base64 || file.imageBase64;
+      const rawData = file.data || file.base64 || file.imageBase64;
+      const cleanData = stripBase64Header(rawData);
 
       if (mime === 'application/pdf') {
         contentBlocks.push({
           type: 'document',
-          source: { type: 'base64', media_type: 'application/pdf', data }
+          source: { type: 'base64', media_type: 'application/pdf', data: cleanData }
         });
       } else {
         contentBlocks.push({
           type: 'image',
-          source: { type: 'base64', media_type: mime, data }
+          source: { type: 'base64', media_type: mime, data: cleanData }
         });
       }
     });
 
     contentBlocks.push({
       type: 'text',
-      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question (Question 1, Question 2, etc.) into its own distinct question block. Place all math inside <math>LaTeX</math> tags.`
+      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. CRITICAL DIAGRAM INSTRUCTION: If any question contains a diagram, figure, circuit, benzene ring, organic structure, graph, plot, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [x, y, width, height], "caption": "description"}, where bbox contains 4 normalized floats [left, top, width, height] between 0.0 and 1.0 bounding the diagram area on sourceFileIndex.`
     });
 
     messages = [{ role: 'user', content: contentBlocks }];
