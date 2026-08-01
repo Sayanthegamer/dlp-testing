@@ -80,9 +80,11 @@ async function extractCandidateFigures(mediaFiles) {
       if (mime === 'application/pdf') {
         // PDF candidate extraction via pdfjs-dist
         try {
-          const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+          const { getPdfJsLib } = require('./diagramCropService');
+          const pdfjsLib = await getPdfJsLib();
+          if (!pdfjsLib) throw new Error('pdfjs-dist module unavailable');
           const pdfBuffer = Buffer.from(cleanStr, 'base64');
-          const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
+          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
           const pdf = await loadingTask.promise;
 
           for (let pIndex = 0; pIndex < pdf.numPages; pIndex++) {

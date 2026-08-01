@@ -54,6 +54,13 @@ function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');
 }
 
+function repairJsonUnescapedBackslashes(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/\\(?:([^"\\\/bfnrtu])|u(?![0-9a-fA-F]{4}))/g, (match, p1) => {
+    return '\\\\' + (p1 || '');
+  });
+}
+
 function extractAndParseJson(text) {
   if (!text || typeof text !== 'string') {
     throw new Error('Received empty or invalid model response text');
@@ -73,7 +80,14 @@ function extractAndParseJson(text) {
     clean = clean.substring(startIdx, endIdx + 1);
   }
 
-  const parsed = JSON.parse(clean);
+  let parsed;
+  try {
+    parsed = JSON.parse(clean);
+  } catch (err1) {
+    console.warn('[Parser Repair] Direct JSON.parse failed, attempting backslash repair:', err1.message);
+    const repaired = repairJsonUnescapedBackslashes(clean);
+    parsed = JSON.parse(repaired);
+  }
 
   // Handle single question vs multi-question catalogue
   let questions = [];

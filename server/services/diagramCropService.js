@@ -6,13 +6,29 @@ function stripBase64Header(str) {
   return str.replace(/^data:[^;]+;base64,/, '').trim();
 }
 
+async function getPdfJsLib() {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    return pdfjs.default || pdfjs;
+  } catch (e1) {
+    try {
+      const pdfjs = await import('pdfjs-dist');
+      return pdfjs.default || pdfjs;
+    } catch (e2) {
+      console.warn('[PDF.js import error]:', e2.message);
+      return null;
+    }
+  }
+}
+
 async function rasterizePdfPage(pdfBase64, pageIndex) {
   try {
-    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+    const pdfjsLib = await getPdfJsLib();
+    if (!pdfjsLib) throw new Error('pdfjs-dist module unavailable');
     const { createCanvas } = require('canvas');
     const cleanPdf = stripBase64Header(pdfBase64);
     const pdfBuffer = Buffer.from(cleanPdf, 'base64');
-    const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage((pageIndex || 0) + 1);
     const viewport = page.getViewport({ scale: 2.0 });
