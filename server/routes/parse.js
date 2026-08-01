@@ -152,6 +152,8 @@ function repairMissingMathBackslashes(text) {
 
   return text.replace(/<math>(.*?)<\/math>/g, (m, inner) => {
     let clean = inner
+      .replace(/(?<!\\)\bsqrt\s*\(?\s*([0-9a-zA-Z]+)\s*\)?/gi, '\\sqrt{$1}')
+      .replace(/(?<!\\)\bsqrt\s*\{([^}]+)\}/gi, '\\sqrt{$1}')
       .replace(/(?<!\\)\bfrac([a-zA-Z0-9_\{\}\+\-\*\/\^\.\s]+)/g, (match, body) => {
         if (body.startsWith('{')) return `\\frac${body}`;
         return `\\frac{${body}}`;
@@ -160,6 +162,7 @@ function repairMissingMathBackslashes(text) {
       .replace(new RegExp(`(?<!\\\\)\\b(${opNames})\\b`, 'g'), '\\$1');
     return `<math>${clean}</math>`;
   });
+
 }
 
   // Normalize each question

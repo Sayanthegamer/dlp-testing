@@ -45,12 +45,15 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         const opNames = 'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|lim|log|ln|sin|cos|tan|cot|sec|csc';
 
         cleanMathContent = cleanMathContent
+          .replace(/(?<!\\)\bsqrt\s*\(?\s*([0-9a-zA-Z]+)\s*\)?/gi, '\\sqrt{$1}')
+          .replace(/(?<!\\)\bsqrt\s*\{([^}]+)\}/gi, '\\sqrt{$1}')
           .replace(/(?<!\\)\bfrac([a-zA-Z0-9_\{\}\+\-\*\/\^\.\s]+)/g, (match, body) => {
             if (body.startsWith('{')) return `\\frac${body}`;
             return `\\frac{${body}}`;
           })
           .replace(new RegExp(`(?<!\\\\)\\b(${greekNames})\\b`, 'g'), '\\$1')
           .replace(new RegExp(`(?<!\\\\)\\b(${opNames})\\b`, 'g'), '\\$1');
+
 
         // Fix unescaped physical unit tags e.g. pu{10cm} -> \mathrm{10cm}
         cleanMathContent = cleanMathContent.replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');

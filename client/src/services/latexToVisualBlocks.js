@@ -248,13 +248,17 @@ export function visualTextToLatex(visual) {
   // Parse fractions with balanced parenthetical matching: (num / den)
   latex = parseFractionsBalanced(latex);
 
-  // Convert √(a) back to \sqrt{a}
-  latex = latex.replace(/√\(([^)]+)\)/g, '\\sqrt{$1}');
-  // Convert √a back to \sqrt{a}
-  latex = latex.replace(/√([a-zA-Z0-9]+)/g, '\\sqrt{$1}');
+  // Convert all variations of square root (e.g. \sqrt(3), sqrt(3), \sqrt 3, sqrt3, √(3), √3) to \sqrt{3}
+  latex = latex
+    .replace(/\\?sqrt\(([^)]+)\)/gi, '\\sqrt{$1}')
+    .replace(/\\?sqrt\{([^}]+)\}/gi, '\\sqrt{$1}')
+    .replace(/\\?sqrt\s*([0-9a-zA-Z]+)/gi, '\\sqrt{$1}')
+    .replace(/√\(([^)]+)\)/g, '\\sqrt{$1}')
+    .replace(/√([a-zA-Z0-9]+)/g, '\\sqrt{$1}');
 
   return latex.trim();
 }
+
 
 function parseFractionsBalanced(input) {
   let str = input;
