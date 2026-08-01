@@ -86,29 +86,35 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
 
     let left, top, width, height;
 
-    // Check if format is [ymin, xmin, ymax, xmax] (Gemini standard: ymax > ymin and xmax > xmin)
-    if (v3 > v1 && v4 > v2 && v3 <= 1.0 && v4 <= 1.0) {
-      top = Math.max(0, Math.min(imgHeight - 10, Math.round(v1 * imgHeight)));
-      left = Math.max(0, Math.min(imgWidth - 10, Math.round(v2 * imgWidth)));
-      height = Math.max(10, Math.min(imgHeight - top, Math.round((v3 - v1) * imgHeight)));
-      width = Math.max(10, Math.min(imgWidth - left, Math.round((v4 - v2) * imgWidth)));
-    } else if (bbox.some(v => v > 1000)) {
-      // Absolute pixel values
-      left = Math.max(0, Math.min(imgWidth - 10, Math.round(v1)));
-      top = Math.max(0, Math.min(imgHeight - 10, Math.round(v2)));
-      width = Math.max(10, Math.min(imgWidth - left, Math.round(v3)));
-      height = Math.max(10, Math.min(imgHeight - top, Math.round(v4)));
+    if (bbox.some(v => v > 1000)) {
+      // Absolute pixel values [top, left, width, height]
+      top = Math.round(v1);
+      left = Math.round(v2);
+      width = Math.round(v3);
+      height = Math.round(v4);
+    } else if (v3 > v1 && v4 > v2 && v3 <= 1.0 && v4 <= 1.0 && (v3 - v1) > 0.04 && (v4 - v2) > 0.04) {
+      // Normalized [ymin, xmin, ymax, xmax] (0.0 to 1.0)
+      top = Math.round(v1 * imgHeight);
+      left = Math.round(v2 * imgWidth);
+      height = Math.round((v3 - v1) * imgHeight);
+      width = Math.round((v4 - v2) * imgWidth);
     } else {
-      // Standard [left, top, width, height] normalized ratios
-      left = Math.max(0, Math.min(imgWidth - 10, Math.round(v1 * imgWidth)));
-      top = Math.max(0, Math.min(imgHeight - 10, Math.round(v2 * imgHeight)));
-      width = Math.max(10, Math.min(imgWidth - left, Math.round(v3 * imgWidth)));
-      height = Math.max(10, Math.min(imgHeight - top, Math.round(v4 * imgHeight)));
+      // Normalized [ymin, xmin, width, height] (0.0 to 1.0)
+      top = Math.round(v1 * imgHeight);
+      left = Math.round(v2 * imgWidth);
+      width = Math.round(v3 * imgWidth);
+      height = Math.round(v4 * imgHeight);
     }
 
-    // Add 5% safety margin padding to prevent clipping diagram elements
-    const padX = Math.max(5, Math.round(width * 0.05));
-    const padY = Math.max(5, Math.round(height * 0.05));
+    // Bound coordinates inside image canvas
+    left = Math.max(0, Math.min(imgWidth - 20, left));
+    top = Math.max(0, Math.min(imgHeight - 20, top));
+    width = Math.max(20, Math.min(imgWidth - left, width));
+    height = Math.max(20, Math.min(imgHeight - top, height));
+
+    // Add 10% safety margin padding to prevent clipping diagram elements
+    const padX = Math.max(10, Math.round(width * 0.10));
+    const padY = Math.max(10, Math.round(height * 0.10));
 
     const finalLeft = Math.max(0, left - padX);
     const finalTop = Math.max(0, top - padY);
