@@ -573,3 +573,5 @@ function generateLocalFallback(type, rawText = '', docxStructure = null) {
 }
 
 module.exports = router;
+module.exports.validateJsonSchema = validateJsonSchema;
+
