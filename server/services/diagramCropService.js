@@ -168,4 +168,4 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
   return questions;
 }
 
-module.exports = { attachCroppedDiagrams, cropDiagram, rasterizePdfPage };
+module.exports = { attachCroppedDiagrams, cropDiagram, rasterizePdfPage, stripBase64Header };

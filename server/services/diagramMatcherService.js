@@ -1,10 +1,12 @@
 /**
  * Diagram Matcher Service.
  * Stage 3 of the Document Diagram Pipeline.
- * Matches extracted candidate figures to parsed questions using spatial proximity & diagram keywords.
+ * Matches extracted candidate figures to parsed questions using spatial proximity & diagram keywords,
+ * and generates visual match decision overlays.
  */
 
-const { attachCroppedDiagrams } = require('./diagramCropService');
+const { attachCroppedDiagrams, rasterizePdfPage, stripBase64Header } = require('./diagramCropService');
+const { generateMatchOverlay } = require('./layoutEvaluatorService');
 
 /**
  * Matches candidate figures to questions.
@@ -48,6 +50,32 @@ async function matchDiagramsToQuestions(questions, candidateFigures, mediaFiles)
 
   // Run crop & attachment service for all questions with diagrams
   const updatedQuestions = await attachCroppedDiagrams(questions, mediaFiles);
+
+  // Generate Match Decision Visual Overlay for visual validation
+  if (Array.isArray(mediaFiles) && mediaFiles.length > 0) {
+    try {
+      for (let fIdx = 0; fIdx < mediaFiles.length; fIdx++) {
+        const file = mediaFiles[fIdx];
+        if (!file) continue;
+        const rawData = file.data || file.base64 || file.imageBase64;
+        if (!rawData) continue;
+        const mime = file.mimeType || file.mediaType || 'image/jpeg';
+
+        let sourceBuffer;
+        if (mime === 'application/pdf') {
+          sourceBuffer = await rasterizePdfPage(rawData, 0);
+        } else {
+          const cleanStr = stripBase64Header(rawData);
+          sourceBuffer = Buffer.from(cleanStr, 'base64');
+        }
+
+        await generateMatchOverlay(sourceBuffer, updatedQuestions, `file${fIdx}`);
+      }
+    } catch (ovErr) {
+      console.warn('[Matcher Diagnostic Overlay Warning]:', ovErr.message);
+    }
+  }
+
   return updatedQuestions;
 }
 
