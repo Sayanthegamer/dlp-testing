@@ -44,10 +44,13 @@ export default function TestReviewScreen({
         {/* Question Grid Review */}
         <div className="space-y-4">
           {questions.map((q, idx) => {
-            const hasAnswer = answers[q.id] !== undefined && answers[q.id] !== null && answers[q.id] !== '';
+            const isUnclassified = q.type !== 'mcq' && q.type !== 'short_answer_numeric';
+            const hasAnswer = !isUnclassified && answers[q.id] !== undefined && answers[q.id] !== null && answers[q.id] !== '';
             let answerSummary = 'Not answered';
 
-            if (hasAnswer) {
+            if (isUnclassified) {
+              answerSummary = 'Pending Teacher Classification';
+            } else if (hasAnswer) {
               if (q.type === 'mcq' && typeof answers[q.id] === 'number') {
                 const letter = ['A', 'B', 'C', 'D', 'E', 'F'][answers[q.id]] || answers[q.id];
                 answerSummary = `Option ${letter}`;
@@ -61,14 +64,16 @@ export default function TestReviewScreen({
                 key={q.id || idx}
                 onClick={() => onJumpToQuestion(idx)}
                 className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-4 ${
-                  hasAnswer
+                  isUnclassified
+                    ? 'bg-amber-100/70 border-amber-400 hover:bg-amber-100'
+                    : hasAnswer
                     ? 'bg-[#fcfbfa] border-[#DCD5C4] hover:border-[#232323]'
                     : 'bg-amber-50/60 border-amber-300 hover:bg-amber-100/50'
                 }`}
               >
                 <div className="flex items-center gap-3.5 min-w-0 flex-1">
                   <span className={`w-8 h-8 rounded-xl font-serif font-bold text-xs flex items-center justify-center shrink-0 ${
-                    hasAnswer ? 'bg-[#232323] text-white' : 'bg-amber-700 text-white'
+                    isUnclassified ? 'bg-amber-800 text-white' : hasAnswer ? 'bg-[#232323] text-white' : 'bg-amber-700 text-white'
                   }`}>
                     #{idx + 1}
                   </span>
@@ -78,7 +83,9 @@ export default function TestReviewScreen({
                       <MathRenderer text={q.questionText} readOnly={true} />
                     </div>
                     <div className="text-xs font-sans mt-0.5">
-                      {hasAnswer ? (
+                      {isUnclassified ? (
+                        <span className="text-amber-950 font-semibold">Pending Teacher Classification</span>
+                      ) : hasAnswer ? (
                         <span className="text-emerald-800 font-medium">Selected Answer: {answerSummary}</span>
                       ) : (
                         <span className="text-amber-900 font-semibold">Answer missing</span>
