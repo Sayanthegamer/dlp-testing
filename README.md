@@ -330,7 +330,7 @@ Contributions are welcome! If you'd like to improve the math parser, add new que
 4. Push to the branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Distributed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See `LICENSE` for more information.
 
 ---
 
