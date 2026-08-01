@@ -50,7 +50,8 @@ CRITICAL RULES:
 12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.
 13. DIAGRAM BOUNDING BOXES: Whenever a question contains a diagram, figure, circuit, benzene ring, or graph in the source image/page, populate the "diagrams" array with an object containing "bbox": [x, y, width, height] as normalized floats between 0.0 and 1.0 relative to sourceFileIndex image bounds.
 14. MATCH THE FOLLOWING QUESTIONS: If the input contains a "Match the Following" question (matching Column I items with Column II items), format Column I and Column II cleanly in "questionText" as a structured 2-column list or table. Set "type": "match_following" (or "mcq"), and provide the matching combination choices (e.g. ["A: (i)-p, (ii)-q, (iii)-r, (iv)-s", ...]) in the "options" array.
-15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.`;
+15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.
+16. JSON ESCAPING: Inside JSON strings, ALL backslashes MUST be escaped as double backslashes "\\\\". E.g. write "<math>\\\\frac{a}{b}</math>" instead of "<math>\\frac{a}{b}</math>".`;
 
 
 function isKeyValid(key) {
@@ -59,9 +60,22 @@ function isKeyValid(key) {
 
 function repairJsonUnescapedBackslashes(str) {
   if (typeof str !== 'string') return str;
-  return str.replace(/\\(?:([^"\\\/bfnrtu])|u(?![0-9a-fA-F]{4}))/g, (match, p1) => {
-    return '\\\\' + (p1 || '');
+  let clean = str.trim();
+
+  // 1. Escape unescaped single backslashes in JSON strings (LaTeX backslashes)
+  // Valid JSON escape sequences are: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+  // Replace any single backslash that is not a valid JSON escape sequence with \\
+  clean = clean.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+
+  // 2. Sanitize unescaped control characters (newlines, tabs) inside strings
+  clean = clean.replace(/[\u0000-\u001F]/g, (c) => {
+    if (c === '\n') return '\\n';
+    if (c === '\r') return '\\r';
+    if (c === '\t') return '\\t';
+    return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
   });
+
+  return clean;
 }
 
 function extractAndParseJson(text) {
@@ -73,7 +87,7 @@ function extractAndParseJson(text) {
 
   // Strip markdown code fences if present
   if (clean.startsWith('```')) {
-    clean = clean.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+    clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   }
 
   // Find first '{' and last '}'
@@ -85,12 +99,29 @@ function extractAndParseJson(text) {
 
   let parsed;
   try {
+    // Attempt 1: Direct JSON parse
     parsed = JSON.parse(clean);
   } catch (err1) {
-    console.warn('[Parser Repair] Direct JSON.parse failed, attempting backslash repair:', err1.message);
-    const repaired = repairJsonUnescapedBackslashes(clean);
-    parsed = JSON.parse(repaired);
+    console.warn('[Parser Repair 1/3] Direct JSON.parse failed:', err1.message, '- Attempting LaTeX backslash repair...');
+    try {
+      // Attempt 2: LaTeX backslash & control char repair
+      const repaired = repairJsonUnescapedBackslashes(clean);
+      parsed = JSON.parse(repaired);
+    } catch (err2) {
+      console.warn('[Parser Repair 2/3] Sanitized parse failed:', err2.message, '- Attempting aggressive string escape repair...');
+      try {
+        // Attempt 3: Aggressive JSON string content escape
+        const aggressive = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+          return match.replace(/\\/g, '\\\\');
+        });
+        parsed = JSON.parse(aggressive);
+      } catch (err3) {
+        console.error('[Parser Repair 3/3 Failed]: All JSON parse attempts failed:', err3.message);
+        throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
+      }
+    }
   }
+
 
   // Handle single question vs multi-question catalogue
   let questions = [];
