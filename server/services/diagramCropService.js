@@ -1,8 +1,14 @@
+function stripBase64Header(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/^data:[^;]+;base64,/, '').trim();
+}
+
 async function rasterizePdfPage(pdfBase64, pageIndex) {
   try {
     const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
     const { createCanvas } = require('canvas');
-    const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+    const cleanPdf = stripBase64Header(pdfBase64);
+    const pdfBuffer = Buffer.from(cleanPdf, 'base64');
     const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage((pageIndex || 0) + 1);
@@ -14,7 +20,8 @@ async function rasterizePdfPage(pdfBase64, pageIndex) {
     return canvas.toBuffer('image/png');
   } catch (err) {
     console.warn('[PDF Rasterization Unavailable]:', err.message);
-    return Buffer.from(pdfBase64, 'base64');
+    const cleanPdf = stripBase64Header(pdfBase64);
+    return Buffer.from(cleanPdf, 'base64');
   }
 }
 
@@ -26,10 +33,21 @@ async function cropDiagram(sourceBuffer, bbox) {
     const imgWidth = meta.width || 800;
     const imgHeight = meta.height || 600;
 
-    const left = Math.max(0, Math.min(imgWidth - 10, Math.round(x * imgWidth)));
-    const top = Math.max(0, Math.min(imgHeight - 10, Math.round(y * imgHeight)));
-    const width = Math.max(10, Math.min(imgWidth - left, Math.round(w * imgWidth)));
-    const height = Math.max(10, Math.min(imgHeight - top, Math.round(h * imgHeight)));
+    // Detect if coordinates are normalized ratios (0-1) or absolute pixel values
+    const isPixel = bbox.some(val => val > 1.0);
+
+    let left, top, width, height;
+    if (isPixel) {
+      left = Math.max(0, Math.min(imgWidth - 10, Math.round(x)));
+      top = Math.max(0, Math.min(imgHeight - 10, Math.round(y)));
+      width = Math.max(10, Math.min(imgWidth - left, Math.round(w)));
+      height = Math.max(10, Math.min(imgHeight - top, Math.round(h)));
+    } else {
+      left = Math.max(0, Math.min(imgWidth - 10, Math.round(x * imgWidth)));
+      top = Math.max(0, Math.min(imgHeight - 10, Math.round(y * imgHeight)));
+      width = Math.max(10, Math.min(imgWidth - left, Math.round(w * imgWidth)));
+      height = Math.max(10, Math.min(imgHeight - top, Math.round(h * imgHeight)));
+    }
 
     const cropped = await sharp(sourceBuffer)
       .extract({ left, top, width, height })
@@ -50,7 +68,9 @@ async function cropDiagram(sourceBuffer, bbox) {
  * @param {Array} mediaFiles - Original media files [{ data, mimeType }]
  */
 async function attachCroppedDiagrams(questions, mediaFiles) {
-  if (!Array.isArray(questions)) return questions || [];
+  if (!Array.isArray(questions) || !Array.isArray(mediaFiles) || mediaFiles.length === 0) {
+    return questions || [];
+  }
 
   try {
     for (const q of questions) {
@@ -58,20 +78,26 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
 
       const diagramImages = [];
       for (const d of q.diagrams) {
-        if (!d || typeof d.sourceFileIndex !== 'number' || !Array.isArray(d.bbox) || d.bbox.length !== 4) continue;
-        const file = mediaFiles && mediaFiles[d.sourceFileIndex];
-        if (!file || !file.data) continue;
+        if (!d || !Array.isArray(d.bbox) || d.bbox.length !== 4) continue;
+        const fileIdx = (typeof d.sourceFileIndex === 'number' && mediaFiles[d.sourceFileIndex]) ? d.sourceFileIndex : 0;
+        const file = mediaFiles[fileIdx];
+        if (!file) continue;
+
+        const rawData = file.data || file.base64 || file.imageBase64;
+        if (!rawData) continue;
 
         try {
           let sourceBuffer;
-          if (file.mimeType === 'application/pdf') {
-            sourceBuffer = await rasterizePdfPage(file.data, d.pageIndex || 0);
+          const mime = file.mimeType || file.mediaType || 'image/jpeg';
+          if (mime === 'application/pdf') {
+            sourceBuffer = await rasterizePdfPage(rawData, d.pageIndex || 0);
           } else {
-            sourceBuffer = Buffer.from(file.data, 'base64');
+            const cleanStr = stripBase64Header(rawData);
+            sourceBuffer = Buffer.from(cleanStr, 'base64');
           }
           const dataUrl = await cropDiagram(sourceBuffer, d.bbox);
           if (dataUrl) {
-            diagramImages.push({ id: d.id || `diag_${Date.now()}`, dataUrl });
+            diagramImages.push({ id: d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, dataUrl });
           }
         } catch (err) {
           console.warn(`[Diagram Crop Warning] Failed for diagram ${d.id}:`, err.message);

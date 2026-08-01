@@ -188,6 +188,10 @@ router.post('/parse-question', async (req, res) => {
     providers.push({ name: 'anthropic', key: anthropicKey });
   }
 
+  const effectiveMediaFiles = (Array.isArray(mediaFiles) && mediaFiles.length > 0)
+    ? mediaFiles
+    : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
+
   const errors = [];
 
   // Try each configured API provider sequentially
@@ -202,7 +206,7 @@ router.post('/parse-question', async (req, res) => {
           rawText,
           imageBase64,
           mediaType,
-          mediaFiles,
+          mediaFiles: effectiveMediaFiles,
           docxStructure
         });
         if (!validateJsonSchema(data)) {
@@ -210,7 +214,7 @@ router.post('/parse-question', async (req, res) => {
         }
         if (Array.isArray(data.questions)) {
           try {
-            data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+            data.questions = await attachCroppedDiagrams(data.questions, effectiveMediaFiles);
           } catch (diagErr) {
             console.warn('[Diagram attach skipped]:', diagErr.message);
           }
@@ -226,7 +230,7 @@ router.post('/parse-question', async (req, res) => {
           rawText,
           imageBase64,
           mediaType,
-          mediaFiles,
+          mediaFiles: effectiveMediaFiles,
           docxStructure
         });
         if (!validateJsonSchema(data)) {
@@ -234,7 +238,7 @@ router.post('/parse-question', async (req, res) => {
         }
         if (Array.isArray(data.questions)) {
           try {
-            data.questions = await attachCroppedDiagrams(data.questions, mediaFiles || []);
+            data.questions = await attachCroppedDiagrams(data.questions, effectiveMediaFiles);
           } catch (diagErr) {
             console.warn('[Diagram attach skipped]:', diagErr.message);
           }
