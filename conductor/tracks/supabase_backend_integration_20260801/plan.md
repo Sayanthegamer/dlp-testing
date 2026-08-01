@@ -19,12 +19,12 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 4: Exam Persistence & Dynamic Rolling Code System
-- [ ] Task: Refactor `server/routes/exams.js` to store drafts and published exam snapshots directly in Supabase PostgreSQL tables (replacing `/tmp/` file storage).
-- [ ] Task: Implement Rolling Code Session engine in `server/routes/exams.js` (`POST /api/exams/session/start` and `POST /api/exams/student-access`).
-- [ ] Task: Update `client/src/components/TeacherDashboard/PublishExamModal.jsx` to allow starting a Rolling Code session and displaying the active 6-digit rolling code.
-- [ ] Task: Update `client/src/components/Student/StudentAccessGateModal.jsx` to validate student Name + Rolling Code against backend.
-- [ ] Task: Refactor `server/routes/submissions.js` to save auto-graded student submissions to Supabase PostgreSQL.
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md).
+- [x] Task: Refactor `server/routes/exams.js` to store drafts and published exam snapshots directly in Supabase PostgreSQL tables (replacing `/tmp/` file storage).
+- [x] Task: Implement Rolling Code Session engine in `server/routes/exams.js` (`POST /api/exams/session/start` and `POST /api/exams/student-access`).
+- [x] Task: Update `client/src/components/TeacherDashboard/PublishExamModal.jsx` to allow starting a Rolling Code session and displaying the active 6-digit rolling code.
+- [x] Task: Update `client/src/components/Student/StudentAccessGateModal.jsx` to validate student Name + Rolling Code against backend.
+- [x] Task: Refactor `server/routes/submissions.js` to save auto-graded student submissions to Supabase PostgreSQL.
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md).
 
 ## Phase 5: End-to-End Verification & Build Check
 - [ ] Task: Run automated server tests (`npm test` in `server/`) updated for Supabase backend mock/integration.

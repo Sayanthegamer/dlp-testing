@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Share2, ExternalLink, ShieldCheck } from 'lucide-react';
+import { X, Copy, Check, Share2, ExternalLink, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
 
 export default function PublishExamModal({ examId, testTitle, questionsCount, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [rollingCode, setRollingCode] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?mode=student&testId=${examId}`;
 
@@ -10,6 +12,25 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
+  }
+
+  async function handleStartRollingSession() {
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/exams/session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examId })
+      });
+      const data = await response.json();
+      if (data.success && data.rollingCode) {
+        setRollingCode(data.rollingCode);
+      }
+    } catch (err) {
+      console.error('[Start Rolling Session Error]:', err);
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -41,6 +62,37 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
           </button>
         </div>
 
+        {/* Rolling Code Session Generator */}
+        <div className="p-4.5 rounded-2xl bg-[#f4ece1] border border-[#dfd4c4] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-sm text-[#1c1b18]">
+              <KeyRound className="w-4 h-4 text-[#8c4a17]" />
+              <span>Dynamic Rolling Security Passcode</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleStartRollingSession}
+              disabled={isGenerating}
+              className="flex items-center gap-1 text-xs font-semibold text-[#8c4a17] hover:underline"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
+              <span>{rollingCode ? 'Roll New Code' : 'Generate Code'}</span>
+            </button>
+          </div>
+
+          {rollingCode ? (
+            <div className="text-center py-3 bg-white border border-[#dcd2c4] rounded-xl">
+              <span className="text-xs font-bold text-[#736c62] block mb-1 uppercase tracking-wider">Live Student Rolling Code</span>
+              <span className="font-mono font-bold text-3xl tracking-widest text-[#8c4a17]">{rollingCode}</span>
+              <p className="text-[11px] text-[#736c62] mt-1">Students type their Name + this 6-digit code to access the test</p>
+            </div>
+          ) : (
+            <p className="text-xs text-[#736c62]">
+              Click Generate Code to open an active test session protected by a dynamic 6-digit rolling code.
+            </p>
+          )}
+        </div>
+
         {/* Info Banner */}
         <div className="p-4 rounded-2xl bg-[#f5efe4] border border-[#e2d8ca] space-y-2 text-xs text-[#5c5346]">
           <div className="flex items-center gap-2 font-bold text-[#1c1b18]">
@@ -48,7 +100,7 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
             <span>Frozen Snapshot Protected</span>
           </div>
           <p>
-            This test paper has been frozen into an immutable snapshot (<strong>{questionsCount} questions</strong>). Any future edits to your working catalogue will not alter this published student exam paper.
+            This test paper has been frozen into an immutable snapshot (<strong>{questionsCount} questions</strong>).
           </p>
         </div>
 

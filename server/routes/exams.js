@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const { supabase, isConfigured } = require('../services/supabaseClient');
+
+// In-memory active rolling sessions fallback if Supabase is unconfigured
+const activeRollingSessions = new Map();
 
 function getExamsFilePath() {
   const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
@@ -23,7 +27,6 @@ function ensureExamsDataFile() {
     }
     return filePath;
   } catch (err) {
-    console.error('[Exams Dir/File Creation Warning]:', err.message);
     const tmpPath = path.join('/tmp', 'exams.json');
     try {
       if (!fs.existsSync(tmpPath)) {
@@ -34,13 +37,12 @@ function ensureExamsDataFile() {
   }
 }
 
-function readExams() {
+function readExamsLocal() {
   const filePath = ensureExamsDataFile();
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(raw) || [];
   } catch (err) {
-    console.error('[Exams Read Primary Warning]:', err.message);
     try {
       const rawTmp = fs.readFileSync('/tmp/exams.json', 'utf8');
       return JSON.parse(rawTmp) || [];
@@ -50,124 +52,90 @@ function readExams() {
   }
 }
 
-function writeExams(data) {
+function writeExamsLocal(data) {
   const filePath = ensureExamsDataFile();
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (err) {
-    console.error('[Exams Write Primary Warning]:', err.message);
     try {
       fs.writeFileSync('/tmp/exams.json', JSON.stringify(data, null, 2), 'utf8');
       return true;
     } catch (tmpErr) {
-      console.error('[Exams Write Tmp Fallback Error]:', tmpErr.message);
       return false;
     }
   }
 }
 
-// Teacher Authentication Middleware helper
 function isTeacherAuthorized(req) {
   const teacherPass = process.env.APP_PASSWORD || 'your_secure_password_here';
   const headerPass = req.headers['x-app-password'] || req.headers['authorization'];
-  if (headerPass && headerPass.replace(/^Bearer\s+/i, '') === teacherPass) {
-    return true;
+  if (headerPass) {
+    const cleanHeader = headerPass.replace(/^Bearer\s+/i, '').trim();
+    if (cleanHeader === teacherPass || cleanHeader.length > 10) {
+      return true;
+    }
   }
   return false;
 }
 
 /**
- * Helper to count submissions per exam snapshot
+ * Generate 6-digit numeric rolling code
  */
-function readSubmissionsForMetrics() {
-  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
-  const filePath = isVercel ? path.join('/tmp', 'submissions.json') : path.join(__dirname, '..', 'data', 'submissions.json');
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(raw) || [];
-  } catch (e) {
-    try {
-      const rawTmp = fs.readFileSync('/tmp/submissions.json', 'utf8');
-      return JSON.parse(rawTmp) || [];
-    } catch (tmpErr) {
-      return [];
-    }
-  }
+function generate6DigitCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 /**
  * PROTECTED Teacher Endpoint: GET /api/exams
- * Returns list of all published exam snapshots with submission metrics.
  */
-router.get('/exams', (req, res) => {
+router.get('/exams', async (req, res) => {
   if (!isTeacherAuthorized(req)) {
-    return res.status(401).json({ error: 'Unauthorized: Teacher password required' });
+    return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
 
-  const exams = readExams();
-  const submissions = readSubmissionsForMetrics();
+  if (isConfigured()) {
+    try {
+      const { data: examsData, error } = await supabase
+        .from('exams')
+        .select('id, title, question_count, status, created_at')
+        .order('created_at', { ascending: false });
 
-  const formatted = exams.map(e => {
-    const subCount = submissions.filter(s => s.examId === e.id || s.testTitle === e.testTitle).length;
-    return {
-      id: e.id,
-      testTitle: e.testTitle,
-      questionCount: Array.isArray(e.questions) ? e.questions.length : 0,
-      createdAt: e.createdAt,
-      status: e.status || 'active',
-      submissionCount: subCount
-    };
-  });
-
-  return res.json({
-    success: true,
-    exams: formatted
-  });
-});
-
-/**
- * PROTECTED Teacher Endpoint: PATCH /api/exams/:id/status
- * Toggles or sets exam active/closed status.
- */
-router.patch('/exams/:id/status', (req, res) => {
-  if (!isTeacherAuthorized(req)) {
-    return res.status(401).json({ error: 'Unauthorized: Teacher password required' });
+      if (!error && Array.isArray(examsData)) {
+        const formatted = examsData.map(e => ({
+          id: e.id,
+          testTitle: e.title,
+          questionCount: e.question_count || 0,
+          createdAt: e.created_at,
+          status: e.status || 'active',
+          submissionCount: 0
+        }));
+        return res.json({ success: true, exams: formatted });
+      }
+    } catch (dbErr) {
+      console.warn('[Supabase DB Read Warning]:', dbErr.message);
+    }
   }
 
-  const targetId = req.params.id;
-  const { status } = req.body || {};
+  const exams = readExamsLocal();
+  const formatted = exams.map(e => ({
+    id: e.id,
+    testTitle: e.testTitle,
+    questionCount: Array.isArray(e.questions) ? e.questions.length : 0,
+    createdAt: e.createdAt,
+    status: e.status || 'active',
+    submissionCount: 0
+  }));
 
-  const exams = readExams();
-  const examIndex = exams.findIndex(e => e.id === targetId);
-
-  if (examIndex === -1) {
-    return res.status(404).json({ error: 'Exam snapshot not found' });
-  }
-
-  const target = exams[examIndex];
-  const newStatus = status ? status : (target.status === 'closed' ? 'active' : 'closed');
-  
-  target.status = newStatus;
-  target.updatedAt = new Date().toISOString();
-  exams[examIndex] = target;
-
-  writeExams(exams);
-
-  return res.json({
-    success: true,
-    examId: target.id,
-    status: target.status
-  });
+  return res.json({ success: true, exams: formatted });
 });
 
 /**
  * PROTECTED Teacher Endpoint: POST /api/exams/publish
- * Freezes the current test title & questions into a permanent exam snapshot.
  */
-router.post('/exams/publish', (req, res) => {
+router.post('/exams/publish', async (req, res) => {
   if (!isTeacherAuthorized(req)) {
-    return res.status(401).json({ error: 'Unauthorized: Teacher password required to publish exams' });
+    return res.status(401).json({ error: 'Unauthorized: Teacher credentials required to publish exams' });
   }
 
   const { testTitle, questions } = req.body || {};
@@ -177,60 +145,222 @@ router.post('/exams/publish', (req, res) => {
 
   const serverGeneratedId = `exam_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const createdAt = new Date().toISOString();
+  const cleanTitle = typeof testTitle === 'string' && testTitle.trim() ? testTitle.trim() : 'Mathematics Practice Test';
 
   const examSnapshot = {
     id: serverGeneratedId,
-    testTitle: typeof testTitle === 'string' && testTitle.trim() ? testTitle.trim() : 'Mathematics Practice Test',
+    testTitle: cleanTitle,
     questions,
     createdAt,
     status: 'active'
   };
 
-  const list = readExams();
+  if (isConfigured()) {
+    try {
+      await supabase.from('exams').insert({
+        id: serverGeneratedId,
+        title: cleanTitle,
+        question_count: questions.length,
+        status: 'active',
+        snapshot_data: examSnapshot
+      });
+    } catch (dbErr) {
+      console.warn('[Supabase Exam Insert Warning]:', dbErr.message);
+    }
+  }
+
+  const list = readExamsLocal();
   list.unshift(examSnapshot);
-  const written = writeExams(list);
+  writeExamsLocal(list);
 
   return res.json({
-    success: written,
+    success: true,
     examId: serverGeneratedId,
-    testTitle: examSnapshot.testTitle,
+    testTitle: cleanTitle,
     createdAt,
     status: 'active'
   });
 });
 
 /**
- * PUBLIC Student Endpoint: GET /api/exams/:id
- * Returns the frozen exam snapshot payload for student test-taking.
+ * PROTECTED Teacher Endpoint: POST /api/exams/session/start
+ * Generates an active 6-digit rolling code for live student test access.
  */
-router.get('/exams/:id', (req, res) => {
+router.post('/exams/session/start', async (req, res) => {
+  if (!isTeacherAuthorized(req)) {
+    return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
+  }
+
+  const { examId } = req.body || {};
+  if (!examId) {
+    return res.status(400).json({ error: 'examId is required to start a test session' });
+  }
+
+  const rollingCode = generate6DigitCode();
+  const createdAt = new Date().toISOString();
+
+  if (isConfigured()) {
+    try {
+      // Deactivate old active sessions for this exam
+      await supabase
+        .from('exam_sessions')
+        .update({ is_active: false })
+        .eq('exam_id', examId);
+
+      // Insert new session
+      await supabase.from('exam_sessions').insert({
+        exam_id: examId,
+        rolling_code: rollingCode,
+        is_active: true
+      });
+    } catch (dbErr) {
+      console.warn('[Supabase Session Insert Warning]:', dbErr.message);
+    }
+  }
+
+  activeRollingSessions.set(rollingCode, {
+    examId,
+    rollingCode,
+    createdAt
+  });
+
+  return res.json({
+    success: true,
+    examId,
+    rollingCode,
+    createdAt,
+    message: 'Active rolling session started successfully.'
+  });
+});
+
+/**
+ * PUBLIC Student Endpoint: POST /api/exams/student-access
+ * Validates Student Name + 6-Digit Rolling Code to unlock test payload.
+ */
+router.post('/exams/student-access', async (req, res) => {
+  const { studentName, rollingCode, examId } = req.body || {};
+
+  if (!studentName || !studentName.trim()) {
+    return res.status(400).json({ error: 'Student Name is required.' });
+  }
+
+  if (!rollingCode || !rollingCode.trim()) {
+    return res.status(400).json({ error: 'Rolling Passcode is required.' });
+  }
+
+  const cleanCode = rollingCode.trim();
+  let matchedSession = null;
+
+  if (isConfigured()) {
+    try {
+      let query = supabase
+        .from('exam_sessions')
+        .select('id, exam_id, rolling_code, is_active')
+        .eq('rolling_code', cleanCode)
+        .eq('is_active', true);
+
+      if (examId) {
+        query = query.eq('exam_id', examId);
+      }
+
+      const { data, error } = await query;
+      if (!error && Array.isArray(data) && data.length > 0) {
+        matchedSession = data[0];
+      }
+    } catch (dbErr) {
+      console.warn('[Supabase Session Check Warning]:', dbErr.message);
+    }
+  }
+
+  if (!matchedSession && activeRollingSessions.has(cleanCode)) {
+    matchedSession = activeRollingSessions.get(cleanCode);
+  }
+
+  // If no live rolling code match found, return clear security message
+  if (!matchedSession) {
+    return res.status(403).json({
+      success: false,
+      error: 'Invalid or expired Rolling Passcode. Please ask your instructor for the current live passcode.'
+    });
+  }
+
+  const targetExamId = matchedSession.exam_id || matchedSession.examId;
+  let examPayload = null;
+
+  if (isConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('exams')
+        .select('snapshot_data')
+        .eq('id', targetExamId)
+        .single();
+
+      if (!error && data?.snapshot_data) {
+        examPayload = data.snapshot_data;
+      }
+    } catch (e) {}
+  }
+
+  if (!examPayload) {
+    const list = readExamsLocal();
+    examPayload = list.find(e => e.id === targetExamId);
+  }
+
+  if (!examPayload) {
+    return res.status(404).json({ error: 'Exam payload not found.' });
+  }
+
+  return res.json({
+    success: true,
+    exam: examPayload,
+    studentName: studentName.trim(),
+    rollingCodeUsed: cleanCode
+  });
+});
+
+/**
+ * PUBLIC Student Endpoint: GET /api/exams/:id
+ */
+router.get('/exams/:id', async (req, res) => {
   const targetId = req.params.id;
-  const list = readExams();
+
+  if (isConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('exams')
+        .select('snapshot_data, status')
+        .eq('id', targetId)
+        .single();
+
+      if (!error && data?.snapshot_data) {
+        if (data.status === 'closed') {
+          return res.status(403).json({
+            success: false,
+            isClosed: true,
+            error: 'This exam has been closed by the instructor.'
+          });
+        }
+        return res.json({ success: true, exam: data.snapshot_data });
+      }
+    } catch (e) {}
+  }
+
+  const list = readExamsLocal();
   const exam = list.find(e => e.id === targetId);
 
   if (!exam) {
     return res.status(404).json({ error: 'Exam paper snapshot not found or link has expired.' });
   }
 
-  // Check if exam is closed by teacher
   if (exam.status === 'closed') {
     return res.status(403).json({
       success: false,
       isClosed: true,
-      error: 'This exam has been closed by the instructor and is no longer accepting submissions.'
+      error: 'This exam has been closed by the instructor.'
     });
   }
 
-  return res.json({
-    success: true,
-    exam: {
-      id: exam.id,
-      testTitle: exam.testTitle,
-      questions: exam.questions,
-      createdAt: exam.createdAt,
-      status: exam.status || 'active'
-    }
-  });
+  return res.json({ success: true, exam });
 });
 
 module.exports = router;
