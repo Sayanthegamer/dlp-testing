@@ -84,15 +84,25 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
     reader.readAsDataURL(file);
   };
 
-  // Start drag handler
+  const getEventCoords = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+  };
+
+  // Start drag handler (Mouse & Touch)
   const startDrag = (e, mode) => {
     e.stopPropagation();
-    e.preventDefault();
     if (!imgRef.current) return;
 
+    const { clientX, clientY } = getEventCoords(e);
     const imgRect = imgRef.current.getBoundingClientRect();
-    const mouseX = (e.clientX - imgRect.left) / imgRect.width;
-    const mouseY = (e.clientY - imgRect.top) / imgRect.height;
+    const mouseX = (clientX - imgRect.left) / imgRect.width;
+    const mouseY = (clientY - imgRect.top) / imgRect.height;
 
     setDragState({
       mode, // 'new', 'move', 'nw', 'ne', 'se', 'sw', 'n', 'e', 's', 'w'
@@ -102,16 +112,17 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
     });
   };
 
-  // Global window mousemove & mouseup listener during active dragging
+  // Global window mousemove & touchmove listener during active dragging
   useEffect(() => {
     if (!dragState) return;
 
-    const handleWindowMouseMove = (e) => {
+    const handleWindowMove = (e) => {
       if (!imgRef.current) return;
       const imgRect = imgRef.current.getBoundingClientRect();
 
-      const currentX = Math.max(0, Math.min(1, (e.clientX - imgRect.left) / imgRect.width));
-      const currentY = Math.max(0, Math.min(1, (e.clientY - imgRect.top) / imgRect.height));
+      const { clientX, clientY } = getEventCoords(e);
+      const currentX = Math.max(0, Math.min(1, (clientX - imgRect.left) / imgRect.width));
+      const currentY = Math.max(0, Math.min(1, (clientY - imgRect.top) / imgRect.height));
 
       const { mode, startX, startY, initialRect } = dragState;
       const dx = currentX - startX;
@@ -151,17 +162,22 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       setCropRect(nextRect);
     };
 
-    const handleWindowMouseUp = () => {
+    const handleWindowEnd = () => {
       setDragState(null);
     };
 
-    window.addEventListener('mousemove', handleWindowMouseMove);
-    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('mousemove', handleWindowMove);
+    window.addEventListener('mouseup', handleWindowEnd);
+    window.addEventListener('touchmove', handleWindowMove, { passive: false });
+    window.addEventListener('touchend', handleWindowEnd);
     return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove);
-      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('mousemove', handleWindowMove);
+      window.removeEventListener('mouseup', handleWindowEnd);
+      window.removeEventListener('touchmove', handleWindowMove);
+      window.removeEventListener('touchend', handleWindowEnd);
     };
   }, [dragState]);
+
 
   const handleResetCrop = () => {
     setCropRect({ x: 0, y: 0, w: 1, h: 1 });
@@ -279,6 +295,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                   <div
                     className="relative inline-block"
                     onMouseDown={(e) => startDrag(e, 'new')}
+                    onTouchStart={(e) => startDrag(e, 'new')}
                   >
                     <img
                       ref={imgRef}
@@ -291,6 +308,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                     <div
                       className="absolute border-2 border-[#8c4a17] bg-[#8c4a17]/20 cursor-move shadow-xl"
                       onMouseDown={(e) => startDrag(e, 'move')}
+                      onTouchStart={(e) => startDrag(e, 'move')}
                       style={{
                         left: `${cropRect.x * 100}%`,
                         top: `${cropRect.y * 100}%`,
@@ -305,40 +323,49 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
 
                       {/* 4 Corner Drag Handles */}
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute -top-1.5 -left-1.5 rounded-full cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -top-2 -left-2 rounded-full cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'nw')}
+                        onTouchStart={(e) => startDrag(e, 'nw')}
                       />
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute -top-1.5 -right-1.5 rounded-full cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -top-2 -right-2 rounded-full cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'ne')}
+                        onTouchStart={(e) => startDrag(e, 'ne')}
                       />
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute -bottom-1.5 -left-1.5 rounded-full cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -bottom-2 -left-2 rounded-full cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'sw')}
+                        onTouchStart={(e) => startDrag(e, 'sw')}
                       />
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute -bottom-1.5 -right-1.5 rounded-full cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -bottom-2 -right-2 rounded-full cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'se')}
+                        onTouchStart={(e) => startDrag(e, 'se')}
                       />
 
                       {/* 4 Edge Drag Handles */}
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full cursor-ns-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -top-2 left-1/2 -translate-x-1/2 rounded-full cursor-ns-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'n')}
+                        onTouchStart={(e) => startDrag(e, 'n')}
                       />
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full cursor-ns-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full cursor-ns-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 's')}
+                        onTouchStart={(e) => startDrag(e, 's')}
                       />
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute top-1/2 -translate-y-1/2 -left-1.5 rounded-full cursor-ew-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute top-1/2 -translate-y-1/2 -left-2 rounded-full cursor-ew-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'w')}
+                        onTouchStart={(e) => startDrag(e, 'w')}
                       />
                       <div
-                        className="w-3.5 h-3.5 bg-white border-2 border-[#8c4a17] absolute top-1/2 -translate-y-1/2 -right-1.5 rounded-full cursor-ew-resize shadow-md hover:scale-125 transition-transform"
+                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute top-1/2 -translate-y-1/2 -right-2 rounded-full cursor-ew-resize shadow-md hover:scale-125 transition-transform"
                         onMouseDown={(e) => startDrag(e, 'e')}
+                        onTouchStart={(e) => startDrag(e, 'e')}
                       />
                     </div>
+
 
                   </div>
                 </div>
