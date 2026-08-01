@@ -87,29 +87,26 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
     let left, top, width, height;
 
     if (bbox.some(v => v > 1000)) {
+      // Absolute pixel values [x, y, w, h] or [xmin, ymin, xmax, ymax]
+      left = Math.round(v1);
+      top = Math.round(v2);
       if (v3 > v1 && v4 > v2) {
-        // Absolute pixel values [ymin, xmin, ymax, xmax]
-        top = Math.round(v1);
-        left = Math.round(v2);
-        height = Math.round(v3 - v1);
-        width = Math.round(v4 - v2);
+        width = Math.round(v3 - v1);
+        height = Math.round(v4 - v2);
       } else {
-        // Absolute pixel values [ymin, xmin, width, height]
-        top = Math.round(v1);
-        left = Math.round(v2);
         width = Math.round(v3);
         height = Math.round(v4);
       }
-    } else if (v3 > v1 && v4 > v2) {
-      // Standard normalized [ymin, xmin, ymax, xmax]
-      top = Math.round(v1 * imgHeight);
-      left = Math.round(v2 * imgWidth);
-      height = Math.round((v3 - v1) * imgHeight);
-      width = Math.round((v4 - v2) * imgWidth);
+    } else if (v3 > v1 && v4 > v2 && (v3 - v1) > 0.03 && (v4 - v2) > 0.03) {
+      // Normalized [xmin, ymin, xmax, ymax] (0.0 to 1.0)
+      left = Math.round(v1 * imgWidth);
+      top = Math.round(v2 * imgHeight);
+      width = Math.round((v3 - v1) * imgWidth);
+      height = Math.round((v4 - v2) * imgHeight);
     } else {
-      // Normalized [ymin, xmin, width, height]
-      top = Math.round(v1 * imgHeight);
-      left = Math.round(v2 * imgWidth);
+      // Normalized [x, y, width, height] (0.0 to 1.0)
+      left = Math.round(v1 * imgWidth);
+      top = Math.round(v2 * imgHeight);
       width = Math.round(v3 * imgWidth);
       height = Math.round(v4 * imgHeight);
     }
@@ -120,9 +117,9 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
     width = Math.max(20, Math.min(imgWidth - left, width));
     height = Math.max(20, Math.min(imgHeight - top, height));
 
-    // Add subtle 3% safety margin padding to prevent clipping diagram elements without grabbing text
-    const padX = Math.max(4, Math.round(width * 0.03));
-    const padY = Math.max(4, Math.round(height * 0.03));
+    // Add subtle 4% safety margin padding
+    const padX = Math.max(4, Math.round(width * 0.04));
+    const padY = Math.max(4, Math.round(height * 0.04));
 
     const finalLeft = Math.max(0, left - padX);
     const finalTop = Math.max(0, top - padY);
