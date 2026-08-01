@@ -1,2 +1,5 @@
-# Documentation Lookup
-- **`context7` MCP Server**: Whenever researching library documentation, API usage, or technical package details, leverage the `context7` MCP tools (`resolve-library-id` and `query-docs`) to obtain authoritative and up-to-date documentation before writing code.
+# Project Guidelines & Rules
+
+# Gemini Model Configuration Invariant
+- **Model Invariant**: NEVER change, sanitize, fallback-rewrite, or substitute `gemini-3.5-flash-lite` for Gemini API calls across `server/routes/parse.js`, `server/index.js`, `api/index.js`, `.env`, or `.env.example`.
+- **Model Identifiers**: The project environment specifically targets `gemini-3.5-flash-lite`. Do not infer that `3.5-flash-lite` is invalid or attempt to replace it with other model names.
