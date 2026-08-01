@@ -16,41 +16,25 @@ backend proxy described below.
 
 ## Backend Layer
 - **Runtime**: Node.js + Express 4.19
-- **Role**: thin proxy between the frontend and AI providers. The
-  frontend calls backend routes like `POST /api/parse-question` (text),
-  `POST /api/parse-question-image` (photo); the backend attaches
-  provider API keys server-side (from environment variables, never
-  committed, never sent to the client) and returns parsed/normalized
-  JSON back to the frontend.
+- **Database & Persistence**: Supabase PostgreSQL (`@supabase/supabase-js`) for persistent multi-tenant storing of teacher accounts, exams, questions, submissions, and active rolling code sessions.
+- **Authentication**: Supabase Auth (Email/Password & JWT) for Teacher login/registration + Dynamic 6-digit Rolling Passcode session validation for Student test entry.
+- **Media Storage**: Supabase Storage Buckets (`diagram-media`) for serving cropped diagram images via public CDN URLs.
+- **Role**: proxy between the frontend, Supabase database, and AI providers.
 - **AI Engines**:
   - Google Gemini API — `gemini-3.5-flash-lite` via `@google/generative-ai`
     (primary — fast/cheap, good for high-volume text + image parsing)
   - Anthropic Claude API — `claude-sonnet-5` via `@anthropic-ai/sdk`
     (fallback, or for cases needing stronger reasoning — e.g. messier
     handwriting, ambiguous option/answer structure)
-  - Pin whichever exact model strings are current at build time by
-    checking each provider's docs — don't hardcode a specific dated
-    snapshot without verifying it's still current, since these get
-    deprecated.
 - **Failover**: if the primary provider call fails or errors, retry
   once against the fallback provider before surfacing an error to the
   frontend.
-- **Structured output**: every AI parsing call must force strict-JSON-only
-  output matching the shared schema (see product.md's internal schema) —
-  the backend should validate the shape of what comes back before
-  returning it to the frontend, and reject/retry on malformed JSON rather
-  than passing it through.
+- **Structured output**: every AI parsing call forces strict-JSON-only
+  output matching the shared schema.
 
 ## Deployment
-- This is a real hosted website for this phase, not a local-only dev
-  app — deploy frontend + backend so it's reachable by a URL for testing
-  outside of a local dev environment.
-- No user accounts/auth in this phase, but keep backend routes structured
-  so per-teacher scoping can be added later without a rewrite (e.g. don't
-  treat "the one global question list" as a hardcoded assumption baked
-  into route logic).
+- Hosted full-stack application deployed on Vercel serverless / Node environment with Supabase cloud backend database and CDN storage.
 
 ## Tooling & Dev Environment
-- **Monorepo Scripts**: Concurrently (running server :5000 and client
-  :3000 in dev)
+- **Monorepo Scripts**: Concurrently (running server :5000 and client :3000 in dev)
 - **Server Reloading**: Nodemon
