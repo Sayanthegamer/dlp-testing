@@ -91,7 +91,18 @@ if (process.env.NODE_ENV === 'production' && process.env.VERCEL !== '1') {
   });
 }
 
+// Express Error Handling Middleware Standard (4 parameters required)
+app.use((err, req, res, next) => {
+  console.error('[Server Global Error]:', err.message || err);
+  const statusCode = err.status || err.statusCode || 500;
+  res.status(statusCode).json({
+    success: false,
+    error: err.message || 'Internal Server Error'
+  });
+});
+
 // Only call app.listen in standalone mode (not when imported as Vercel serverless function)
+
 if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
   app.listen(PORT, () => {
     const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));

@@ -88,4 +88,15 @@ safeMount('/api', () => require('../server/routes/submissions'));
 safeMount('/api', () => require('../server/routes/exams'));
 safeMount('/api', () => require('../server/routes/parse'), authMiddleware);
 
+// 4. Context7 Express Error Handling Middleware Standard (4 parameters required)
+app.use((err, req, res, next) => {
+  console.error('[Express API Global Error]:', err.message || err);
+  const statusCode = err.status || err.statusCode || 500;
+  res.status(statusCode).json({
+    success: false,
+    error: err.message || 'Internal Server Error'
+  });
+});
+
 module.exports = app;
+
