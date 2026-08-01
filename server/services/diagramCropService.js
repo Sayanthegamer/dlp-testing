@@ -21,11 +21,28 @@ async function getPdfJsLib() {
   }
 }
 
+function getCreateCanvas() {
+  try {
+    const { createCanvas } = require('@napi-rs/canvas');
+    return createCanvas;
+  } catch (e1) {
+    try {
+      const { createCanvas } = require('canvas');
+      return createCanvas;
+    } catch (e2) {
+      console.warn('[Canvas library missing]:', e2.message);
+      return null;
+    }
+  }
+}
+
 async function rasterizePdfPage(pdfBase64, pageIndex) {
   try {
     const pdfjsLib = await getPdfJsLib();
     if (!pdfjsLib) throw new Error('pdfjs-dist module unavailable');
-    const { createCanvas } = require('canvas');
+    const createCanvas = getCreateCanvas();
+    if (!createCanvas) throw new Error('canvas library unavailable');
+
     const cleanPdf = stripBase64Header(pdfBase64);
     const pdfBuffer = Buffer.from(cleanPdf, 'base64');
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
@@ -36,7 +53,13 @@ async function rasterizePdfPage(pdfBase64, pageIndex) {
     const canvas = createCanvas(viewport.width, viewport.height);
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport }).promise;
-    return canvas.toBuffer('image/png');
+
+    if (typeof canvas.toBuffer === 'function') {
+      return canvas.toBuffer('image/png');
+    } else if (typeof canvas.toBufferAsync === 'function') {
+      return await canvas.toBufferAsync('image/png');
+    }
+    return Buffer.from(canvas.toDataURL().replace(/^data:image\/png;base64,/, ''), 'base64');
   } catch (err) {
     console.warn('[PDF Rasterization Unavailable]:', err.message);
     const cleanPdf = stripBase64Header(pdfBase64);
