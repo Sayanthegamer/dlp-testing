@@ -67,17 +67,7 @@ function writeExamsLocal(data) {
   }
 }
 
-function isTeacherAuthorized(req) {
-  const teacherPass = process.env.APP_PASSWORD || 'your_secure_password_here';
-  const headerPass = req.headers['x-app-password'] || req.headers['authorization'];
-  if (headerPass) {
-    const cleanHeader = headerPass.replace(/^Bearer\s+/i, '').trim();
-    if (cleanHeader === teacherPass || cleanHeader.length > 10) {
-      return true;
-    }
-  }
-  return false;
-}
+const { verifyTeacherAuth } = require('../services/authService');
 
 /**
  * Generate 6-digit numeric rolling code
@@ -90,7 +80,7 @@ function generate6DigitCode() {
  * PROTECTED Teacher Endpoint: GET /api/exams
  */
 router.get('/exams', async (req, res) => {
-  if (!isTeacherAuthorized(req)) {
+  if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
 
@@ -134,9 +124,10 @@ router.get('/exams', async (req, res) => {
  * PROTECTED Teacher Endpoint: POST /api/exams/publish
  */
 router.post('/exams/publish', async (req, res) => {
-  if (!isTeacherAuthorized(req)) {
+  if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required to publish exams' });
   }
+
 
   const { testTitle, questions } = req.body || {};
   if (!Array.isArray(questions) || questions.length === 0) {
@@ -187,9 +178,10 @@ router.post('/exams/publish', async (req, res) => {
  * Generates an active 6-digit rolling code for live student test access.
  */
 router.post('/exams/session/start', async (req, res) => {
-  if (!isTeacherAuthorized(req)) {
+  if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
+
 
   const { examId } = req.body || {};
   if (!examId) {

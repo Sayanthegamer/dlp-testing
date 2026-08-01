@@ -62,16 +62,16 @@ export default function App() {
   const [isJustParsed, setIsJustParsed] = useState(false);
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
 
-  // Mode Switch Detection: ?mode=student & ?testId=exam_...
+  // Mode Switch Detection: ?mode=student & ?testId=exam_... or ?examId=exam_...
   const searchParams = new URLSearchParams(window.location.search);
   const isStudentMode = searchParams.get('mode') === 'student';
-  const targetTestId = searchParams.get('testId');
+  const targetTestId = searchParams.get('testId') || searchParams.get('examId');
 
   const [publishedExamInfo, setPublishedExamInfo] = useState(null);
   const [isFetchingExam, setIsFetchingExam] = useState(false);
   const [examFetchError, setExamFetchError] = useState(null);
 
-  // Fetch published frozen exam snapshot if testId query param exists
+  // Fetch published frozen exam snapshot if testId/examId query param exists
   useEffect(() => {
     if (isStudentMode && targetTestId) {
       let isMounted = true;
@@ -99,23 +99,28 @@ export default function App() {
 
   // Student Flow State Machine
   const [isStudentAuthenticated, setIsStudentAuthenticated] = useState(false);
-  const [studentStep, setStudentStep] = useState('name'); // 'name' | 'intro' | 'test' | 'review' | 'result'
+  const [studentStep, setStudentStep] = useState('intro'); // 'intro' | 'test' | 'review' | 'result'
   const [studentName, setStudentName] = useState('');
+  const [rollingCodeUsed, setRollingCodeUsed] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [studentAnswers, setStudentAnswers] = useState({});
 
-  // Check stored auth on load
+  // Check stored teacher & student session on load
   useEffect(() => {
     const savedPwd = localStorage.getItem('app_access_password');
     if (savedPwd) {
       setIsAuthenticated(true);
     }
 
-    const savedStudentPwd = localStorage.getItem('student_access_password');
-    if (savedStudentPwd) {
+    const savedStudentName = localStorage.getItem('student_name');
+    const savedRollingCode = localStorage.getItem('student_rolling_code');
+    if (savedStudentName && savedRollingCode) {
+      setStudentName(savedStudentName);
+      setRollingCodeUsed(savedRollingCode);
       setIsStudentAuthenticated(true);
     }
   }, []);
+
 
   // Restore student in-progress answers from sessionStorage
   useEffect(() => {
@@ -409,7 +414,19 @@ export default function App() {
     if (!isStudentAuthenticated) {
       return (
         <StudentAccessGateModal
-          onAuthenticated={() => setIsStudentAuthenticated(true)}
+          examId={targetTestId}
+          onAuthenticated={(data) => {
+            if (data) {
+              if (data.studentName) setStudentName(data.studentName);
+              if (data.rollingCodeUsed) setRollingCodeUsed(data.rollingCodeUsed);
+              if (data.exam) {
+                if (data.exam.testTitle) setTestTitle(data.exam.testTitle);
+                if (Array.isArray(data.exam.questions)) setQuestions(data.exam.questions);
+              }
+            }
+            setIsStudentAuthenticated(true);
+            setStudentStep('intro');
+          }}
         />
       );
     }
@@ -472,6 +489,8 @@ export default function App() {
     if (studentStep === 'result') {
       return (
         <TestResultScreen
+          examId={targetTestId || publishedExamInfo?.examId || 'exam_default'}
+          rollingCodeUsed={rollingCodeUsed}
           questions={questions}
           studentAnswers={studentAnswers}
           studentName={studentName}
@@ -486,6 +505,7 @@ export default function App() {
         />
       );
     }
+
   }
 
   // Teacher Catalogue Mode (Default)

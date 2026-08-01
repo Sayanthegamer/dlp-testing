@@ -31,11 +31,12 @@ export default function PublishedExamsList() {
 
   const handleCopyLink = (examId) => {
     const origin = window.location.origin;
-    const shareableUrl = `${origin}/?examId=${examId}&mode=student`;
+    const shareableUrl = `${origin}/?mode=student&testId=${examId}`;
     navigator.clipboard.writeText(shareableUrl);
     setCopiedId(examId);
     setTimeout(() => setCopiedId(null), 2500);
   };
+
 
   const handleToggleStatus = async (examId, currentStatus) => {
     setTogglingId(examId);

@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { supabase, isConfigured } = require('../services/supabaseClient');
+const { verifyTeacherAuth } = require('../services/authService');
 
 function getSubmissionsFilePath() {
   const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
@@ -64,18 +65,6 @@ function writeSubmissionsLocal(data) {
   }
 }
 
-function isTeacherAuthorized(req) {
-  const teacherPass = process.env.APP_PASSWORD || 'your_secure_password_here';
-  const headerPass = req.headers['x-app-password'] || req.headers['authorization'];
-  if (headerPass) {
-    const cleanHeader = headerPass.replace(/^Bearer\s+/i, '').trim();
-    if (cleanHeader === teacherPass || cleanHeader.length > 10) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * PUBLIC Student Endpoint: POST /api/submissions
  */
@@ -99,12 +88,47 @@ router.post('/submissions', async (req, res) => {
   const pendingCount = typeof body.pendingCount === 'number' ? body.pendingCount : 0;
   const questions = body.questions || [];
   const studentAnswers = body.studentAnswers || {};
-  const examId = body.examId || 'exam_default';
+  const rawExamId = body.examId || 'exam_default';
   const rollingCodeUsed = body.rollingCodeUsed || '';
+
+  let targetExamId = rawExamId;
+
+  if (isConfigured()) {
+    try {
+      if (rawExamId && rawExamId !== 'exam_default') {
+        const { data: existing } = await supabase.from('exams').select('id').eq('id', rawExamId).single();
+        if (existing && existing.id) {
+          targetExamId = existing.id;
+        } else {
+          targetExamId = null;
+        }
+      } else {
+        targetExamId = null;
+      }
+
+      if (!targetExamId) {
+        const { data: recentExams } = await supabase.from('exams').select('id').order('created_at', { ascending: false }).limit(1);
+        if (recentExams && recentExams.length > 0) {
+          targetExamId = recentExams[0].id;
+        } else {
+          targetExamId = 'exam_default';
+          await supabase.from('exams').upsert({
+            id: targetExamId,
+            title: testTitle,
+            status: 'published',
+            question_count: questions.length,
+            snapshot_data: { id: targetExamId, testTitle, questions }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Exam FK Resolution Warning]:', e.message);
+    }
+  }
 
   const submissionObj = {
     id: serverGeneratedId,
-    examId,
+    examId: targetExamId || rawExamId,
     testTitle,
     studentName,
     rollingCodeUsed,
@@ -124,9 +148,9 @@ router.post('/submissions', async (req, res) => {
 
   if (isConfigured()) {
     try {
-      await supabase.from('submissions').insert({
+      const { error: insertError } = await supabase.from('submissions').insert({
         id: serverGeneratedId,
-        exam_id: examId,
+        exam_id: targetExamId || rawExamId,
         student_name: studentName,
         rolling_code_used: rollingCodeUsed,
         total_score: autoGraded.score || 0,
@@ -136,8 +160,14 @@ router.post('/submissions', async (req, res) => {
         responses: submissionObj,
         submitted_at: submittedAt
       });
+
+      if (insertError) {
+        console.warn('[Supabase Submission Insert Error]:', insertError.message);
+      } else {
+        console.log(`[Supabase Submissions] Successfully saved submission ${serverGeneratedId} for exam ${targetExamId}`);
+      }
     } catch (dbErr) {
-      console.warn('[Supabase Submission Insert Warning]:', dbErr.message);
+      console.warn('[Supabase Submission Insert Exception]:', dbErr.message);
     }
   }
 
@@ -156,7 +186,7 @@ router.post('/submissions', async (req, res) => {
  * PROTECTED Teacher Endpoint: GET /api/submissions
  */
 router.get('/submissions', async (req, res) => {
-  if (!isTeacherAuthorized(req)) {
+  if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
 
@@ -185,7 +215,7 @@ router.get('/submissions', async (req, res) => {
  * PROTECTED Teacher Endpoint: POST /api/submissions/:id/grade
  */
 router.post('/submissions/:id/grade', async (req, res) => {
-  if (!isTeacherAuthorized(req)) {
+  if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
 

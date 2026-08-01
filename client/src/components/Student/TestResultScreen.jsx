@@ -11,6 +11,8 @@ export default function TestResultScreen({
   studentAnswers,
   studentName,
   testTitle,
+  examId,
+  rollingCodeUsed,
   onRestartTest,
   onExitStudentMode
 }) {
@@ -26,6 +28,8 @@ export default function TestResultScreen({
     let isMounted = true;
     async function doSubmit() {
       const payload = {
+        examId: examId || 'exam_default',
+        rollingCodeUsed: rollingCodeUsed || '',
         testTitle: testTitle || 'Mathematics Practice Test',
         studentName: studentName || 'Candidate',
         autoGraded,
@@ -45,6 +49,7 @@ export default function TestResultScreen({
     doSubmit();
     return () => { isMounted = false; };
   }, []);
+
 
   return (
     <div className="min-h-screen bg-[#FAF7F0] text-[#232323] py-10 px-4 sm:px-6">
