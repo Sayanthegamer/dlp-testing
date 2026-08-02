@@ -31,7 +31,11 @@ export default function AccessGateModal({ onAuthenticated }) {
         onAuthenticated();
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+      let msg = err.message || 'Authentication failed. Please check your credentials.';
+      if (typeof msg === 'object' || msg === '{}' || msg === '[object Object]') {
+        msg = 'Authentication failed. Please check your credentials or server configuration.';
+      }
+      setErrorMsg(msg);
     } finally {
       setIsSubmitting(false);
     }

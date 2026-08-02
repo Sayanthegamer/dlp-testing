@@ -26,7 +26,11 @@ export async function loginTeacher(email, password) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Login failed.');
+    let errorMsg = data.error || 'Login failed.';
+    if (typeof errorMsg === 'object' || errorMsg === '{}' || errorMsg === '[object Object]') {
+      errorMsg = 'Login failed. Please check your credentials.';
+    }
+    throw new Error(errorMsg);
   }
 
   if (data.token) {
@@ -49,7 +53,11 @@ export async function signupTeacher(email, password, fullName, accessCode) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Registration failed.');
+    let errorMsg = data.error || 'Registration failed.';
+    if (typeof errorMsg === 'object' || errorMsg === '{}' || errorMsg === '[object Object]') {
+      errorMsg = 'Registration failed. Please check your inputs.';
+    }
+    throw new Error(errorMsg);
   }
 
   if (data.token || data.session?.access_token) {
