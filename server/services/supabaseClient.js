@@ -29,6 +29,7 @@ function checkConfigured() {
 const isConfigured = checkConfigured();
 
 
+let supabase = null;
 if (isConfigured) {
   try {
     supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
@@ -79,8 +80,8 @@ async function uploadDiagramToStorage(pngBuffer, fileName) {
 }
 
 module.exports = {
-  supabase,
-  isConfigured: () => Boolean(supabase),
+  supabase: typeof supabase !== 'undefined' ? supabase : null,
+  isConfigured: () => Boolean(typeof supabase !== 'undefined' && supabase),
   uploadDiagramToStorage,
 };
 

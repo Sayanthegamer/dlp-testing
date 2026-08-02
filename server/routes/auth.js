@@ -57,8 +57,12 @@ router.post('/signup', async (req, res) => {
       token: data.session?.access_token || 'dev-fallback-token',
     });
   } catch (err) {
-    console.error('[Auth Signup Error]:', err.message);
-    return res.status(400).json({ error: err.message });
+    console.error('[Auth Signup Error]:', err.message || err);
+    let errorMsg = err.message || 'Signup failed due to an unknown error.';
+    if (typeof errorMsg === 'object' || errorMsg === '{}' || errorMsg === '[object Object]') {
+      errorMsg = 'Registration failed. Please check your inputs or try again later.';
+    }
+    return res.status(400).json({ error: errorMsg });
   }
 });
 
@@ -100,8 +104,12 @@ router.post('/login', async (req, res) => {
       token: data.session?.access_token,
     });
   } catch (err) {
-    console.error('[Auth Login Error]:', err.message);
-    return res.status(401).json({ error: err.message });
+    console.error('[Auth Login Error]:', err.message || err);
+    let errorMsg = err.message || 'Login failed due to an unknown error.';
+    if (typeof errorMsg === 'object' || errorMsg === '{}' || errorMsg === '[object Object]') {
+      errorMsg = 'Login failed. Please check your credentials.';
+    }
+    return res.status(401).json({ error: errorMsg });
   }
 });
 
@@ -142,7 +150,11 @@ router.get('/me', async (req, res) => {
       user,
     });
   } catch (err) {
-    return res.status(401).json({ authenticated: false, error: err.message });
+    let errorMsg = err.message || 'Session validation failed.';
+    if (typeof errorMsg === 'object' || errorMsg === '{}' || errorMsg === '[object Object]') {
+      errorMsg = 'Invalid user session.';
+    }
+    return res.status(401).json({ authenticated: false, error: errorMsg });
   }
 });
 
