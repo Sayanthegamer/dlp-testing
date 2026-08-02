@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RefreshCw, Printer, Award, Share2, UploadCloud, FileText } from 'lucide-react';
+import { BookOpen, RefreshCw, Printer, Award, Share2, UploadCloud, FileText, LogOut } from 'lucide-react';
 import { checkServerHealth } from '../services/apiService';
 
-export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, onPublishExam, onScrollToInput }) {
+export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, onPublishExam, onLogout, onScrollToInput }) {
   const [serverHealth, setServerHealth] = useState({ status: 'checking' });
 
   useEffect(() => {
@@ -94,9 +94,22 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, on
               <RefreshCw className="w-3.5 h-3.5 text-[#736c62]" />
               <span>New Test</span>
             </button>
+
+            {/* Log Out Action */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-red-700 hover:bg-red-50 border border-red-200 transition-all"
+                title="Log out of teacher account"
+              >
+                <LogOut className="w-3.5 h-3.5 text-red-600" />
+                <span>Log Out</span>
+              </button>
+            )}
           </div>
 
-          {/* Quick Header Reset for Mobile (< sm) */}
+          {/* Quick Header Reset & Logout for Mobile (< sm) */}
           <div className="sm:hidden flex items-center gap-1.5">
             <button
               type="button"
@@ -106,6 +119,16 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, on
             >
               <RefreshCw className="w-4 h-4 text-[#736c62]" />
             </button>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="p-2 rounded-xl text-red-700 bg-white border border-red-200 text-xs font-medium shadow-2xs"
+                title="Log Out"
+              >
+                <LogOut className="w-4 h-4 text-red-600" />
+              </button>
+            )}
           </div>
 
         </div>

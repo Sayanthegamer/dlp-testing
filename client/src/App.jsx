@@ -14,7 +14,7 @@ import TestReviewScreen from './components/Student/TestReviewScreen';
 import TestResultScreen from './components/Student/TestResultScreen';
 import SubmissionsDashboardModal from './components/TeacherDashboard/SubmissionsDashboardModal';
 import PublishExamModal from './components/TeacherDashboard/PublishExamModal';
-import { parseQuestionText, parseQuestionImage, parseDocxStructure, publishExam, fetchExamSnapshot } from './services/apiService';
+import { parseQuestionText, parseQuestionImage, parseDocxStructure, publishExam, fetchExamSnapshot, logoutTeacher } from './services/apiService';
 import { computeNeedsReview } from './services/reviewEvaluator';
 
 const INITIAL_CATALOGUE = {
@@ -54,7 +54,7 @@ const INITIAL_CATALOGUE = {
 };
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem('teacher_auth_token')));
   const [testTitle, setTestTitle] = useState(INITIAL_CATALOGUE.testTitle);
   const [questions, setQuestions] = useState(INITIAL_CATALOGUE.questions);
   const [isLoading, setIsLoading] = useState(false);
@@ -508,6 +508,15 @@ export default function App() {
 
   }
 
+  // Enforce zero-DOM rendering for unauthenticated users (prevents DevTools bypass)
+  if (!isAuthenticated && !isStudentMode) {
+    return (
+      <div className="min-h-dvh bg-[#1c1b18] flex items-center justify-center p-4 font-sans">
+        <AccessGateModal onAuthenticated={() => setIsAuthenticated(true)} />
+      </div>
+    );
+  }
+
   // Teacher Catalogue Mode (Default)
   return (
     <div className="min-h-dvh bg-[#f7f4ee] flex flex-col font-sans">
@@ -517,6 +526,10 @@ export default function App() {
         onOpenPrintView={() => setShowPrintModal(true)}
         onOpenSubmissions={() => setShowSubmissionsModal(true)}
         onPublishExam={handlePublishExam}
+        onLogout={() => {
+          logoutTeacher();
+          setIsAuthenticated(false);
+        }}
         onScrollToInput={() => {
           const drawer = document.getElementById('input-drawer-container');
           if (drawer) drawer.scrollIntoView({ behavior: 'smooth' });
@@ -606,11 +619,6 @@ export default function App() {
           questionsCount={publishedExamInfo.questionsCount}
           onClose={() => setPublishedExamInfo(null)}
         />
-      )}
-
-      {/* Access Gate Modal (Restricted Entry) */}
-      {!isAuthenticated && (
-        <AccessGateModal onAuthenticated={() => setIsAuthenticated(true)} />
       )}
     </div>
   );
