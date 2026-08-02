@@ -2,18 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { supabase, isConfigured } = require('../services/supabaseClient');
 
-// Password fallback check if Supabase env keys are placeholders
-const APP_PASSWORD = process.env.APP_PASSWORD || 'admin';
+// Teacher access code for account creation gate & dev mode fallback
+const TEACHER_ACCESS_CODE = process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'admin';
 
 /**
  * POST /api/auth/signup
- * Register a new teacher account in Supabase Auth
+ * Register a new teacher account in Supabase Auth (requires accessCode)
  */
 router.post('/signup', async (req, res) => {
-  const { email, password, fullName } = req.body || {};
+  const { email, password, fullName, accessCode } = req.body || {};
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
+  if (!email || !password || !accessCode) {
+    return res.status(400).json({ error: 'Email, password, and access code are required.' });
+  }
+
+  if (accessCode.trim() !== TEACHER_ACCESS_CODE.trim()) {
+    return res.status(401).json({ error: 'Invalid access code.' });
   }
 
   if (!isConfigured()) {
@@ -50,6 +54,7 @@ router.post('/signup', async (req, res) => {
       success: true,
       user: data.user,
       session: data.session,
+      token: data.session?.access_token || 'dev-fallback-token',
     });
   } catch (err) {
     console.error('[Auth Signup Error]:', err.message);
@@ -59,27 +64,17 @@ router.post('/signup', async (req, res) => {
 
 /**
  * POST /api/auth/login
- * Log in teacher via Supabase Auth or APP_PASSWORD fallback
+ * Log in teacher via Supabase Auth (email + password only)
  */
 router.post('/login', async (req, res) => {
-  const { email, password, appPassword } = req.body || {};
-
-  // Support legacy single password login
-  if (appPassword && appPassword === APP_PASSWORD) {
-    return res.json({
-      success: true,
-      mode: 'legacy_password',
-      teacher: { email: 'teacher@local.dev', fullName: 'Tuition Teacher' },
-      token: 'legacy-app-password-token',
-    });
-  }
+  const { email, password } = req.body || {};
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
   if (!isConfigured()) {
-    if (password === APP_PASSWORD || password === 'admin') {
+    if (password.trim() === TEACHER_ACCESS_CODE.trim()) {
       return res.json({
         success: true,
         mode: 'dev_fallback',
@@ -87,7 +82,7 @@ router.post('/login', async (req, res) => {
         token: 'dev-fallback-token',
       });
     }
-    return res.status(401).json({ error: 'Invalid password or unconfigured Supabase credentials.' });
+    return res.status(401).json({ error: 'Invalid credentials.' });
   }
 
   try {

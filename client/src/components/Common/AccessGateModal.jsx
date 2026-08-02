@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Lock, KeyRound, ArrowRight, ShieldAlert, User, Mail, Sparkles } from 'lucide-react';
-import { verifyPassword, loginTeacher, signupTeacher } from '../../services/apiService';
+import { Lock, KeyRound, ArrowRight, ShieldAlert, User, Mail, ShieldCheck } from 'lucide-react';
+import { loginTeacher, signupTeacher } from '../../services/apiService';
 
 export default function AccessGateModal({ onAuthenticated }) {
-  const [authMode, setAuthMode] = useState('login'); // 'login', 'signup', 'passcode'
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -17,14 +17,13 @@ export default function AccessGateModal({ onAuthenticated }) {
     setErrorMsg('');
 
     try {
-      if (authMode === 'passcode') {
-        if (!passwordInput.trim()) return;
-        await verifyPassword(passwordInput);
-        localStorage.setItem('app_access_password', passwordInput);
-        onAuthenticated();
-      } else if (authMode === 'signup') {
-        if (!email || !password) return;
-        await signupTeacher(email, password, fullName);
+      if (authMode === 'signup') {
+        if (!email || !password || !accessCode) {
+          setErrorMsg('Email, password, and access code are required.');
+          setIsSubmitting(false);
+          return;
+        }
+        await signupTeacher(email, password, fullName, accessCode);
         onAuthenticated();
       } else {
         if (!email || !password) return;
@@ -48,12 +47,12 @@ export default function AccessGateModal({ onAuthenticated }) {
             <Lock className="w-7 h-7" />
           </div>
           <h2 className="font-serif font-bold text-2xl text-[#1c1b18]">
-            {authMode === 'signup' ? 'Create Teacher Account' : authMode === 'passcode' ? 'Access Passcode' : 'Teacher Login'}
+            {authMode === 'signup' ? 'Create Teacher Account' : 'Teacher Login'}
           </h2>
           <p className="text-xs text-[#736c62] max-w-xs mx-auto">
-            {authMode === 'passcode'
-              ? 'Enter your private access password to unlock the platform.'
-              : 'Sign in to access your Supabase persistent tests, drafts, and analytics.'}
+            {authMode === 'signup'
+              ? 'Sign up with your teacher email and shared access code.'
+              : 'Sign in to access your persistent tests, drafts, and analytics.'}
           </p>
         </div>
 
@@ -72,13 +71,6 @@ export default function AccessGateModal({ onAuthenticated }) {
             className={`flex-1 py-1.5 rounded-lg transition-all ${authMode === 'signup' ? 'bg-white shadow-xs text-[#1c1b18]' : 'hover:text-[#1c1b18]'}`}
           >
             Sign Up
-          </button>
-          <button
-            type="button"
-            onClick={() => { setAuthMode('passcode'); setErrorMsg(''); }}
-            className={`flex-1 py-1.5 rounded-lg transition-all ${authMode === 'passcode' ? 'bg-white shadow-xs text-[#1c1b18]' : 'hover:text-[#1c1b18]'}`}
-          >
-            Passcode
           </button>
         </div>
 
@@ -108,53 +100,50 @@ export default function AccessGateModal({ onAuthenticated }) {
             </div>
           )}
 
-          {authMode !== 'passcode' ? (
-            <>
-              <div>
-                <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Teacher Email</label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="teacher@school.edu"
-                    required
-                    autoFocus
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
-                  />
-                  <Mail className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
-                </div>
-              </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Teacher Email</label>
+            <div className="relative">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="teacher@school.edu"
+                required
+                autoFocus
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+              />
+              <Mail className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+            </div>
+          </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Password</label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
-                  />
-                  <KeyRound className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
-                </div>
-              </div>
-            </>
-          ) : (
+          <div>
+            <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Password</label>
+            <div className="relative">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+              />
+              <KeyRound className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+            </div>
+          </div>
+
+          {authMode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Access Passcode</label>
+              <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Access Code</label>
               <div className="relative">
                 <input
                   type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="Enter password..."
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                  placeholder="Shared access code..."
                   required
-                  autoFocus
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
                 />
-                <KeyRound className="w-5 h-5 text-[#8c8275] absolute left-3 top-3.5" />
+                <ShieldCheck className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
               </div>
             </div>
           )}
@@ -164,7 +153,7 @@ export default function AccessGateModal({ onAuthenticated }) {
             disabled={isSubmitting}
             className="w-full py-3.5 px-4 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white font-serif font-bold text-sm shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            <span>{isSubmitting ? 'Authenticating...' : authMode === 'signup' ? 'Create Account' : authMode === 'passcode' ? 'Unlock Platform' : 'Sign In'}</span>
+            <span>{isSubmitting ? 'Authenticating...' : authMode === 'signup' ? 'Create Account' : 'Sign In'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
@@ -177,4 +166,5 @@ export default function AccessGateModal({ onAuthenticated }) {
     </div>
   );
 }
+
 

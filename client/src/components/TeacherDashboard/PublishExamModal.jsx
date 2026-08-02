@@ -6,6 +6,7 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   const [copiedCode, setCopiedCode] = useState(false);
   const [rollingCode, setRollingCode] = useState('');
   const [secondsRemaining, setSecondsRemaining] = useState(300);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?mode=student&testId=${examId}`;
 

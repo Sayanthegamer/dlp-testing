@@ -4,22 +4,21 @@
  */
 
 function getAuthHeader() {
-  const pwd = localStorage.getItem('app_access_password') || '';
   const token = localStorage.getItem('teacher_auth_token') || '';
-  const headers = { 'X-App-Password': pwd };
+  const headers = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
 }
 
-export async function loginTeacher(email, password, appPassword) {
+export async function loginTeacher(email, password) {
   let response;
   try {
     response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, appPassword })
+      body: JSON.stringify({ email, password })
     });
   } catch (networkErr) {
     throw new Error('Network error: Cannot reach the server. Please check your connection.');
@@ -36,13 +35,13 @@ export async function loginTeacher(email, password, appPassword) {
   return data;
 }
 
-export async function signupTeacher(email, password, fullName) {
+export async function signupTeacher(email, password, fullName, accessCode) {
   let response;
   try {
     response = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, fullName })
+      body: JSON.stringify({ email, password, fullName, accessCode })
     });
   } catch (networkErr) {
     throw new Error('Network error: Cannot reach the server. Please check your connection.');
@@ -59,68 +58,9 @@ export async function signupTeacher(email, password, fullName) {
   return data;
 }
 
-export async function verifyPassword(password) {
-  let response;
-  try {
-    response = await fetch('/api/verify-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
-    });
-  } catch (networkErr) {
-    throw new Error('Network error: Cannot reach the server. Please check your connection.');
-  }
-
-  if (!response.ok) {
-    let errBody;
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      errBody = await response.json().catch(() => null);
-    }
-
-    if (errBody && errBody.error) {
-      throw new Error(errBody.error);
-    }
-
-    if (response.status >= 500) {
-      throw new Error(`Server error (${response.status}): The API function failed to start. Check Vercel deployment logs.`);
-    }
-
-    throw new Error(`Authentication failed (${response.status}).`);
-  }
-  return true;
-}
-
-export async function verifyStudentPassword(password) {
-  let response;
-  try {
-    response = await fetch('/api/verify-student-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
-    });
-  } catch (networkErr) {
-    throw new Error('Network error: Cannot reach the server. Please check your connection.');
-  }
-
-  if (!response.ok) {
-    let errBody;
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      errBody = await response.json().catch(() => null);
-    }
-
-    if (errBody && errBody.error) {
-      throw new Error(errBody.error);
-    }
-
-    if (response.status >= 500) {
-      throw new Error(`Server error (${response.status}): The API function failed to start.`);
-    }
-
-    throw new Error(`Student authentication failed (${response.status}).`);
-  }
-  return true;
+export function logoutTeacher() {
+  localStorage.removeItem('teacher_auth_token');
+  localStorage.removeItem('app_access_password');
 }
 
 export async function parseQuestionText(rawText) {

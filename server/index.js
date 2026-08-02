@@ -7,7 +7,15 @@ const parseRoutes = require('./routes/parse');
 const submissionsRoutes = require('./routes/submissions');
 const examsRoutes = require('./routes/exams');
 const authRoutes = require('./routes/auth');
+const { verifyTeacherAuth } = require('./services/authService');
 
+const authMiddleware = async (req, res, next) => {
+  const isAuthorized = await verifyTeacherAuth(req);
+  if (isAuthorized) {
+    return next();
+  }
+  return res.status(401).json({ success: false, error: 'Unauthorized teacher access.' });
+};
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,45 +26,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 
-// Auth Gate Middleware: verify request header against APP_PASSWORD
-const authMiddleware = (req, res, next) => {
-  const appPassword = process.env.APP_PASSWORD;
-  
-  // If APP_PASSWORD is not set in environment, allow access (or lock if desired)
-  if (!appPassword) {
-    return next();
-  }
 
-  const authHeader = req.headers['x-app-password'] || req.headers.authorization;
-  if (authHeader === appPassword || authHeader === `Bearer ${appPassword}`) {
-    return next();
-  }
-
-  return res.status(401).json({ success: false, error: 'Unauthorized: Invalid access password.' });
-};
-
-// Public endpoints
-app.post('/api/verify-password', (req, res) => {
-  const { password } = req.body || {};
-  const appPassword = process.env.APP_PASSWORD;
-
-  if (!appPassword || (password && password.trim() === appPassword.trim())) {
-    return res.json({ success: true, message: 'Authenticated successfully.' });
-  }
-
-  return res.status(401).json({ success: false, error: 'Incorrect access password.' });
-});
-
-app.post('/api/verify-student-password', (req, res) => {
-  const { password } = req.body || {};
-  const studentPassword = process.env.STUDENT_PASSWORD;
-
-  if (!studentPassword || (password && password.trim() === studentPassword.trim())) {
-    return res.json({ success: true, message: 'Student authenticated successfully.' });
-  }
-
-  return res.status(401).json({ success: false, error: 'Incorrect student access password.' });
-});
 
 app.get('/api/health', (req, res) => {
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
