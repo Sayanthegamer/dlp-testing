@@ -104,6 +104,7 @@ router.get('/exams', async (req, res) => {
       const { data: examsData, error } = await supabase
         .from('exams')
         .select('id, title, question_count, status, created_at')
+        .eq('teacher_id', req.user?.id)
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(examsData)) {
@@ -198,6 +199,7 @@ router.post('/exams/publish', async (req, res) => {
         title: cleanTitle,
         question_count: questions.length,
         status: 'active',
+        teacher_id: req.user?.id,
         snapshot_data: examSnapshot
       }).select();
 
@@ -351,7 +353,6 @@ router.post('/exams/student-access', async (req, res) => {
         let query = supabase
           .from('exam_sessions')
           .select('id, exam_id, rolling_code, is_active')
-          .eq('rolling_code', cleanCode)
           .eq('is_active', true);
 
         if (examId) {
@@ -360,8 +361,17 @@ router.post('/exams/student-access', async (req, res) => {
 
         const { data, error } = await query;
         if (!error && Array.isArray(data) && data.length > 0) {
-          matchedSession = data[0];
-          targetExamId = matchedSession.exam_id;
+          // Verify against both current time bucket and immediately preceding bucket
+          const matchedItem = data.find(session => {
+            const currentCode = get5MinRollingCode(session.exam_id, 0);
+            const previousCode = get5MinRollingCode(session.exam_id, -1);
+            return cleanCode === currentCode || cleanCode === previousCode || cleanCode === session.rolling_code;
+          });
+
+          if (matchedItem) {
+            matchedSession = matchedItem;
+            targetExamId = matchedSession.exam_id;
+          }
         }
       } catch (dbErr) {
         console.warn('[Supabase Session Check Warning]:', dbErr.message);
@@ -371,9 +381,20 @@ router.post('/exams/student-access', async (req, res) => {
     // Evict expired sessions before lookup
     evictExpiredSessions();
 
-    if (!matchedSession && activeRollingSessions.has(cleanCode)) {
-      matchedSession = activeRollingSessions.get(cleanCode);
-      targetExamId = matchedSession.examId || matchedSession.exam_id;
+    if (!matchedSession) {
+      for (const session of activeRollingSessions.values()) {
+        const sessionExamId = session.examId || session.exam_id;
+        if (examId && sessionExamId !== examId) continue;
+
+        const currentCode = get5MinRollingCode(sessionExamId, 0);
+        const previousCode = get5MinRollingCode(sessionExamId, -1);
+
+        if (cleanCode === currentCode || cleanCode === previousCode || cleanCode === session.rollingCode) {
+          matchedSession = session;
+          targetExamId = sessionExamId;
+          break;
+        }
+      }
     }
 
     if (!matchedSession) {
