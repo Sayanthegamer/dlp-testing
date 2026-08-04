@@ -189,7 +189,7 @@ router.get('/submissions', async (req, res) => {
     try {
       const { data, error } = await supabase
         .from('submissions')
-        .select('responses')
+        .select('id, student_name, percentage, total_score, responses, submitted_at')
         .order('submitted_at', { ascending: false });
 
       if (error) {
@@ -198,7 +198,19 @@ router.get('/submissions', async (req, res) => {
       }
 
       if (Array.isArray(data)) {
-        const formatted = data.map(item => item.responses || item);
+        const formatted = data.map(item => {
+          if (item.responses) {
+             return {
+               ...item.responses,
+               id: item.id || item.responses.id,
+               studentName: item.student_name || item.responses.studentName,
+               percentage: item.percentage || item.responses.finalScore?.percentage,
+               totalScore: item.total_score || item.responses.finalScore?.score,
+               submittedAt: item.submitted_at || item.responses.submittedAt
+             };
+          }
+          return item;
+        });
         return res.json({ success: true, submissions: formatted });
       }
     } catch (e) {
