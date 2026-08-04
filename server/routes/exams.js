@@ -1,11 +1,26 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { supabase, isConfigured } = require('../services/supabaseClient');
 
 // In-memory active rolling sessions fallback if Supabase is unconfigured
 const activeRollingSessions = new Map();
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Evicts expired entries from the in-memory rolling sessions map.
+ */
+function evictExpiredSessions() {
+  const now = Date.now();
+  for (const [code, session] of activeRollingSessions) {
+    const createdMs = session.createdAt ? new Date(session.createdAt).getTime() : 0;
+    if (now - createdMs > SESSION_TTL_MS) {
+      activeRollingSessions.delete(code);
+    }
+  }
+}
 
 function getExamsFilePath() {
   const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
@@ -92,13 +107,30 @@ router.get('/exams', async (req, res) => {
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(examsData)) {
+        // Fetch submission counts per exam
+        const examIds = examsData.map(e => e.id);
+        let submissionCounts = {};
+        try {
+          const { data: subData } = await supabase
+            .from('submissions')
+            .select('exam_id')
+            .in('exam_id', examIds);
+          if (Array.isArray(subData)) {
+            subData.forEach(s => {
+              submissionCounts[s.exam_id] = (submissionCounts[s.exam_id] || 0) + 1;
+            });
+          }
+        } catch (subErr) {
+          console.warn('[Supabase Submission Count Warning]:', subErr.message);
+        }
+
         const formatted = examsData.map(e => ({
           id: e.id,
           testTitle: e.title,
           questionCount: e.question_count || 0,
           createdAt: e.created_at,
           status: e.status || 'active',
-          submissionCount: 0
+          submissionCount: submissionCounts[e.id] || 0
         }));
         return res.json({ success: true, exams: formatted });
       }
@@ -108,13 +140,26 @@ router.get('/exams', async (req, res) => {
   }
 
   const exams = readExamsLocal();
+  // Count local submissions per exam
+  let localSubmissions = [];
+  try {
+    const subPath = path.join(__dirname, '..', 'data', 'submissions.json');
+    if (fs.existsSync(subPath)) {
+      localSubmissions = JSON.parse(fs.readFileSync(subPath, 'utf8')) || [];
+    }
+  } catch (e) {}
+  const localSubCounts = {};
+  localSubmissions.forEach(s => {
+    if (s.examId) localSubCounts[s.examId] = (localSubCounts[s.examId] || 0) + 1;
+  });
+
   const formatted = exams.map(e => ({
     id: e.id,
     testTitle: e.testTitle,
     questionCount: Array.isArray(e.questions) ? e.questions.length : 0,
     createdAt: e.createdAt,
     status: e.status || 'active',
-    submissionCount: 0
+    submissionCount: localSubCounts[e.id] || 0
   }));
 
   return res.json({ success: true, exams: formatted });
@@ -180,7 +225,7 @@ router.post('/exams/publish', async (req, res) => {
   });
 });
 
-const crypto = require('crypto');
+
 
 /**
  * Computes deterministic 6-digit rolling passcode for a 5-minute time bucket (300 seconds).
@@ -254,6 +299,9 @@ router.post('/exams/session/start', async (req, res) => {
     }
   }
 
+  // Evict expired sessions before inserting new one
+  evictExpiredSessions();
+
   activeRollingSessions.set(rollingCode, {
     examId,
     rollingCode,
@@ -319,6 +367,9 @@ router.post('/exams/student-access', async (req, res) => {
         console.warn('[Supabase Session Check Warning]:', dbErr.message);
       }
     }
+
+    // Evict expired sessions before lookup
+    evictExpiredSessions();
 
     if (!matchedSession && activeRollingSessions.has(cleanCode)) {
       matchedSession = activeRollingSessions.get(cleanCode);
@@ -430,6 +481,51 @@ router.get('/exams/:id', async (req, res) => {
   }
 
   return res.json({ success: true, exam });
+});
+
+/**
+ * PROTECTED Teacher Endpoint: PATCH /api/exams/:id/status
+ * Close or reopen an exam.
+ */
+router.patch('/exams/:id/status', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
+  }
+
+  const targetId = req.params.id;
+  const { status } = req.body || {};
+
+  const validStatuses = ['active', 'closed', 'draft', 'archived'];
+  if (!status || !validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  if (isConfigured()) {
+    try {
+      const { error: updateErr } = await supabase
+        .from('exams')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', targetId);
+
+      if (updateErr) {
+        console.warn('[Supabase Exam Status Update Error]:', updateErr.message);
+        return res.status(500).json({ error: 'Failed to update exam status in database.' });
+      }
+    } catch (dbErr) {
+      console.warn('[Supabase Exam Status Update Exception]:', dbErr.message);
+      return res.status(500).json({ error: 'Database error updating exam status.' });
+    }
+  }
+
+  // Also update local file
+  const list = readExamsLocal();
+  const examIdx = list.findIndex(e => e.id === targetId);
+  if (examIdx !== -1) {
+    list[examIdx].status = status;
+    writeExamsLocal(list);
+  }
+
+  return res.json({ success: true, examId: targetId, status });
 });
 
 module.exports = router;

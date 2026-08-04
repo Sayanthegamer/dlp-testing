@@ -150,15 +150,17 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
       .toBuffer();
 
 
-    // Save debug crop PNG to server/data/ directory for visual inspection
-    try {
-      const debugDir = path.join(__dirname, '../data');
-      if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
-      const debugFilePath = path.join(debugDir, `debug_crop_${debugLabel}.png`);
-      fs.writeFileSync(debugFilePath, cropped);
-      console.log(`[Diagram Crop Debug] Saved debug crop image to: ${debugFilePath}`);
-    } catch (saveErr) {
-      console.warn('[Diagram Crop Debug Warning] Could not write debug crop file:', saveErr.message);
+    // Save debug crop PNG to server/data/ directory for visual inspection (dev only)
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const debugDir = path.join(__dirname, '../data');
+        if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+        const debugFilePath = path.join(debugDir, `debug_crop_${debugLabel}.png`);
+        fs.writeFileSync(debugFilePath, cropped);
+        console.log(`[Diagram Crop Debug] Saved debug crop image to: ${debugFilePath}`);
+      } catch (saveErr) {
+        console.warn('[Diagram Crop Debug Warning] Could not write debug crop file:', saveErr.message);
+      }
     }
 
     const { uploadDiagramToStorage } = require('./supabaseClient');
@@ -249,4 +251,4 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
   return questions;
 }
 
-module.exports = { attachCroppedDiagrams, cropDiagram, rasterizePdfPage, stripBase64Header };
+module.exports = { attachCroppedDiagrams, cropDiagram, rasterizePdfPage, stripBase64Header, getPdfJsLib };

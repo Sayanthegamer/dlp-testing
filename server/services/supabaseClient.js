@@ -26,11 +26,9 @@ function checkConfigured() {
   );
 }
 
-const isConfigured = checkConfigured();
-
-
 let supabase = null;
-if (isConfigured) {
+
+if (checkConfigured()) {
   try {
     supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
@@ -41,6 +39,7 @@ if (isConfigured) {
     console.log('[Supabase Client] Successfully initialized connection to Supabase.');
   } catch (err) {
     console.warn('[Supabase Client Initialization Warning]:', err.message);
+    supabase = null;
   }
 } else {
   console.log('[Supabase Client] Running in unconfigured/placeholder mode. Environment variables needed for live DB operations.');
@@ -80,8 +79,8 @@ async function uploadDiagramToStorage(pngBuffer, fileName) {
 }
 
 module.exports = {
-  supabase: typeof supabase !== 'undefined' ? supabase : null,
-  isConfigured: () => Boolean(typeof supabase !== 'undefined' && supabase),
+  supabase,
+  isConfigured: () => Boolean(supabase),
   uploadDiagramToStorage,
 };
 

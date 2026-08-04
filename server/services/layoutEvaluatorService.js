@@ -13,6 +13,7 @@ const path = require('path');
  */
 async function generateMatchOverlay(sourceBuffer, questions, fileLabel) {
   if (!Array.isArray(questions) || questions.length === 0) return;
+  if (process.env.NODE_ENV === 'production') return;
 
   try {
     const sharp = require('sharp');

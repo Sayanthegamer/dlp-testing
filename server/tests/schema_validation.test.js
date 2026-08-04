@@ -103,5 +103,26 @@ describe('Strict JSON Schema Invariant Validation', () => {
     };
     expect(validateJsonSchema(invalidBareCommand)).toBe(false);
   });
+
+  it('should pass valid match_following question type', () => {
+    const validMatchFollowing = {
+      testTitle: 'Test Paper',
+      questions: [
+        {
+          id: 'q_mf1',
+          questionText: 'Match the following quantities with their SI units',
+          type: 'match_following',
+          options: [
+            'A: (i)-p, (ii)-q, (iii)-r, (iv)-s',
+            'B: (i)-q, (ii)-p, (iii)-s, (iv)-r',
+            'C: (i)-r, (ii)-s, (iii)-p, (iv)-q',
+            'D: (i)-s, (ii)-r, (iii)-q, (iv)-p'
+          ],
+          correctAnswer: 0
+        }
+      ]
+    };
+    expect(validateJsonSchema(validMatchFollowing)).toBe(true);
+  });
 });
 

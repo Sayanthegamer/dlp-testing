@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { attachCroppedDiagrams } = require('../services/diagramCropService');
+const { stripBase64Header } = require('../services/diagramCropService');
 const { extractCandidateFigures } = require('../services/layoutExtractorService');
 const { matchDiagramsToQuestions } = require('../services/diagramMatcherService');
 
@@ -156,18 +156,7 @@ function extractAndParseJson(text) {
   } else if (parsed.questionText) {
     questions = [parsed];
   } else {
-    questions = [
-      {
-        id: "q1",
-        questionText: "Sample Question: <math>x^2 + 2x - 3 = 0</math>",
-        type: "mcq",
-        options: ["<math>x = 1, -3</math>", "<math>x = -1, 3</math>", "<math>x = 2, -3</math>", "<math>x = -2, 1</math>"],
-        correctAnswer: 0,
-        mathSpans: ["x^2 + 2x - 3 = 0"],
-        confidenceScore: 0.95,
-        needsReview: false
-      }
-    ];
+    throw new Error('AI response JSON has unrecognized structure: missing "questions" array and "questionText" field');
   }
 
   // Normalize each question
@@ -403,10 +392,7 @@ router.post('/parse-question', async (req, res) => {
 });
 
 
-function stripBase64Header(str) {
-  if (typeof str !== 'string') return str || '';
-  return str.replace(/^data:[^;]+;base64,/, '').trim();
-}
+
 
 // Google Gemini Parser Implementation (Native PDF & Multi-Image support)
 async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, mediaFiles, docxStructure }) {
@@ -516,53 +502,5 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
   return parsedData;
 }
 
-// Heuristic fallback for demo testing without an API key
-function generateLocalFallback(type, rawText = '', docxStructure = null) {
-  if (type === 'docx_structure' && docxStructure) {
-    return {
-      testTitle: "Word Document Math Test",
-      questions: [
-        {
-          id: "q_docx_1",
-          questionText: docxStructure.questionText || "Extracted Docx Question: <math>x^2 + y^2 = r^2</math>",
-          type: docxStructure.options && docxStructure.options.length > 0 ? "mcq" : "short_answer_numeric",
-          options: docxStructure.options || ["<math>r = \\sqrt{x^2+y^2}</math>", "<math>r = x+y</math>", "<math>r = x^2</math>", "<math>r = y^2</math>"],
-          correctAnswer: 0,
-          mathSpans: docxStructure.mathSpans || ["x^2 + y^2 = r^2"],
-          confidenceScore: 0.98,
-          needsReview: false
-        }
-      ]
-    };
-  }
-
-  return {
-    testTitle: "Mathematics Practice Quiz",
-    questions: [
-      {
-        id: "q_demo_1",
-        questionText: "Solve for <math>x</math>: <math>x^2 + 2x - 3 = 0</math>",
-        type: "mcq",
-        options: ["<math>x = 1, -3</math>", "<math>x = -1, 3</math>", "<math>x = 2, -3</math>", "<math>x = -2, 1</math>"],
-        correctAnswer: 0,
-        mathSpans: ["x", "x^2 + 2x - 3 = 0", "x = 1, -3"],
-        confidenceScore: 0.98,
-        needsReview: false
-      },
-      {
-        id: "q_demo_2",
-        questionText: "Evaluate the definite integral: <math>\\int_{0}^{1} x^2 \\, dx</math>",
-        type: "mcq",
-        options: ["<math>\\frac{1}{3}</math>", "<math>\\frac{1}{2}</math>", "<math>1</math>", "<math>\\frac{2}{3}</math>"],
-        correctAnswer: 0,
-        mathSpans: ["\\int_{0}^{1} x^2 \\, dx", "\\frac{1}{3}"],
-        confidenceScore: 0.96,
-        needsReview: false
-      }
-    ]
-  };
-}
-
 module.exports = router;
 module.exports.validateJsonSchema = validateJsonSchema;
-

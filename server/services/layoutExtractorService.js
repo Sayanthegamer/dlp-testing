@@ -7,11 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-
-function stripBase64Header(str) {
-  if (typeof str !== 'string') return str || '';
-  return str.replace(/^data:[^;]+;base64,/, '').trim();
-}
+const { stripBase64Header } = require('./diagramCropService');
 
 /**
  * Generates an SVG visual diagnostic overlay with labeled bounding boxes for detected candidate figures
@@ -19,6 +15,7 @@ function stripBase64Header(str) {
  */
 async function generateDiagnosticOverlay(sourceBuffer, pageCandidates, fileLabel) {
   if (!pageCandidates || pageCandidates.length === 0) return;
+  if (process.env.NODE_ENV === 'production') return;
 
   try {
     const sharp = require('sharp');
@@ -29,11 +26,11 @@ async function generateDiagnosticOverlay(sourceBuffer, pageCandidates, fileLabel
     let svgElements = '';
     pageCandidates.forEach((c, idx) => {
       const color = idx % 2 === 0 ? '#10b981' : '#f59e0b';
-      const [x, y, w, h] = c.bbox || [0, 0, 1, 1];
-      const left = Math.round(x * width);
-      const top = Math.round(y * height);
-      const rectW = Math.round(w * width);
-      const rectH = Math.round(h * height);
+      const [ymin, xmin, ymax, xmax] = c.bbox || [0, 0, 1, 1];
+      const left = Math.round(xmin * width);
+      const top = Math.round(ymin * height);
+      const rectW = Math.round((xmax - xmin) * width);
+      const rectH = Math.round((ymax - ymin) * height);
 
       svgElements += `
         <rect x="${left}" y="${top}" width="${rectW}" height="${rectH}" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="6,4"/>
@@ -200,4 +197,4 @@ async function extractCandidateFigures(mediaFiles) {
   return candidates;
 }
 
-module.exports = { extractCandidateFigures, generateDiagnosticOverlay, stripBase64Header };
+module.exports = { extractCandidateFigures, generateDiagnosticOverlay };

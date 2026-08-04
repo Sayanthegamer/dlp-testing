@@ -135,6 +135,8 @@ router.post('/submissions', async (req, res) => {
     }
   };
 
+  let supabaseInsertOk = false;
+
   if (isConfigured()) {
     try {
       const { error: insertError } = await supabase.from('submissions').insert({
@@ -153,6 +155,7 @@ router.post('/submissions', async (req, res) => {
       if (insertError) {
         console.warn('[Supabase Submission Insert Error]:', insertError.message);
       } else {
+        supabaseInsertOk = true;
         console.log(`[Supabase Submissions] Successfully saved submission ${serverGeneratedId} for exam ${targetExamId}`);
       }
     } catch (dbErr) {
@@ -160,9 +163,12 @@ router.post('/submissions', async (req, res) => {
     }
   }
 
-  const list = readSubmissionsLocal();
-  list.unshift(submissionObj);
-  writeSubmissionsLocal(list);
+  // Only write to local file as fallback when Supabase is not configured or insert failed
+  if (!supabaseInsertOk) {
+    const list = readSubmissionsLocal();
+    list.unshift(submissionObj);
+    writeSubmissionsLocal(list);
+  }
 
   return res.json({
     success: true,
@@ -186,11 +192,19 @@ router.get('/submissions', async (req, res) => {
         .select('responses')
         .order('submitted_at', { ascending: false });
 
-      if (!error && Array.isArray(data)) {
+      if (error) {
+        console.error('[Supabase Submissions Read Error]:', error.message);
+        return res.status(500).json({ success: false, error: 'Database error fetching submissions.' });
+      }
+
+      if (Array.isArray(data)) {
         const formatted = data.map(item => item.responses || item);
         return res.json({ success: true, submissions: formatted });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('[Supabase Submissions Read Exception]:', e.message);
+      return res.status(500).json({ success: false, error: 'Database connection error fetching submissions.' });
+    }
   }
 
   const list = readSubmissionsLocal();
@@ -250,7 +264,7 @@ router.post('/submissions/:id/grade', async (req, res) => {
 
   if (isConfigured()) {
     try {
-      await supabase
+      const { error: updateErr } = await supabase
         .from('submissions')
         .update({
           total_score: totalScore,
@@ -258,7 +272,13 @@ router.post('/submissions/:id/grade', async (req, res) => {
           responses: target
         })
         .eq('id', targetId);
-    } catch (e) {}
+
+      if (updateErr) {
+        console.error('[Supabase Grade Update Error]:', updateErr.message);
+      }
+    } catch (e) {
+      console.error('[Supabase Grade Update Exception]:', e.message);
+    }
   }
 
   list[subIndex] = target;

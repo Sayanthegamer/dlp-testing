@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS exams (
     subject TEXT DEFAULT 'Mathematics',
     grade TEXT DEFAULT 'JEE Advanced',
     duration_minutes INTEGER DEFAULT 60,
-    status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+    status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'published', 'closed', 'archived')),
     needs_review BOOLEAN DEFAULT FALSE,
     question_count INTEGER DEFAULT 0,
     snapshot_data JSONB, -- Published question snapshot payload
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS questions (
     id TEXT PRIMARY KEY,
     exam_id TEXT REFERENCES exams(id) ON DELETE CASCADE,
     question_text TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('mcq', 'short_answer_numeric')),
+    type TEXT NOT NULL CHECK (type IN ('mcq', 'short_answer_numeric', 'match_following')),
     options JSONB, -- Array of MCQ options e.g. ["A", "B", "C", "D"]
     correct_answer INTEGER, -- 0-indexed key for MCQ
     accepted_range JSONB, -- Numeric [min, max] range
