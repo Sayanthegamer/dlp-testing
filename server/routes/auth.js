@@ -50,11 +50,17 @@ router.post('/signup', async (req, res) => {
       });
     }
 
+    const requiresConfirmation = !data.session;
+
     return res.json({
       success: true,
+      message: requiresConfirmation
+        ? 'Account created! Please check your email for a confirmation link before logging in.'
+        : 'Account created successfully.',
+      requiresConfirmation,
       user: data.user,
       session: data.session,
-      token: data.session?.access_token || 'dev-fallback-token',
+      token: data.session?.access_token || null,
     });
   } catch (err) {
     console.error('[Auth Signup Error]:', err.message || err);

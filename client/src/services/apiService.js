@@ -60,8 +60,8 @@ export async function signupTeacher(email, password, fullName, accessCode) {
     throw new Error(errorMsg);
   }
 
-  if (data.token || data.session?.access_token) {
-    localStorage.setItem('teacher_auth_token', data.token || data.session?.access_token);
+  if (data.token) {
+    localStorage.setItem('teacher_auth_token', data.token);
   }
   return data;
 }

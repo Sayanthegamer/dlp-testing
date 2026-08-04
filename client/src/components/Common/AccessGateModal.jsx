@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, KeyRound, ArrowRight, ShieldAlert, User, Mail, ShieldCheck } from 'lucide-react';
+import { Lock, KeyRound, ArrowRight, ShieldAlert, User, Mail, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { loginTeacher, signupTeacher } from '../../services/apiService';
 
 export default function AccessGateModal({ onAuthenticated }) {
@@ -9,12 +9,14 @@ export default function AccessGateModal({ onAuthenticated }) {
   const [fullName, setFullName] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMsg('');
+    setSuccessMsg('');
 
     try {
       if (authMode === 'signup') {
@@ -23,8 +25,14 @@ export default function AccessGateModal({ onAuthenticated }) {
           setIsSubmitting(false);
           return;
         }
-        await signupTeacher(email, password, fullName, accessCode);
-        onAuthenticated();
+        const res = await signupTeacher(email, password, fullName, accessCode);
+        if (res.token) {
+          onAuthenticated();
+        } else {
+          setSuccessMsg(res.message || 'Account created! Please check your email for a confirmation link before logging in.');
+          setAuthMode('login');
+          setPassword('');
+        }
       } else {
         if (!email || !password) return;
         await loginTeacher(email, password);
@@ -64,19 +72,27 @@ export default function AccessGateModal({ onAuthenticated }) {
         <div className="flex items-center justify-center gap-1 bg-[#efe8dc] p-1 rounded-xl text-xs font-semibold text-[#5c5346]">
           <button
             type="button"
-            onClick={() => { setAuthMode('login'); setErrorMsg(''); }}
+            onClick={() => { setAuthMode('login'); setErrorMsg(''); setSuccessMsg(''); }}
             className={`flex-1 py-1.5 rounded-lg transition-all ${authMode === 'login' ? 'bg-white shadow-xs text-[#1c1b18]' : 'hover:text-[#1c1b18]'}`}
           >
             Login
           </button>
           <button
             type="button"
-            onClick={() => { setAuthMode('signup'); setErrorMsg(''); }}
+            onClick={() => { setAuthMode('signup'); setErrorMsg(''); setSuccessMsg(''); }}
             className={`flex-1 py-1.5 rounded-lg transition-all ${authMode === 'signup' ? 'bg-white shadow-xs text-[#1c1b18]' : 'hover:text-[#1c1b18]'}`}
           >
             Sign Up
           </button>
         </div>
+
+        {/* Success Alert */}
+        {successMsg && (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-sans font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span>{successMsg}</span>
+          </div>
+        )}
 
         {/* Error Alert */}
         {errorMsg && (
