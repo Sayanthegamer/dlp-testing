@@ -104,7 +104,7 @@ router.get('/exams', async (req, res) => {
       const { data: examsData, error } = await supabase
         .from('exams')
         .select('id, title, question_count, status, created_at')
-        .eq('teacher_id', req.user.id)
+        .eq('teacher_id', req.user?.id)
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(examsData)) {
@@ -199,7 +199,7 @@ router.post('/exams/publish', async (req, res) => {
         title: cleanTitle,
         question_count: questions.length,
         status: 'active',
-        teacher_id: req.user.id,
+        teacher_id: req.user?.id,
         snapshot_data: examSnapshot
       }).select();
 
