@@ -17,14 +17,46 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
 
 
   // Normalized crop rectangle relative to rendered image (x, y, w, h from 0.0 to 1.0)
-  const initialBbox = (currentDiagram && Array.isArray(currentDiagram.bbox) && currentDiagram.bbox.length === 4)
-    ? { x: currentDiagram.bbox[0], y: currentDiagram.bbox[1], w: currentDiagram.bbox[2], h: currentDiagram.bbox[3] }
-    : { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+  // Helper to parse bbox coordinates safely into normalized {x, y, w, h}
+  const parseBboxToRect = (bbox) => {
+    if (!Array.isArray(bbox) || bbox.length !== 4) {
+      return { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+    }
 
+    let [v1, v2, v3, v4] = bbox.map(v => parseFloat(v) || 0);
+
+    // If 0..1000 scale, normalize to 0..1
+    if (bbox.some(v => v > 1.0 && v <= 1000)) {
+      v1 /= 1000; v2 /= 1000; v3 /= 1000; v4 /= 1000;
+    }
+
+    // Handles [ymin, xmin, ymax, xmax] (standard AI vision format)
+    if (v3 > v1 && v4 > v2) {
+      const ymin = Math.min(v1, v3);
+      const ymax = Math.max(v1, v3);
+      const xmin = Math.min(v2, v4);
+      const xmax = Math.max(v2, v4);
+      return {
+        x: xmin,
+        y: ymin,
+        w: Math.max(0.05, Math.min(1 - xmin, xmax - xmin)),
+        h: Math.max(0.05, Math.min(1 - ymin, ymax - ymin))
+      };
+    }
+
+    // Fallback: [x, y, w, h] format
+    return {
+      x: Math.max(0, Math.min(0.9, v1)),
+      y: Math.max(0, Math.min(0.9, v2)),
+      w: Math.max(0.05, Math.min(1 - v1, v3)),
+      h: Math.max(0.05, Math.min(1 - v2, v4))
+    };
+  };
+
+  const initialBbox = parseBboxToRect(currentDiagram?.bbox);
   const [cropRect, setCropRect] = useState(initialBbox);
 
   // Drag interaction state
-  // dragType: null | 'new' | 'move' | 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w'
   const [dragState, setDragState] = useState(null);
 
   const imgRef = useRef(null);
@@ -131,6 +163,10 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       let { x, y, w, h } = initialRect;
 
       if (mode === 'new') {
+        // Only reset rectangle if user actually drags by more than 2% distance
+        const dragDist = Math.hypot(dx, dy);
+        if (dragDist < 0.02) return;
+
         x = Math.min(startX, currentX);
         y = Math.min(startY, currentY);
         w = Math.max(0.02, Math.abs(currentX - startX));
@@ -201,7 +237,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
         id: diagId,
         sourceFileIndex: currentDiagram?.sourceFileIndex || 0,
         pageIndex: currentDiagram?.pageIndex || 0,
-        bbox: [cropRect.x, cropRect.y, cropRect.w, cropRect.h],
+        bbox: [cropRect.y, cropRect.x, cropRect.y + cropRect.h, cropRect.x + cropRect.w],
         caption: caption.trim() || 'Question Figure / Diagram'
       }
     ];
