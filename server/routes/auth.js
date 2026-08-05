@@ -61,6 +61,7 @@ router.post('/signup', async (req, res) => {
       user: data.user,
       session: data.session,
       token: data.session?.access_token || null,
+      refresh_token: data.session?.refresh_token || null,
     });
   } catch (err) {
     console.error('[Auth Signup Error]:', err.message || err);
@@ -108,6 +109,7 @@ router.post('/login', async (req, res) => {
       user: data.user,
       session: data.session,
       token: data.session?.access_token,
+      refresh_token: data.session?.refresh_token || null,
     });
   } catch (err) {
     console.error('[Auth Login Error]:', err.message || err);
@@ -161,6 +163,46 @@ router.get('/me', async (req, res) => {
       errorMsg = 'Invalid user session.';
     }
     return res.status(401).json({ authenticated: false, error: errorMsg });
+  }
+});
+
+/**
+ * POST /api/auth/refresh
+ * Exchange a refresh_token for a new access_token + refresh_token pair
+ */
+router.post('/refresh', async (req, res) => {
+  const { refresh_token } = req.body || {};
+
+  if (!refresh_token) {
+    return res.status(400).json({ error: 'refresh_token is required.' });
+  }
+
+  if (!isConfigured()) {
+    // Dev fallback mode: just re-issue the dev token
+    return res.json({
+      success: true,
+      token: 'dev-fallback-token',
+      refresh_token: 'dev-refresh-token',
+    });
+  }
+
+  try {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+
+    if (error) throw error;
+
+    if (!data.session) {
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+
+    return res.json({
+      success: true,
+      token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+  } catch (err) {
+    console.error('[Auth Refresh Error]:', err.message || err);
+    return res.status(401).json({ error: 'Unable to refresh session. Please log in again.' });
   }
 });
 

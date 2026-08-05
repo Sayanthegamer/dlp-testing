@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { supabase, isConfigured } = require('../services/supabaseClient');
+const { supabase, isConfigured, createUserClient } = require('../services/supabaseClient');
 const { verifyTeacherAuth } = require('../services/authService');
 
 function getSubmissionsFilePath() {
@@ -186,8 +186,9 @@ router.get('/submissions', async (req, res) => {
   }
 
   if (isConfigured()) {
+    const userDb = createUserClient(req.accessToken);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await userDb
         .from('submissions')
         .select('id, student_name, percentage, total_score, responses, submitted_at')
         .order('submitted_at', { ascending: false });
@@ -275,8 +276,9 @@ router.post('/submissions/:id/grade', async (req, res) => {
   target.reviewedAt = new Date().toISOString();
 
   if (isConfigured()) {
+    const userDb = createUserClient(req.accessToken);
     try {
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await userDb
         .from('submissions')
         .update({
           total_score: totalScore,

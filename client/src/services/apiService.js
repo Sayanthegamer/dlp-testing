@@ -12,6 +12,63 @@ function getAuthHeader() {
   return headers;
 }
 
+/**
+ * Attempt to refresh the access token using the stored refresh token.
+ * Returns true if refresh succeeded, false otherwise.
+ */
+async function refreshAuthToken() {
+  const refreshToken = localStorage.getItem('teacher_refresh_token');
+  if (!refreshToken) return false;
+
+  try {
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+
+    if (!response.ok) {
+      // Refresh failed — clear stale tokens
+      localStorage.removeItem('teacher_auth_token');
+      localStorage.removeItem('teacher_refresh_token');
+      return false;
+    }
+
+    const data = await response.json();
+    if (data.token) {
+      localStorage.setItem('teacher_auth_token', data.token);
+    }
+    if (data.refresh_token) {
+      localStorage.setItem('teacher_refresh_token', data.refresh_token);
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Token Refresh Error]:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Wrapper around fetch that auto-retries once on 401 by refreshing the token.
+ * Use this for all authenticated API calls.
+ */
+async function authenticatedFetch(url, options = {}) {
+  // First attempt with current token
+  options.headers = { ...options.headers, ...getAuthHeader() };
+  let response = await fetch(url, options);
+
+  // If 401, try refreshing the token and retry once
+  if (response.status === 401) {
+    const refreshed = await refreshAuthToken();
+    if (refreshed) {
+      options.headers = { ...options.headers, ...getAuthHeader() };
+      response = await fetch(url, options);
+    }
+  }
+
+  return response;
+}
+
 export async function loginTeacher(email, password) {
   let response;
   try {
@@ -35,6 +92,9 @@ export async function loginTeacher(email, password) {
 
   if (data.token) {
     localStorage.setItem('teacher_auth_token', data.token);
+  }
+  if (data.refresh_token) {
+    localStorage.setItem('teacher_refresh_token', data.refresh_token);
   }
   return data;
 }
@@ -63,18 +123,22 @@ export async function signupTeacher(email, password, fullName, accessCode) {
   if (data.token) {
     localStorage.setItem('teacher_auth_token', data.token);
   }
+  if (data.refresh_token) {
+    localStorage.setItem('teacher_refresh_token', data.refresh_token);
+  }
   return data;
 }
 
 export function logoutTeacher() {
   localStorage.removeItem('teacher_auth_token');
+  localStorage.removeItem('teacher_refresh_token');
   localStorage.removeItem('app_access_password');
 }
 
 export async function parseQuestionText(rawText) {
-  const response = await fetch('/api/parse-question', {
+  const response = await authenticatedFetch('/api/parse-question', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'text', rawText })
   });
   return handleApiResponse(response);
@@ -91,18 +155,18 @@ export async function parseQuestionImage(imageBase64OrFiles, mediaType = 'image/
     bodyData = { type: 'image', imageBase64: imageBase64OrFiles, mediaType };
   }
 
-  const response = await fetch('/api/parse-question', {
+  const response = await authenticatedFetch('/api/parse-question', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(bodyData)
   });
   return handleApiResponse(response);
 }
 
 export async function parseDocxStructure(docxStructure) {
-  const response = await fetch('/api/parse-question', {
+  const response = await authenticatedFetch('/api/parse-question', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'docx_structure', docxStructure })
   });
   return handleApiResponse(response);
@@ -137,9 +201,9 @@ export async function submitStudentTest(payload) {
 }
 
 export async function fetchSubmissions() {
-  const response = await fetch('/api/submissions', {
+  const response = await authenticatedFetch('/api/submissions', {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+    headers: { 'Content-Type': 'application/json' }
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -149,9 +213,9 @@ export async function fetchSubmissions() {
 }
 
 export async function gradeSubmission(submissionId, manualGrades) {
-  const response = await fetch(`/api/submissions/${submissionId}/grade`, {
+  const response = await authenticatedFetch(`/api/submissions/${submissionId}/grade`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ manualGrades })
   });
   if (!response.ok) {
@@ -177,9 +241,9 @@ export async function publishExam(payload) {
 
   const cleanPayload = { ...payload, questions: cleanQuestions };
 
-  const response = await fetch('/api/exams/publish', {
+  const response = await authenticatedFetch('/api/exams/publish', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cleanPayload)
   });
   if (!response.ok) {
@@ -203,9 +267,9 @@ export async function fetchExamSnapshot(examId) {
 }
 
 export async function fetchExamsList() {
-  const response = await fetch('/api/exams', {
+  const response = await authenticatedFetch('/api/exams', {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+    headers: { 'Content-Type': 'application/json' }
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -215,9 +279,9 @@ export async function fetchExamsList() {
 }
 
 export async function toggleExamStatus(examId, status) {
-  const response = await fetch(`/api/exams/${examId}/status`, {
+  const response = await authenticatedFetch(`/api/exams/${examId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status })
   });
   if (!response.ok) {
@@ -238,3 +302,4 @@ async function handleApiResponse(response) {
   }
   return result.data;
 }
+

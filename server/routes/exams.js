@@ -3,7 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { supabase, isConfigured } = require('../services/supabaseClient');
+const { supabase, isConfigured, createUserClient } = require('../services/supabaseClient');
 
 // In-memory active rolling sessions fallback if Supabase is unconfigured
 const activeRollingSessions = new Map();
@@ -100,8 +100,9 @@ router.get('/exams', async (req, res) => {
   }
 
   if (isConfigured()) {
+    const userDb = createUserClient(req.accessToken);
     try {
-      const { data: examsData, error } = await supabase
+      const { data: examsData, error } = await userDb
         .from('exams')
         .select('id, title, question_count, status, created_at')
         .eq('teacher_id', req.user?.id)
@@ -112,7 +113,7 @@ router.get('/exams', async (req, res) => {
         const examIds = examsData.map(e => e.id);
         let submissionCounts = {};
         try {
-          const { data: subData } = await supabase
+          const { data: subData } = await userDb
             .from('submissions')
             .select('exam_id')
             .in('exam_id', examIds);
@@ -193,8 +194,9 @@ router.post('/exams/publish', async (req, res) => {
   };
 
   if (isConfigured()) {
+    const userDb = createUserClient(req.accessToken);
     try {
-      const { error: insertErr } = await supabase.from('exams').insert({
+      const { error: insertErr } = await userDb.from('exams').insert({
         id: serverGeneratedId,
         title: cleanTitle,
         question_count: questions.length,
@@ -263,9 +265,11 @@ router.post('/exams/session/start', async (req, res) => {
   }
 
   // Check if target exam is closed
-  if (isConfigured()) {
+  const userDb = isConfigured() ? createUserClient(req.accessToken) : null;
+
+  if (isConfigured() && userDb) {
     try {
-      const { data: examData } = await supabase.from('exams').select('status').eq('id', examId).single();
+      const { data: examData } = await userDb.from('exams').select('status').eq('id', examId).single();
       if (examData && examData.status === 'closed') {
         return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Please re-open the exam first.' });
       }
@@ -282,16 +286,16 @@ router.post('/exams/session/start', async (req, res) => {
   const secondsRemaining = get5MinSecondsRemaining();
   const createdAt = new Date().toISOString();
 
-  if (isConfigured()) {
+  if (isConfigured() && userDb) {
     try {
       // Deactivate old active sessions for this exam
-      await supabase
+      await userDb
         .from('exam_sessions')
         .update({ is_active: false })
         .eq('exam_id', examId);
 
       // Insert new session
-      await supabase.from('exam_sessions').insert({
+      await userDb.from('exam_sessions').insert({
         exam_id: examId,
         rolling_code: rollingCode,
         is_active: true
@@ -522,8 +526,9 @@ router.patch('/exams/:id/status', async (req, res) => {
   }
 
   if (isConfigured()) {
+    const userDb = createUserClient(req.accessToken);
     try {
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await userDb
         .from('exams')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', targetId);

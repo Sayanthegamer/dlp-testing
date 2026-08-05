@@ -18,6 +18,7 @@ async function verifyTeacherAuth(req) {
   if (!isConfigured()) {
     if (cleanHeader === 'legacy-app-password-token' || cleanHeader === 'dev-fallback-token') {
       req.user = { id: 'local-dev-user' };
+      req.accessToken = cleanHeader;
       return true;
     }
   }
@@ -28,6 +29,7 @@ async function verifyTeacherAuth(req) {
       const { data: { user }, error } = await supabase.auth.getUser(cleanHeader);
       if (!error && user) {
         req.user = user;
+        req.accessToken = cleanHeader;
         return true;
       }
     } catch (err) {
