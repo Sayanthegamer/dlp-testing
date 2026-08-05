@@ -40,6 +40,8 @@ function repairMissingMathBackslashes(text) {
 
   const replaceInSpan = (inner) => {
     return inner
+      // Collapse duplicate backslashes before command letters (e.g. \\frac -> \frac, \\pi -> \pi)
+      .replace(/\\\\(?=[a-zA-Z])/g, '\\')
       // Repair square roots: sqrt(3), sqrt3, \sqrt(3) -> \sqrt{3}
       .replace(/(?<!\\)\bsqrt\s*\(?\s*([0-9a-zA-Z]+)\s*\)?/gi, '\\sqrt{$1}')
       .replace(/(?<!\\)\bsqrt\s*\{([^}]+)\}/gi, '\\sqrt{$1}')
