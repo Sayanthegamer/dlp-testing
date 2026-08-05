@@ -9,8 +9,7 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!studentName.trim()) return;
-    if (!examId && !rollingCode.trim()) return;
+    if (!studentName.trim() || !rollingCode.trim()) return;
 
     setIsSubmitting(true);
     setErrorMsg('');
@@ -55,9 +54,7 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
           </div>
           <h2 className="font-serif font-bold text-2xl text-[#232323]">Student Exam Entrance</h2>
           <p className="text-xs text-[#5c5346] max-w-xs mx-auto">
-            {examId
-              ? 'Enter your full name to start taking your exam.'
-              : 'Please enter your full name and the 6-digit Rolling Code provided by your teacher.'}
+            Please enter your full name and the 6-digit Rolling Passcode provided by your teacher.
           </p>
         </div>
 
@@ -91,7 +88,7 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
 
           <div>
             <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">
-              6-Digit Rolling Code {examId && <span className="text-gray-400 font-normal">(Optional for direct link)</span>}
+              6-Digit Rolling Passcode <span className="text-[#8c4a17] font-semibold">(Required)</span>
             </label>
             <div className="relative">
               <input
@@ -99,8 +96,8 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
                 maxLength={6}
                 value={rollingCode}
                 onChange={(e) => setRollingCode(e.target.value)}
-                placeholder={examId ? "Optional (e.g. 849201)" : "e.g. 849201"}
-                required={!examId}
+                placeholder="e.g. 849201"
+                required
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#DCD5C4] bg-white font-mono font-bold text-base tracking-widest text-[#8c4a17] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
               />
               <KeyRound className="w-5 h-5 text-[#8c8275] absolute left-3 top-3.5" />

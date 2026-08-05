@@ -71,32 +71,6 @@ export default function App() {
   const [isFetchingExam, setIsFetchingExam] = useState(false);
   const [examFetchError, setExamFetchError] = useState(null);
 
-  // Fetch published frozen exam snapshot if testId/examId query param exists
-  useEffect(() => {
-    if (isStudentMode && targetTestId) {
-      let isMounted = true;
-      async function loadSnapshot() {
-        setIsFetchingExam(true);
-        setExamFetchError(null);
-        try {
-          const res = await fetchExamSnapshot(targetTestId);
-          if (isMounted && res && res.exam) {
-            setTestTitle(res.exam.testTitle);
-            setQuestions(res.exam.questions);
-          }
-        } catch (err) {
-          if (isMounted) {
-            setExamFetchError(err.message || 'Exam paper snapshot not found or link has expired.');
-          }
-        } finally {
-          if (isMounted) setIsFetchingExam(false);
-        }
-      }
-      loadSnapshot();
-      return () => { isMounted = false; };
-    }
-  }, [isStudentMode, targetTestId]);
-
   // Student Flow State Machine
   const [isStudentAuthenticated, setIsStudentAuthenticated] = useState(false);
   const [studentStep, setStudentStep] = useState('intro'); // 'intro' | 'test' | 'review' | 'result'

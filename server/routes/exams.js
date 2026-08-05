@@ -328,6 +328,7 @@ router.post('/exams/session/start', async (req, res) => {
 /**
  * PUBLIC Student Endpoint: POST /api/exams/student-access
  * Validates Student Name + 6-Digit Rolling Code (Current 5-min window or 5-min grace window).
+ * Rolling passcode is STRICTLY REQUIRED for all students (including direct links).
  */
 router.post('/exams/student-access', async (req, res) => {
   const { studentName, rollingCode, examId } = req.body || {};
@@ -337,81 +338,82 @@ router.post('/exams/student-access', async (req, res) => {
   }
 
   const cleanCode = (rollingCode || '').trim();
+  if (!cleanCode) {
+    return res.status(400).json({ error: 'A valid 6-Digit Rolling Passcode is required to enter this exam.' });
+  }
+
   let matchedSession = null;
   let targetExamId = examId || null;
 
-  if (cleanCode) {
-    // 1. Check 5-minute TOTP auto-rolling codes (current window or 5-min grace window)
-    if (examId) {
-      const current5MinCode = get5MinRollingCode(examId, 0);
-      const grace5MinCode = get5MinRollingCode(examId, -1);
+  // 1. Check 5-minute TOTP auto-rolling codes (current window or 5-min grace window)
+  if (examId) {
+    const current5MinCode = get5MinRollingCode(examId, 0);
+    const grace5MinCode = get5MinRollingCode(examId, -1);
 
-      if (cleanCode === current5MinCode || cleanCode === grace5MinCode) {
-        matchedSession = { exam_id: examId, rolling_code: cleanCode };
-        targetExamId = examId;
-      }
-    }
-
-    if (!matchedSession && isConfigured()) {
-      try {
-        let query = supabase
-          .from('exam_sessions')
-          .select('id, exam_id, rolling_code, is_active')
-          .eq('is_active', true);
-
-        if (examId) {
-          query = query.eq('exam_id', examId);
-        }
-
-        const { data, error } = await query;
-        if (!error && Array.isArray(data) && data.length > 0) {
-          // Verify against both current time bucket and immediately preceding bucket
-          const matchedItem = data.find(session => {
-            const currentCode = get5MinRollingCode(session.exam_id, 0);
-            const previousCode = get5MinRollingCode(session.exam_id, -1);
-            return cleanCode === currentCode || cleanCode === previousCode || cleanCode === session.rolling_code;
-          });
-
-          if (matchedItem) {
-            matchedSession = matchedItem;
-            targetExamId = matchedSession.exam_id;
-          }
-        }
-      } catch (dbErr) {
-        console.warn('[Supabase Session Check Warning]:', dbErr.message);
-      }
-    }
-
-    // Evict expired sessions before lookup
-    evictExpiredSessions();
-
-    if (!matchedSession) {
-      for (const session of activeRollingSessions.values()) {
-        const sessionExamId = session.examId || session.exam_id;
-        if (examId && sessionExamId !== examId) continue;
-
-        const currentCode = get5MinRollingCode(sessionExamId, 0);
-        const previousCode = get5MinRollingCode(sessionExamId, -1);
-
-        if (cleanCode === currentCode || cleanCode === previousCode || cleanCode === session.rollingCode) {
-          matchedSession = session;
-          targetExamId = sessionExamId;
-          break;
-        }
-      }
-    }
-
-    if (!matchedSession) {
-      return res.status(403).json({
-        success: false,
-        error: 'Invalid or expired 6-Digit Passcode. Rolling codes automatically refresh every 5 minutes. Please ask your instructor for the current passcode.'
-      });
+    if (cleanCode === current5MinCode || cleanCode === grace5MinCode) {
+      matchedSession = { exam_id: examId, rolling_code: cleanCode };
+      targetExamId = examId;
     }
   }
 
+  if (!matchedSession && isConfigured()) {
+    try {
+      let query = supabase
+        .from('exam_sessions')
+        .select('id, exam_id, rolling_code, is_active')
+        .eq('is_active', true);
+
+      if (examId) {
+        query = query.eq('exam_id', examId);
+      }
+
+      const { data, error } = await query;
+      if (!error && Array.isArray(data) && data.length > 0) {
+        // Verify against both current time bucket and immediately preceding bucket
+        const matchedItem = data.find(session => {
+          const currentCode = get5MinRollingCode(session.exam_id, 0);
+          const previousCode = get5MinRollingCode(session.exam_id, -1);
+          return cleanCode === currentCode || cleanCode === previousCode || cleanCode === session.rolling_code;
+        });
+
+        if (matchedItem) {
+          matchedSession = matchedItem;
+          targetExamId = matchedSession.exam_id;
+        }
+      }
+    } catch (dbErr) {
+      console.warn('[Supabase Session Check Warning]:', dbErr.message);
+    }
+  }
+
+  // Evict expired sessions before lookup
+  evictExpiredSessions();
+
+  if (!matchedSession) {
+    for (const session of activeRollingSessions.values()) {
+      const sessionExamId = session.examId || session.exam_id;
+      if (examId && sessionExamId !== examId) continue;
+
+      const currentCode = get5MinRollingCode(sessionExamId, 0);
+      const previousCode = get5MinRollingCode(sessionExamId, -1);
+
+      if (cleanCode === currentCode || cleanCode === previousCode || cleanCode === session.rollingCode) {
+        matchedSession = session;
+        targetExamId = sessionExamId;
+        break;
+      }
+    }
+  }
+
+  if (!matchedSession) {
+    return res.status(403).json({
+      success: false,
+      error: 'Invalid or expired 6-Digit Passcode. Rolling codes automatically refresh every 5 minutes. Please ask your instructor for the current passcode.'
+    });
+  }
 
   if (!targetExamId) {
-    return res.status(400).json({ error: 'Exam link or Rolling Code is required.' });
+    return res.status(400).json({ error: 'Exam target ID could not be identified.' });
   }
 
   let examPayload = null;
@@ -458,16 +460,60 @@ router.post('/exams/student-access', async (req, res) => {
     success: true,
     exam: examPayload,
     studentName: studentName.trim(),
-    rollingCodeUsed: cleanCode || 'DIRECT_LINK'
+    rollingCodeUsed: cleanCode
   });
 });
 
 
 /**
  * PUBLIC Student Endpoint: GET /api/exams/:id
+ * Strictly verifies 6-Digit Rolling Code via header (x-rolling-code) or query parameter (?code=123456)
  */
 router.get('/exams/:id', async (req, res) => {
   const targetId = req.params.id;
+  const providedCode = (req.headers['x-rolling-code'] || req.query.code || '').toString().trim();
+
+  if (!providedCode) {
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied: Valid 6-digit Rolling Passcode is required to view this exam paper.'
+    });
+  }
+
+  // Validate passcode against current or grace 5-minute window
+  const currentCode = get5MinRollingCode(targetId, 0);
+  const graceCode = get5MinRollingCode(targetId, -1);
+
+  let isValidCode = (providedCode === currentCode || providedCode === graceCode);
+
+  if (!isValidCode && isConfigured()) {
+    try {
+      const { data } = await supabase
+        .from('exam_sessions')
+        .select('rolling_code')
+        .eq('exam_id', targetId)
+        .eq('is_active', true);
+      if (Array.isArray(data) && data.some(s => s.rolling_code === providedCode)) {
+        isValidCode = true;
+      }
+    } catch (e) {}
+  }
+
+  if (!isValidCode) {
+    for (const session of activeRollingSessions.values()) {
+      if ((session.examId || session.exam_id) === targetId && session.rollingCode === providedCode) {
+        isValidCode = true;
+        break;
+      }
+    }
+  }
+
+  if (!isValidCode) {
+    return res.status(403).json({
+      success: false,
+      error: 'Invalid or expired 6-digit Rolling Passcode.'
+    });
+  }
 
   if (isConfigured()) {
     try {
