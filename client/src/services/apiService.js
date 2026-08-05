@@ -291,6 +291,19 @@ export async function toggleExamStatus(examId, status) {
   return await response.json();
 }
 
+export async function startRollingSession(examId) {
+  const response = await authenticatedFetch('/api/exams/session/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ examId })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to start rolling session (${response.status})`);
+  }
+  return await response.json();
+}
+
 async function handleApiResponse(response) {
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));

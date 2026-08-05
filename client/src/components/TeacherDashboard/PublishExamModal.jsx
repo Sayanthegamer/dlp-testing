@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, Share2, ExternalLink, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
+import { startRollingSession } from '../../services/apiService';
 
 export default function PublishExamModal({ examId, testTitle, questionsCount, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -45,12 +46,7 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   async function handleStartRollingSession() {
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/exams/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ examId })
-      });
-      const data = await response.json();
+      const data = await startRollingSession(examId);
       if (data.success && data.rollingCode) {
         setRollingCode(data.rollingCode);
         if (typeof data.secondsRemaining === 'number') {

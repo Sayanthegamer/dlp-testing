@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchExamsList, toggleExamStatus } from '../../services/apiService';
+import { fetchExamsList, toggleExamStatus, startRollingSession } from '../../services/apiService';
 import { Copy, Check, Power, RefreshCw, FileText, Search, ExternalLink, AlertCircle, KeyRound } from 'lucide-react';
 
 export default function PublishedExamsList() {
@@ -49,12 +49,7 @@ export default function PublishedExamsList() {
   const handleGenerateCode = async (examId) => {
     setGeneratingCodeId(examId);
     try {
-      const res = await fetch('/api/exams/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ examId })
-      });
-      const data = await res.json();
+      const data = await startRollingSession(examId);
       if (data.success && data.rollingCode) {
         setActiveCodes(prev => ({ ...prev, [examId]: data.rollingCode }));
       } else {
