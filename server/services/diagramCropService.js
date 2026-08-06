@@ -226,8 +226,18 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
           const diagId = d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
           const dataUrl = await cropDiagram(sourceBuffer, d.bbox, `q${i + 1}_${diagId}`);
           if (dataUrl) {
-            const sourceMime = (mime === 'application/pdf') ? 'image/png' : mime;
-            const sourcePageImage = `data:${sourceMime};base64,${sourceBuffer.toString('base64')}`;
+            let sourcePageImage = dataUrl;
+            try {
+              const sharp = require('sharp');
+              const resized = await sharp(sourceBuffer)
+                .resize({ width: 1000, fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 75 })
+                .toBuffer();
+              sourcePageImage = `data:image/jpeg;base64,${resized.toString('base64')}`;
+            } catch (sErr) {
+              const sourceMime = (mime === 'application/pdf') ? 'image/png' : mime;
+              sourcePageImage = `data:${sourceMime};base64,${sourceBuffer.toString('base64')}`;
+            }
             diagramImages.push({ id: diagId, dataUrl, sourcePageImage });
             console.log(`[Diagram Crop Pipeline] Question #${i + 1}: Successfully cropped and attached image + sourcePageImage for diagram ${diagId}.`);
           } else {

@@ -119,3 +119,23 @@ CREATE POLICY "Teachers view submissions for own exams"
     ON submissions FOR SELECT USING (
         EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
+
+-- =======================================================
+-- 6. Storage Bucket Setup for Cropped Diagram Images
+-- =======================================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('diagram-media', 'diagram-media', true)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Public Read Diagram Media"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'diagram-media');
+
+CREATE POLICY "Public Upload Diagram Media"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'diagram-media');
+
+CREATE POLICY "Public Update Diagram Media"
+    ON storage.objects FOR UPDATE
+    USING (bucket_id = 'diagram-media');
+
