@@ -14,10 +14,16 @@ CREATE TABLE IF NOT EXISTS teachers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Auto-sync any existing auth.users into the teachers table
+INSERT INTO teachers (id, email, full_name)
+SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1))
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
 -- 2. Exams Table (Metadata & Published Snapshots)
 CREATE TABLE IF NOT EXISTS exams (
     id TEXT PRIMARY KEY,
-    teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
+    teacher_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
     subject TEXT DEFAULT 'Mathematics',
     grade TEXT DEFAULT 'JEE Advanced',

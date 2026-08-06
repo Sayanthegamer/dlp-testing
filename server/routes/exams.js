@@ -196,6 +196,17 @@ router.post('/exams/publish', async (req, res) => {
   if (isConfigured()) {
     const userDb = createUserClient(req.accessToken);
     try {
+      // 1. Ensure teacher record exists in teachers table so foreign key constraint is satisfied
+      if (req.user?.id) {
+        await userDb.from('teachers').upsert({
+          id: req.user.id,
+          email: req.user.email || 'teacher@local.dev',
+          full_name: req.user.user_metadata?.full_name || req.user.email?.split('@')[0] || 'Teacher'
+        }, { onConflict: 'id' }).catch(tErr => {
+          console.warn('[Supabase Teacher Upsert Warning]:', tErr.message);
+        });
+      }
+
       const { error: insertErr } = await userDb.from('exams').insert({
         id: serverGeneratedId,
         title: cleanTitle,
@@ -206,12 +217,14 @@ router.post('/exams/publish', async (req, res) => {
       }).select();
 
       if (insertErr) {
-        console.warn('[Supabase Exam Insert Error]:', insertErr.message);
+        console.error('[Supabase Exam Insert Error]:', insertErr.message);
+        return res.status(500).json({ error: `Failed to publish exam to database: ${insertErr.message}` });
       } else {
         console.log(`[Supabase Exams] Successfully published exam ${serverGeneratedId} to database.`);
       }
     } catch (dbErr) {
-      console.warn('[Supabase Exam Insert Warning]:', dbErr.message);
+      console.error('[Supabase Exam Insert Exception]:', dbErr.message);
+      return res.status(500).json({ error: `Database error publishing exam: ${dbErr.message}` });
     }
   }
 
