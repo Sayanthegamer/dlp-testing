@@ -78,6 +78,22 @@ export default function App() {
   const [rollingCodeUsed, setRollingCodeUsed] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [studentAnswers, setStudentAnswers] = useState({});
+  const [questionStatuses, setQuestionStatuses] = useState({});
+  const [cheatingFlagged, setCheatingFlagged] = useState(false);
+  const [cheatingReason, setCheatingReason] = useState('');
+
+  const handleUpdateQuestionStatus = (qId, status) => {
+    setQuestionStatuses(prev => ({
+      ...prev,
+      [qId]: status
+    }));
+  };
+
+  const handleDisqualifyCheating = ({ cheatingFlagged, reason }) => {
+    setCheatingFlagged(true);
+    setCheatingReason(reason || 'Proctoring security violation');
+    setStudentStep('result');
+  };
 
   // Check stored teacher & student session on load
   useEffect(() => {
@@ -437,10 +453,16 @@ export default function App() {
           questions={questions}
           currentIndex={currentQuestionIndex}
           answers={studentAnswers}
+          questionStatuses={questionStatuses}
           onAnswerChange={handleStudentAnswerChange}
+          onUpdateQuestionStatus={handleUpdateQuestionStatus}
+          onSelectQuestion={(idx) => setCurrentQuestionIndex(idx)}
           onNext={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
           onPrevious={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
           onReview={() => setStudentStep('review')}
+          onSubmitExam={() => setStudentStep('review')}
+          onDisqualifyCheating={handleDisqualifyCheating}
+          cheatingFlagged={cheatingFlagged}
           studentName={studentName}
         />
       );
@@ -469,6 +491,8 @@ export default function App() {
           studentAnswers={studentAnswers}
           studentName={studentName}
           testTitle={testTitle}
+          cheatingFlagged={cheatingFlagged}
+          cheatingReason={cheatingReason}
           onRestartTest={() => {
             handleClearStudentSession();
             setStudentStep('intro');

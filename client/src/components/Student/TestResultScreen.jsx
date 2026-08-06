@@ -14,13 +14,19 @@ export default function TestResultScreen({
   examId,
   rollingCodeUsed,
   onRestartTest,
-  onExitStudentMode
+  onExitStudentMode,
+  cheatingFlagged = false,
+  cheatingReason = ''
 }) {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState('submitting'); // 'submitting' | 'submitted' | 'offline'
 
   const result = gradeAttempt(questions, studentAnswers);
-  const { autoGraded, pendingReview, perQuestion } = result;
+  let { autoGraded, pendingReview, perQuestion } = result;
+
+  if (cheatingFlagged) {
+    autoGraded = { score: 0, total: questions.length, percentage: 0 };
+  }
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
@@ -35,7 +41,9 @@ export default function TestResultScreen({
         autoGraded,
         pendingCount: pendingReview.length,
         questions,
-        studentAnswers
+        studentAnswers,
+        cheatingFlagged,
+        cheatingReason
       };
       const res = await submitStudentTest(payload);
       if (isMounted) {
@@ -57,6 +65,16 @@ export default function TestResultScreen({
         
         {/* Top Summary Card (Exam Native Tone) */}
         <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm space-y-4">
+          {cheatingFlagged && (
+            <div className="p-4 rounded-2xl bg-red-600 text-white font-sans space-y-1 shadow-md">
+              <div className="font-bold flex items-center gap-2 text-base">
+                <span>🛡️ SESSION DISQUALIFIED & FLAGGED FOR MALPRACTICE</span>
+              </div>
+              <p className="text-xs text-red-100">
+                Reason: {cheatingReason || 'Excessive tab switching or window inactivity detected during examination.'}
+              </p>
+            </div>
+          )}
           <div className="border-b border-[#DCD5C4] pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-[#8c4a17] block">
