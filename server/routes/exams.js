@@ -316,6 +316,7 @@ router.post('/exams/session/start', async (req, res) => {
       // Insert new session
       const { error: sessionErr } = await userDb.from('exam_sessions').insert({
         exam_id: examId,
+        teacher_id: req.user?.id,
         rolling_code: rollingCode,
         is_active: true
       });

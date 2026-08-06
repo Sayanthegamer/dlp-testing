@@ -107,9 +107,14 @@ CREATE POLICY "Teachers can manage own exam questions"
         EXISTS (SELECT 1 FROM exams WHERE exams.id = questions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
--- 4. Active Sessions Public Access Policy
+-- 4. Active Sessions Policies
 CREATE POLICY "Public student access for active sessions" 
     ON exam_sessions FOR SELECT USING (is_active = TRUE);
+
+CREATE POLICY "Teachers can manage exam sessions" 
+    ON exam_sessions FOR ALL USING (
+        auth.role() = 'authenticated' OR EXISTS (SELECT 1 FROM exams WHERE exams.id = exam_sessions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
+    );
 
 -- 5. Submissions Policy
 CREATE POLICY "Public student submissions insert" 
@@ -117,6 +122,11 @@ CREATE POLICY "Public student submissions insert"
 
 CREATE POLICY "Teachers view submissions for own exams" 
     ON submissions FOR SELECT USING (
+        EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
+    );
+
+CREATE POLICY "Teachers update submissions for own exams" 
+    ON submissions FOR UPDATE USING (
         EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
