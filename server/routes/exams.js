@@ -198,13 +198,14 @@ router.post('/exams/publish', async (req, res) => {
     try {
       // 1. Ensure teacher record exists in teachers table so foreign key constraint is satisfied
       if (req.user?.id) {
-        await userDb.from('teachers').upsert({
+        const { error: tErr } = await userDb.from('teachers').upsert({
           id: req.user.id,
           email: req.user.email || 'teacher@local.dev',
           full_name: req.user.user_metadata?.full_name || req.user.email?.split('@')[0] || 'Teacher'
-        }, { onConflict: 'id' }).catch(tErr => {
+        }, { onConflict: 'id' });
+        if (tErr) {
           console.warn('[Supabase Teacher Upsert Warning]:', tErr.message);
-        });
+        }
       }
 
       const { error: insertErr } = await userDb.from('exams').insert({
