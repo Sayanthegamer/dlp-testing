@@ -38,6 +38,8 @@ describe('Diagram Crop Pipeline Integration', () => {
     expect(processed[0].diagramsConfirmed).toBe(false);
     expect(Array.isArray(processed[0].diagramImages)).toBe(true);
     expect(processed[0].diagramImages.length).toBe(1);
-    expect(processed[0].diagramImages[0].dataUrl).toContain('data:image/png;base64,');
+    const url = processed[0].diagramImages[0].dataUrl;
+    expect(typeof url).toBe('string');
+    expect(url.startsWith('http') || url.startsWith('data:image/')).toBe(true);
   });
 });

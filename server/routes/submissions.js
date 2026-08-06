@@ -90,58 +90,48 @@ router.post('/submissions', async (req, res) => {
   const studentAnswers = body.studentAnswers || {};
   const rawExamId = (body.examId || '').trim();
   const rollingCodeUsed = (body.rollingCodeUsed || '').trim();
-  let targetExamId = rawExamId;
 
   if (isConfigured()) {
     if (!rawExamId || rawExamId === 'exam_default') {
       return res.status(400).json({ error: 'Missing examId: Submissions must be linked to a valid published exam.' });
     }
 
+    let targetExamId = rawExamId;
     try {
-      const { data: existing } = await supabase.from('exams').select('id').eq('id', rawExamId).single();
-      if (existing && existing.id) {
-        targetExamId = existing.id;
-      } else {
+      const { data: existing, error: checkErr } = await supabase.from('exams').select('id').eq('id', rawExamId).single();
+      if (checkErr || !existing || !existing.id) {
         return res.status(400).json({ error: `Invalid examId '${rawExamId}': Exam snapshot not found in database.` });
       }
+      targetExamId = existing.id;
     } catch (e) {
-      console.warn('[Exam FK Resolution Warning]:', e.message);
+      console.error('[Exam FK Resolution Warning]:', e.message);
       return res.status(400).json({ error: `Database error verifying examId '${rawExamId}'.` });
     }
-  } else {
-    // Unconfigured local dev mode fallback
-    targetExamId = rawExamId || 'exam_default';
-  }
 
+    const submissionObj = {
+      id: serverGeneratedId,
+      examId: targetExamId,
+      testTitle,
+      studentName,
+      rollingCodeUsed,
+      submittedAt,
+      autoGraded,
+      pendingCount,
+      status: pendingCount > 0 ? 'pending_review' : 'reviewed',
+      questions,
+      studentAnswers,
+      manualGrades: {},
+      finalScore: {
+        score: autoGraded.score,
+        total: questions.length,
+        percentage: questions.length > 0 ? Math.round((autoGraded.score / questions.length) * 100) : 0
+      }
+    };
 
-
-  const submissionObj = {
-    id: serverGeneratedId,
-    examId: targetExamId || rawExamId,
-    testTitle,
-    studentName,
-    rollingCodeUsed,
-    submittedAt,
-    autoGraded,
-    pendingCount,
-    status: pendingCount > 0 ? 'pending_review' : 'reviewed',
-    questions,
-    studentAnswers,
-    manualGrades: {},
-    finalScore: {
-      score: autoGraded.score,
-      total: questions.length,
-      percentage: questions.length > 0 ? Math.round((autoGraded.score / questions.length) * 100) : 0
-    }
-  };
-
-  let supabaseInsertOk = false;
-
-  if (isConfigured()) {
     try {
       const { error: insertError } = await supabase.from('submissions').insert({
         id: serverGeneratedId,
-        exam_id: targetExamId || rawExamId,
+        exam_id: targetExamId,
         student_name: studentName,
         rolling_code_used: rollingCodeUsed,
         total_score: autoGraded.score || 0,
@@ -153,28 +143,53 @@ router.post('/submissions', async (req, res) => {
       });
 
       if (insertError) {
-        console.warn('[Supabase Submission Insert Error]:', insertError.message);
-      } else {
-        supabaseInsertOk = true;
-        console.log(`[Supabase Submissions] Successfully saved submission ${serverGeneratedId} for exam ${targetExamId}`);
+        console.error('[Supabase Submission Insert Error]:', insertError.message);
+        return res.status(500).json({ error: `Failed to save submission in database: ${insertError.message}` });
       }
-    } catch (dbErr) {
-      console.warn('[Supabase Submission Insert Exception]:', dbErr.message);
-    }
-  }
 
-  // Only write to local file as fallback when Supabase is not configured or insert failed
-  if (!supabaseInsertOk) {
+      console.log(`[Supabase Submissions] Successfully saved submission ${serverGeneratedId} for exam ${targetExamId}`);
+      return res.json({
+        success: true,
+        submissionId: serverGeneratedId,
+        status: submissionObj.status
+      });
+    } catch (dbErr) {
+      console.error('[Supabase Submission Insert Exception]:', dbErr.message);
+      return res.status(500).json({ error: `Database error saving submission: ${dbErr.message}` });
+    }
+  } else {
+    // Unconfigured local dev mode fallback
+    const targetExamId = rawExamId || 'exam_default';
+    const submissionObj = {
+      id: serverGeneratedId,
+      examId: targetExamId,
+      testTitle,
+      studentName,
+      rollingCodeUsed,
+      submittedAt,
+      autoGraded,
+      pendingCount,
+      status: pendingCount > 0 ? 'pending_review' : 'reviewed',
+      questions,
+      studentAnswers,
+      manualGrades: {},
+      finalScore: {
+        score: autoGraded.score,
+        total: questions.length,
+        percentage: questions.length > 0 ? Math.round((autoGraded.score / questions.length) * 100) : 0
+      }
+    };
+
     const list = readSubmissionsLocal();
     list.unshift(submissionObj);
     writeSubmissionsLocal(list);
-  }
 
-  return res.json({
-    success: true,
-    submissionId: serverGeneratedId,
-    status: submissionObj.status
-  });
+    return res.json({
+      success: true,
+      submissionId: serverGeneratedId,
+      status: submissionObj.status
+    });
+  }
 });
 
 /**
@@ -195,36 +210,36 @@ router.get('/submissions', async (req, res) => {
 
       if (error) {
         console.error('[Supabase Submissions Read Error]:', error.message);
-        return res.status(500).json({ success: false, error: 'Database error fetching submissions.' });
+        return res.status(500).json({ success: false, error: `Database error fetching submissions: ${error.message}` });
       }
 
-      if (Array.isArray(data)) {
-        const formatted = data.map(item => {
-          if (item.responses) {
-             return {
-               ...item.responses,
-               id: item.id || item.responses.id,
-               studentName: item.student_name || item.responses.studentName,
-               percentage: item.percentage || item.responses.finalScore?.percentage,
-               totalScore: item.total_score || item.responses.finalScore?.score,
-               submittedAt: item.submitted_at || item.responses.submittedAt
-             };
-          }
-          return item;
-        });
-        return res.json({ success: true, submissions: formatted });
-      }
+      const formatted = Array.isArray(data) ? data.map(item => {
+        if (item.responses) {
+           return {
+             ...item.responses,
+             id: item.id || item.responses.id,
+             studentName: item.student_name || item.responses.studentName,
+             percentage: item.percentage || item.responses.finalScore?.percentage,
+             totalScore: item.total_score || item.responses.finalScore?.score,
+             submittedAt: item.submitted_at || item.responses.submittedAt
+           };
+        }
+        return item;
+      }) : [];
+
+      return res.json({ success: true, submissions: formatted });
     } catch (e) {
       console.error('[Supabase Submissions Read Exception]:', e.message);
-      return res.status(500).json({ success: false, error: 'Database connection error fetching submissions.' });
+      return res.status(500).json({ success: false, error: `Database connection error fetching submissions: ${e.message}` });
     }
+  } else {
+    // Unconfigured local dev mode fallback
+    const list = readSubmissionsLocal();
+    return res.json({
+      success: true,
+      submissions: list
+    });
   }
-
-  const list = readSubmissionsLocal();
-  return res.json({
-    success: true,
-    submissions: list
-  });
 });
 
 /**
@@ -242,42 +257,44 @@ router.post('/submissions/:id/grade', async (req, res) => {
     return res.status(400).json({ error: 'manualGrades object required' });
   }
 
-  const list = readSubmissionsLocal();
-  const subIndex = list.findIndex(s => s.id === targetId);
-
-  if (subIndex === -1) {
-    return res.status(404).json({ error: 'Submission not found' });
-  }
-
-  const target = list[subIndex];
-  
-  target.manualGrades = {
-    ...target.manualGrades,
-    ...manualGrades
-  };
-
-  let totalScore = target.autoGraded ? target.autoGraded.score : 0;
-  Object.values(target.manualGrades).forEach(g => {
-    if (g && g.status === 'correct') {
-      totalScore += (typeof g.score === 'number' ? g.score : 1);
-    }
-  });
-
-  const totalQuestions = target.questions ? target.questions.length : 0;
-  const percentage = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
-
-  target.finalScore = {
-    score: totalScore,
-    total: totalQuestions,
-    percentage
-  };
-
-  target.status = 'reviewed';
-  target.reviewedAt = new Date().toISOString();
-
   if (isConfigured()) {
     const userDb = createUserClient(req.accessToken);
     try {
+      const { data: subData, error: subErr } = await userDb
+        .from('submissions')
+        .select('responses')
+        .eq('id', targetId)
+        .single();
+
+      if (subErr || !subData || !subData.responses) {
+        return res.status(404).json({ error: 'Submission not found in database.' });
+      }
+
+      const target = subData.responses;
+      target.manualGrades = {
+        ...target.manualGrades,
+        ...manualGrades
+      };
+
+      let totalScore = target.autoGraded ? target.autoGraded.score : 0;
+      Object.values(target.manualGrades).forEach(g => {
+        if (g && g.status === 'correct') {
+          totalScore += (typeof g.score === 'number' ? g.score : 1);
+        }
+      });
+
+      const totalQuestions = target.questions ? target.questions.length : 0;
+      const percentage = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
+
+      target.finalScore = {
+        score: totalScore,
+        total: totalQuestions,
+        percentage
+      };
+
+      target.status = 'reviewed';
+      target.reviewedAt = new Date().toISOString();
+
       const { error: updateErr } = await userDb
         .from('submissions')
         .update({
@@ -289,19 +306,60 @@ router.post('/submissions/:id/grade', async (req, res) => {
 
       if (updateErr) {
         console.error('[Supabase Grade Update Error]:', updateErr.message);
+        return res.status(500).json({ error: `Failed to update grade in database: ${updateErr.message}` });
       }
+
+      return res.json({
+        success: true,
+        submission: target
+      });
     } catch (e) {
       console.error('[Supabase Grade Update Exception]:', e.message);
+      return res.status(500).json({ error: `Database error updating grade: ${e.message}` });
     }
+  } else {
+    // Unconfigured local dev mode fallback
+    const list = readSubmissionsLocal();
+    const subIndex = list.findIndex(s => s.id === targetId);
+
+    if (subIndex === -1) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    const target = list[subIndex];
+
+    target.manualGrades = {
+      ...target.manualGrades,
+      ...manualGrades
+    };
+
+    let totalScore = target.autoGraded ? target.autoGraded.score : 0;
+    Object.values(target.manualGrades).forEach(g => {
+      if (g && g.status === 'correct') {
+        totalScore += (typeof g.score === 'number' ? g.score : 1);
+      }
+    });
+
+    const totalQuestions = target.questions ? target.questions.length : 0;
+    const percentage = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
+
+    target.finalScore = {
+      score: totalScore,
+      total: totalQuestions,
+      percentage
+    };
+
+    target.status = 'reviewed';
+    target.reviewedAt = new Date().toISOString();
+
+    list[subIndex] = target;
+    writeSubmissionsLocal(list);
+
+    return res.json({
+      success: true,
+      submission: target
+    });
   }
-
-  list[subIndex] = target;
-  writeSubmissionsLocal(list);
-
-  return res.json({
-    success: true,
-    submission: target
-  });
 });
 
 module.exports = router;
