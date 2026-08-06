@@ -7,7 +7,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { stripBase64Header } = require('./diagramCropService');
+const { stripBase64Header, getPdfJsLib, rasterizePdfPage } = require('./diagramCropService');
+const sharp = require('sharp');
 
 /**
  * Generates an SVG visual diagnostic overlay with labeled bounding boxes for detected candidate figures
@@ -18,7 +19,6 @@ async function generateDiagnosticOverlay(sourceBuffer, pageCandidates, fileLabel
   if (process.env.NODE_ENV === 'production') return;
 
   try {
-    const sharp = require('sharp');
     const meta = await sharp(sourceBuffer).metadata();
     const width = meta.width || 800;
     const height = meta.height || 600;
@@ -77,7 +77,6 @@ async function extractCandidateFigures(mediaFiles) {
       if (mime === 'application/pdf') {
         // PDF candidate extraction via pdfjs-dist
         try {
-          const { getPdfJsLib } = require('./diagramCropService');
           const pdfjsLib = await getPdfJsLib();
           if (!pdfjsLib) throw new Error('pdfjs-dist module unavailable');
           const pdfBuffer = Buffer.from(cleanStr, 'base64');
@@ -150,7 +149,6 @@ async function extractCandidateFigures(mediaFiles) {
 
             // Rasterize PDF page & save diagnostic visual overlay
             try {
-              const { rasterizePdfPage } = require('./diagramCropService');
               const pagePngBuffer = await rasterizePdfPage(cleanStr, pIndex);
               await generateDiagnosticOverlay(pagePngBuffer, pageCandidates, `file${fileIdx}_page_${pIndex + 1}`);
             } catch (ovErr) {
@@ -163,7 +161,6 @@ async function extractCandidateFigures(mediaFiles) {
       } else {
         // Standard Image candidate extraction via sharp metadata
         try {
-          const sharp = require('sharp');
           const buffer = Buffer.from(cleanStr, 'base64');
           const meta = await sharp(buffer).metadata();
           

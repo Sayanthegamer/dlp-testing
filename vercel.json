@@ -3,7 +3,11 @@
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {
-      "includeFiles": "server/**"
+      "includeFiles": [
+        "server/**",
+        "server/node_modules/pdfjs-dist/**",
+        "server/node_modules/@napi-rs/canvas/**"
+      ]
     }
   },
   "rewrites": [

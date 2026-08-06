@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
+const { uploadDiagramToStorage } = require('./supabaseClient');
 
 function stripBase64Header(str) {
   if (typeof str !== 'string') return str;
@@ -69,7 +71,6 @@ async function rasterizePdfPage(pdfBase64, pageIndex) {
 
 async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
   try {
-    const sharp = require('sharp');
     const meta = await sharp(sourceBuffer).metadata();
     const imgWidth = meta.width || 800;
     const imgHeight = meta.height || 600;
@@ -163,7 +164,6 @@ async function cropDiagram(sourceBuffer, bbox, debugLabel = 'diag') {
       }
     }
 
-    const { uploadDiagramToStorage } = require('./supabaseClient');
     const fileName = `${debugLabel}_${Date.now()}.png`;
     return await uploadDiagramToStorage(cropped, fileName);
   } catch (err) {
@@ -228,7 +228,6 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
           if (dataUrl) {
             let sourcePageImage = dataUrl;
             try {
-              const sharp = require('sharp');
               const resized = await sharp(sourceBuffer)
                 .resize({ width: 1000, fit: 'inside', withoutEnlargement: true })
                 .jpeg({ quality: 75 })
