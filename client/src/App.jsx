@@ -103,12 +103,9 @@ export default function App() {
       setIsAuthenticated(true);
     }
 
-    const savedStudentName = localStorage.getItem('student_name');
-    const savedRollingCode = localStorage.getItem('student_rolling_code');
-    if (savedStudentName && savedRollingCode) {
+    const savedStudentName = localStorage.getItem('student_name') || '';
+    if (savedStudentName) {
       setStudentName(savedStudentName);
-      setRollingCodeUsed(savedRollingCode);
-      setIsStudentAuthenticated(true);
     }
   }, []);
 
@@ -145,6 +142,11 @@ export default function App() {
 
   const handleClearStudentSession = () => {
     setStudentAnswers({});
+    setQuestionStatuses({});
+    setCheatingFlagged(false);
+    setCheatingReason('');
+    setIsStudentAuthenticated(false);
+    localStorage.removeItem('student_rolling_code');
     try {
       const sessionKey = `student_answers_${testTitle}`;
       sessionStorage.removeItem(sessionKey);
