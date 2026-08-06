@@ -80,7 +80,12 @@ export default function QuestionPaletteSidebar({
   };
 
   const paletteContent = (
-    <div className="flex flex-col h-full bg-white border border-[#DCD5C4] rounded-2xl shadow-sm overflow-hidden text-xs font-sans">
+    <div className="flex flex-col h-full bg-white border border-[#DCD5C4] rounded-t-3xl sm:rounded-2xl shadow-xl overflow-hidden text-xs font-sans">
+      {/* Mobile Top Drag Handle Bar */}
+      <div className="sm:hidden w-full pt-2.5 pb-1 flex justify-center bg-[#F5EFDF]">
+        <div className="w-12 h-1 rounded-full bg-[#c8bead]" />
+      </div>
+
       {/* Sidebar Header */}
       <div className="p-3 sm:p-4 bg-[#F5EFDF] border-b border-[#DCD5C4] flex items-center justify-between">
         <div>
