@@ -12,6 +12,7 @@ import TestIntroScreen from './components/Student/TestIntroScreen';
 import TestQuestionView from './components/Student/TestQuestionView';
 import TestReviewScreen from './components/Student/TestReviewScreen';
 import TestResultScreen from './components/Student/TestResultScreen';
+import ProctoringSecurityGuard from './components/Student/ProctoringSecurityGuard';
 import SubmissionsDashboardModal from './components/TeacherDashboard/SubmissionsDashboardModal';
 import PublishExamModal from './components/TeacherDashboard/PublishExamModal';
 import { parseQuestionText, parseQuestionImage, parseDocxStructure, publishExam, fetchExamSnapshot, logoutTeacher } from './services/apiService';
@@ -447,38 +448,54 @@ export default function App() {
       );
     }
 
+    const isExamActive = !cheatingFlagged && (studentStep === 'test' || studentStep === 'review');
+
     if (studentStep === 'test') {
       return (
-        <TestQuestionView
-          questions={questions}
-          currentIndex={currentQuestionIndex}
-          answers={studentAnswers}
-          questionStatuses={questionStatuses}
-          onAnswerChange={handleStudentAnswerChange}
-          onUpdateQuestionStatus={handleUpdateQuestionStatus}
-          onSelectQuestion={(idx) => setCurrentQuestionIndex(idx)}
-          onNext={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
-          onPrevious={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
-          onReview={() => setStudentStep('review')}
-          onSubmitExam={() => setStudentStep('review')}
-          onDisqualifyCheating={handleDisqualifyCheating}
-          cheatingFlagged={cheatingFlagged}
-          studentName={studentName}
-        />
+        <div className="relative min-h-screen">
+          <ProctoringSecurityGuard
+            isActive={isExamActive}
+            onDisqualifyCheating={handleDisqualifyCheating}
+            studentName={studentName}
+          />
+          <TestQuestionView
+            questions={questions}
+            currentIndex={currentQuestionIndex}
+            answers={studentAnswers}
+            questionStatuses={questionStatuses}
+            onAnswerChange={handleStudentAnswerChange}
+            onUpdateQuestionStatus={handleUpdateQuestionStatus}
+            onSelectQuestion={(idx) => setCurrentQuestionIndex(idx)}
+            onNext={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+            onPrevious={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
+            onReview={() => setStudentStep('review')}
+            onSubmitExam={() => setStudentStep('review')}
+            onDisqualifyCheating={handleDisqualifyCheating}
+            cheatingFlagged={cheatingFlagged}
+            studentName={studentName}
+          />
+        </div>
       );
     }
 
     if (studentStep === 'review') {
       return (
-        <TestReviewScreen
-          questions={questions}
-          answers={studentAnswers}
-          onJumpToQuestion={(idx) => {
-            setCurrentQuestionIndex(idx);
-            setStudentStep('test');
-          }}
-          onSubmitTest={() => setStudentStep('result')}
-        />
+        <div className="relative min-h-screen">
+          <ProctoringSecurityGuard
+            isActive={isExamActive}
+            onDisqualifyCheating={handleDisqualifyCheating}
+            studentName={studentName}
+          />
+          <TestReviewScreen
+            questions={questions}
+            answers={studentAnswers}
+            onJumpToQuestion={(idx) => {
+              setCurrentQuestionIndex(idx);
+              setStudentStep('test');
+            }}
+            onSubmitTest={() => setStudentStep('result')}
+          />
+        </div>
       );
     }
 

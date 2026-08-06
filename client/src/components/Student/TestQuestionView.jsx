@@ -87,13 +87,6 @@ export default function TestQuestionView({
 
   return (
     <div className="min-h-screen bg-[#FAF7F0] text-[#232323] py-4 sm:py-6 px-3 sm:px-6 flex flex-col justify-between">
-      {/* Proctoring Security Guard Monitor */}
-      <ProctoringSecurityGuard
-        isActive={!cheatingFlagged}
-        onDisqualifyCheating={onDisqualifyCheating}
-        studentName={studentName}
-      />
-
       {/* Disqualification Banner */}
       {cheatingFlagged && (
         <div className="max-w-7xl w-full mx-auto mb-4 p-4 rounded-2xl bg-red-600 text-white shadow-lg flex items-center justify-between gap-3 text-xs sm:text-sm font-sans font-bold animate-pulse">
