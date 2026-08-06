@@ -120,6 +120,8 @@ router.post('/submissions', async (req, res) => {
       status: pendingCount > 0 ? 'pending_review' : 'reviewed',
       questions,
       studentAnswers,
+      cheatingFlagged: Boolean(body.cheatingFlagged),
+      cheatingReason: body.cheatingReason || '',
       manualGrades: {},
       finalScore: {
         score: autoGraded.score,
@@ -172,6 +174,8 @@ router.post('/submissions', async (req, res) => {
       status: pendingCount > 0 ? 'pending_review' : 'reviewed',
       questions,
       studentAnswers,
+      cheatingFlagged: Boolean(body.cheatingFlagged),
+      cheatingReason: body.cheatingReason || '',
       manualGrades: {},
       finalScore: {
         score: autoGraded.score,

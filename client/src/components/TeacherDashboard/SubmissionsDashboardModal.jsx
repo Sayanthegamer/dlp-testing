@@ -3,7 +3,7 @@ import MathRenderer from '../PreviewPanel/MathRenderer';
 import PublishedExamsList from './PublishedExamsList';
 import { fetchSubmissions, gradeSubmission } from '../../services/apiService';
 import { evaluateSubmission } from '../../services/gradingService';
-import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare, Users } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare, Users, ShieldAlert } from 'lucide-react';
 
 export default function SubmissionsDashboardModal({ onClose }) {
   const [activeTab, setActiveTab] = useState('submissions'); // 'submissions' | 'published_exams'
@@ -250,10 +250,15 @@ export default function SubmissionsDashboardModal({ onClose }) {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-serif font-bold text-sm text-[#1c1b18] truncate max-w-[160px]">
+                      <span className="font-serif font-bold text-sm text-[#1c1b18] truncate max-w-[150px]">
                         {sub.studentName}
                       </span>
-                      {sub.status === 'pending_review' ? (
+                      {sub.cheatingFlagged ? (
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-900 text-[10px] font-bold flex items-center gap-1">
+                          <ShieldAlert className="w-3 h-3 text-red-700" />
+                          <span>Cheating Flagged</span>
+                        </span>
+                      ) : sub.status === 'pending_review' ? (
                         <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold flex items-center gap-1">
                           <Clock className="w-3 h-3 text-amber-700" />
                           <span>Review Needed</span>
@@ -268,9 +273,13 @@ export default function SubmissionsDashboardModal({ onClose }) {
 
                     <div className="text-xs text-[#5c5346] flex items-center justify-between">
                       <span className="truncate max-w-[140px]">{sub.testTitle}</span>
-                      <span className="font-semibold text-gray-900">
-                        {sub.finalScore ? `${sub.finalScore.score}/${sub.finalScore.total}` : `${sub.autoGraded.score}/${sub.autoGraded.total}`}
-                      </span>
+                      {sub.cheatingFlagged ? (
+                        <span className="font-bold text-red-600">Disqualified (0)</span>
+                      ) : (
+                        <span className="font-semibold text-gray-900">
+                          {sub.finalScore ? `${sub.finalScore.score}/${sub.finalScore.total}` : `${sub.autoGraded.score}/${sub.autoGraded.total}`}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-[10px] text-gray-400 font-mono text-right">
@@ -308,7 +317,12 @@ export default function SubmissionsDashboardModal({ onClose }) {
                         <span className="text-xs font-bold uppercase tracking-wider text-[#8c4a17]">
                           Candidate Scorecard
                         </span>
-                        {selectedSubmission.status === 'pending_review' ? (
+                        {selectedSubmission.cheatingFlagged ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold flex items-center gap-1">
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            <span>MALPRACTICE / CHEATING FLAGGED</span>
+                          </span>
+                        ) : selectedSubmission.status === 'pending_review' ? (
                           <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold">
                             Pending Review ({selectedSubmission.pendingCount} items)
                           </span>
@@ -324,6 +338,12 @@ export default function SubmissionsDashboardModal({ onClose }) {
                       <p className="text-xs text-[#786f63]">
                         Test: {selectedSubmission.testTitle} • Submitted {new Date(selectedSubmission.submittedAt).toLocaleString()}
                       </p>
+                      {selectedSubmission.cheatingFlagged && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs font-semibold flex items-center gap-1.5">
+                          <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
+                          <span>Violation Detail: {selectedSubmission.cheatingReason || 'Excessive tab switching / window inactivity during exam.'}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-left sm:text-right space-y-1 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[#e2d8ca]">
