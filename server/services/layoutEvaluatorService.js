@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 
 /**
  * Renders a visual match diagnostic overlay showing Question -> Matched Figure associations.
@@ -16,7 +17,6 @@ async function generateMatchOverlay(sourceBuffer, questions, fileLabel) {
   if (process.env.NODE_ENV === 'production') return;
 
   try {
-    const sharp = require('sharp');
     const meta = await sharp(sourceBuffer).metadata();
     const width = meta.width || 800;
     const height = meta.height || 600;
