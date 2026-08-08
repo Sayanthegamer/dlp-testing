@@ -124,5 +124,32 @@ describe('Strict JSON Schema Invariant Validation', () => {
     };
     expect(validateJsonSchema(validMatchFollowing)).toBe(true);
   });
+
+  it('should pass aggregated question list from multi-chunk batch parsing', () => {
+    const chunk1Questions = Array.from({ length: 15 }, (_, i) => ({
+      id: `q${i + 1}`,
+      questionText: `Question ${i + 1}: Solve <math>\\frac{${i + 1}}{2}</math>`,
+      type: 'mcq',
+      options: ['1', '2', '3', '4'],
+      correctAnswer: 0
+    }));
+
+    const chunk2Questions = Array.from({ length: 15 }, (_, i) => ({
+      id: `q${i + 16}`,
+      questionText: `Question ${i + 16}: Solve <math>\\sqrt{${i + 16}}</math>`,
+      type: 'mcq',
+      options: ['1', '2', '3', '4'],
+      correctAnswer: 1
+    }));
+
+    const aggregatedPayload = {
+      testTitle: 'Aggregated Math Exam (30 Questions)',
+      questions: [...chunk1Questions, ...chunk2Questions]
+    };
+
+    expect(aggregatedPayload.questions.length).toBe(30);
+    expect(validateJsonSchema(aggregatedPayload)).toBe(true);
+  });
 });
+
 

@@ -54,34 +54,137 @@ Your task is to parse input (informal text, photo of exam paper, or document str
   ]
 }
 
-CRITICAL RULES:
-1. <math>...</math> tags are ONLY for mathematical formulas, equations, variables, and math symbols (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
-2. Do NOT place plain English text, computer science terms, or general option descriptions inside <math> tags.
-3. If the input contains MULTIPLE questions (e.g. Question 1, Question 2...), extract ALL questions into the "questions" array.
-4. For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq", with "correctAnswer" as the 0-indexed integer of the correct option if identifiable.
-5. ALL non-MCQ questions MUST be "type": "short_answer_numeric". There are NO free-text subjective questions. The answer is ALWAYS a numerical value (integer or decimal from -infinity to +infinity).
-6. ALWAYS SOLVE/ESTIMATE THE NUMERICAL ANSWER for numerical questions: output an estimated "correctAnswer" (numeric float/integer) AND a suggested "acceptedRange": [min, max] (e.g. [14.5, 15.5] or ±1% tolerance around the estimated answer).
-7. Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.
-8. CHEMISTRY EQUATIONS & FORMULAS: wrap in <math>\\ce{...}</math> using mhchem syntax — balanced reactions, state symbols (s)/(l)/(g)/(aq), equilibrium arrows (<=>, <=>>), ionic charges (Fe^3+), coordination formulas ([Co(NH3)6]^3+).
-9. NUCLEAR NOTATION (Chemistry radioactivity AND Physics Modern Physics): isotopes as <math>\\ce{^238_92U}</math> via mhchem — identical syntax serves both subjects.
-10. PHYSICAL QUANTITIES WITH UNITS (Physics): wrap value+unit pairs in <math>\\pu{...}</math>, e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{6.63e-34 J s}</math>.
-11. PERMUTATIONS/COMBINATIONS (Math Algebra): use <math>\\nCr{n}{r}</math> / <math>\\nPr{n}{r}</math> custom macros, not raw \\binom.
-12. STRUCTURAL/GEOMETRIC CONTENT — NEVER put these in <math> tags, even though they look chemistry/physics-related: benzene rings and other skeletal structures, wedge-dash stereochemistry, VSEPR 3D molecular shapes, reaction mechanism arrows, orbital shape diagrams (s/p/d), circuit diagrams, apparatus drawings, graphs/plots. These belong in the "diagrams" array as a bounding box on the source image — never as attempted LaTeX/mhchem text.
-14. MATCH THE FOLLOWING QUESTIONS: If the input contains a "Match the Following" question (matching Column I items with Column II items), format Column I and Column II cleanly in "questionText" as a structured 2-column list or table. Set "type": "match_following" (or "mcq"), and provide the matching combination choices (e.g. ["A: (i)-p, (ii)-q, (iii)-r, (iv)-s", ...]) in the "options" array.
-15. PASSAGE-BASED / COMPREHENSION QUESTIONS: If a question (or group of questions) relies on a preceding reading passage, case study, or shared paragraph, populate "passageTitle" (e.g. "Passage 1: Case Study") and "passageText" (the complete paragraph text) on each related question object.
-16. LATEX BACKSLASH & SPACING DISCIPLINE: Every LaTeX command inside <math> tags MUST include its leading backslash and proper braces — NEVER emit bare command words run together with variables. WRONG: "frac3pilambdar8". CORRECT: "\\frac{3\\pi\\lambda r}{8}". Always wrap numerator/denominator in \\frac{...}{...} with explicit braces, always precede pi/lambda/theta/alpha/etc. with a backslash, and always insert a space or brace boundary between a command and the variable that follows it (e.g. "\\pi r" not "\\pir", "\\lambda r" not "\\lambdar"). If you are unsure whether a symbol needs a backslash, default to including it — a missing backslash silently renders as plain italic letters with no error, which is worse than an occasional harmless extra backslash.`;
+CRITICAL MATH & EQUATION FORMATTING RULES:
+1. MATH TAG BOUNDARIES: <math>...</math> tags are strictly reserved for mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
+   - NEVER put plain English sentences, problem instructions, question numbers (e.g. "Question 1"), or option letters (e.g. "Option A") inside <math> tags.
+   - CORRECT: "Solve for <math>x</math> when <math>x^2 = 4</math>."
+   - WRONG: "<math>Solve for x when x^2 = 4.</math>"
+
+2. JSON LATEX ESCAPING MANDATE: Because your response MUST be valid JSON, EVERY single LaTeX backslash inside JSON string values MUST be double-escaped (e.g., "\\frac{a}{b}", "\\ce{...}", "\\pu{...}", "\\pi", "\\alpha", "\\sin", "\\sqrt{x}"). Never output unescaped single backslashes inside JSON strings.
+
+3. BRACE DISCIPLINE FOR EXPONENTS, SUBSCRIPTS, FRACTIONS & ROOTS:
+   - Exponents & Subscripts: ALWAYS enclose multi-character or multi-term superscripts/subscripts in curly braces: <math>x^{10}</math>, <math>a_{12}</math>, <math>x_{1}^{(2)}</math>. WRONG: "x^10" or "a_12".
+   - Fractions: ALWAYS use explicit curly braces around BOTH numerator and denominator: <math>\\frac{numerator}{denominator}</math>. WRONG: "\\frac 1 2" or "\\frac x y".
+   - Radicals / Roots: ALWAYS use curly braces: <math>\\sqrt{x + 1}</math> or <math>\\sqrt[n]{x}</math>. WRONG: "\\sqrt x".
+
+4. TRIGONOMETRIC, LOGARITHMIC & NAMED FUNCTIONS:
+   - Standard math functions MUST include their leading backslash: \\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg.
+   - CORRECT: <math>\\sin(x) + \\cos(x) = 1</math>
+   - WRONG: <math>sin(x) + cos(x) = 1</math> (renders in italic text s·i·n).
+
+5. CHEMISTRY EQUATIONS & REACTION NOTATION (mhchem Syntax):
+   - Wrap chemical formulas, balanced reactions, state symbols, and ionic charges in <math>\\ce{...}</math> using mhchem syntax.
+   - Reactions: <math>\\ce{2H2 + O2 -> 2H2O}</math>
+   - Ions & Complex Ions: <math>\\ce{Fe^3+}</math>, <math>\\ce{[Co(NH3)6]^3+}</math>
+   - States of Matter: <math>\\ce{NaCl(aq) + AgNO3(aq) -> AgCl(s) + NaNO3(aq)}</math>
+   - Radioactivity & Nuclear Isotopes: <math>\\ce{^238_92U -> ^234_90Th + ^4_2He}</math>
+   - WRONG: <math>2H2 + O2 -> 2H2O</math> (renders in plain math italics).
+
+6. PHYSICAL QUANTITIES WITH UNITS:
+   - Wrap physical quantities with units in <math>\\pu{value unit}</math> so units render in proper upright (non-italic) font.
+   - Examples: <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{6.63e-34 J s}</math>, <math>\\pu{50 \\Omega}</math>, <math>\\pu{12 V}</math>, <math>\\pu{5 kg}</math>.
+   - WRONG: <math>9.8 m/s^2</math> (renders unit in math italics).
+
+7. PERMUTATIONS & COMBINATIONS:
+   - Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math> for combinations and permutations notation.
+   - Examples: <math>\\nCr{10}{3}</math>, <math>\\nPr{n}{r}</math>.
+
+8. MATRICES, DETERMINANTS & SYSTEMS OF EQUATIONS:
+   - Matrices: <math>\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}</math> or <math>\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}</math>.
+   - Determinants: <math>\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}</math>.
+   - Systems / Piecewise: <math>\\begin{cases} 2x + y = 5 \\\\ x - 3y = 2 \\end{cases}</math>.
+
+9. ESCAPING PERCENT SIGNS & PLAIN WORDS INSIDE MATH:
+   - Percentage signs inside <math> tags MUST be escaped as \\% (e.g. <math>50\\%</math>) or placed outside the <math> tag (e.g. <math>50</math>%).
+   - Multi-letter English words inside math tags MUST be wrapped in \\text{...} or \\mathrm{...} (e.g. <math>\\text{speed} = \\frac{\\text{distance}}{\\text{time}}</math>).
+
+10. STRUCTURAL / GEOMETRIC CONTENT:
+    - NEVER put benzene rings, skeletal structures, VSEPR 3D shapes, orbital diagrams, circuit diagrams, apparatus drawings, or plots into <math> tags. These belong in the "diagrams" array as bounding box coordinates [ymin, xmin, ymax, xmax] on the source image.
+
+11. QUESTION TYPES & ANSWERS:
+    - For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq", with "correctAnswer" as the 0-indexed integer of the correct option if identifiable.
+    - ALL non-MCQ questions MUST be "type": "short_answer_numeric". Output an estimated "correctAnswer" (numeric float/integer) AND a suggested "acceptedRange": [min, max] (e.g. [14.5, 15.5]).
+    - MATCH THE FOLLOWING QUESTIONS: Format Column I and Column II cleanly in "questionText" as a structured table. Set "type": "match_following", and provide combination choices in "options".
+    - PASSAGE-BASED QUESTIONS: Populate "passageTitle" and "passageText" on each related question object.
+
+12. SUBPARTS DISAGGREGATION:
+    - Extract sub-questions (e.g. Question 1(a), 1(b), 1(c) or 1.1, 1.2) into DISTINCT individual question objects in the "questions" array with descriptive IDs (e.g. "q1_a", "q1_b"). Do NOT collapse sub-questions together into a single wall of text.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
 
 const { hasBareCommandRun, repairMissingMathBackslashes } = require('../services/mathSanitizerService');
 
 
-
-
-
-
 function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');
+}
+
+/**
+ * Splits incoming media files / PDF pages into manageable chunks of at most maxPagesPerChunk.
+ * For multi-page PDFs, rasterizes pages into image chunks so each AI invocation processes
+ * at most ~15 questions, eliminating schema validation errors and response truncations.
+ */
+async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 3) {
+  if (!Array.isArray(mediaFiles) || mediaFiles.length === 0) {
+    return [[]];
+  }
+
+  const processedItems = [];
+
+  for (let fileIdx = 0; fileIdx < mediaFiles.length; fileIdx++) {
+    const file = mediaFiles[fileIdx];
+    if (!file) continue;
+    const mime = file.mimeType || file.mediaType || 'image/jpeg';
+    const rawData = file.data || file.base64 || file.imageBase64;
+    if (!rawData) continue;
+    const cleanStr = stripBase64Header(rawData);
+
+    if (mime === 'application/pdf') {
+      try {
+        const { getPdfJsLib, rasterizePdfPage } = require('../services/diagramCropService');
+        const pdfjsLib = await getPdfJsLib();
+        if (pdfjsLib) {
+          const pdfBuffer = Buffer.from(cleanStr, 'base64');
+          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+          const pdf = await loadingTask.promise;
+          const numPages = pdf.numPages;
+
+          if (numPages > maxPagesPerChunk) {
+            console.log(`[Parser Chunking] PDF file #${fileIdx} has ${numPages} pages (> ${maxPagesPerChunk}). Rasterizing into page chunks...`);
+            for (let p = 0; p < numPages; p++) {
+              try {
+                const pageBuffer = await rasterizePdfPage(cleanStr, p);
+                processedItems.push({
+                  data: pageBuffer.toString('base64'),
+                  mimeType: 'image/png',
+                  sourceFileIndex: fileIdx,
+                  pageIndex: p,
+                  name: `${file.name || 'document'}_page_${p + 1}`
+                });
+              } catch (rErr) {
+                console.warn(`[Parser Chunking] Page ${p + 1} rasterization skipped:`, rErr.message);
+                processedItems.push({ ...file, sourceFileIndex: fileIdx, pageIndex: p });
+              }
+            }
+            continue;
+          }
+        }
+      } catch (err) {
+        console.warn('[Parser Chunking] PDF page count check skipped:', err.message);
+      }
+    }
+
+    processedItems.push({ ...file, sourceFileIndex: fileIdx, pageIndex: file.pageIndex || 0 });
+  }
+
+  if (processedItems.length === 0) return [mediaFiles];
+
+  const chunks = [];
+  for (let i = 0; i < processedItems.length; i += maxPagesPerChunk) {
+    chunks.push(processedItems.slice(i, i + maxPagesPerChunk));
+  }
+
+  return chunks.length > 0 ? chunks : [mediaFiles];
 }
 
 function repairJsonUnescapedBackslashes(str) {
@@ -313,61 +416,103 @@ router.post('/parse-question', async (req, res) => {
   // Stage 1: Deterministic Layout & Candidate Figure Extraction (Zero AI)
   const candidateFigures = await extractCandidateFigures(effectiveMediaFiles);
 
+  // Chunk media files into batches of max 3 pages (~15 questions per chunk call)
+  const mediaChunks = (type === 'image' || type === 'media')
+    ? await chunkMediaFiles(effectiveMediaFiles, 3)
+    : [[{ type, rawText, docxStructure }]];
+
+  console.log(`[Parser] Prepared ${mediaChunks.length} chunk(s) for parsing (${effectiveMediaFiles.length} file(s) total).`);
+
   const errors = [];
 
   // Try each configured API provider sequentially
   for (const provider of providers) {
     try {
-      if (provider.name === 'gemini') {
-        const activeModel = getGeminiModelName();
-        console.log(`[Parser] Attempting Gemini API (${activeModel}) for multi-media/PDF...`);
-        const data = await parseWithGemini({
-          geminiKey: provider.key,
-          type,
-          rawText,
-          imageBase64,
-          mediaType,
-          mediaFiles: effectiveMediaFiles,
-          docxStructure
-        });
-        if (!validateJsonSchema(data)) {
-          throw new Error('Gemini response failed JSON schema shape validation');
+      let aggregatedQuestions = [];
+      let masterTestTitle = 'Mathematics Test Paper';
+
+      for (let chunkIdx = 0; chunkIdx < mediaChunks.length; chunkIdx++) {
+        const chunk = mediaChunks[chunkIdx];
+        console.log(`[Parser Chunk ${chunkIdx + 1}/${mediaChunks.length}] Attempting parsing via ${provider.name}...`);
+
+        let parsedChunkData;
+        if (provider.name === 'gemini') {
+          const activeModel = getGeminiModelName();
+          console.log(`[Parser] Attempting Gemini API (${activeModel}) for chunk ${chunkIdx + 1}...`);
+          parsedChunkData = await parseWithGemini({
+            geminiKey: provider.key,
+            type,
+            rawText,
+            imageBase64,
+            mediaType,
+            mediaFiles: chunk,
+            docxStructure
+          });
+        } else if (provider.name === 'anthropic') {
+          console.log(`[Parser] Attempting Anthropic Claude API for chunk ${chunkIdx + 1}...`);
+          parsedChunkData = await parseWithClaude({
+            anthropicKey: provider.key,
+            type,
+            rawText,
+            imageBase64,
+            mediaType,
+            mediaFiles: chunk,
+            docxStructure
+          });
         }
-        if (Array.isArray(data.questions)) {
-          try {
-            // Stage 3: Spatial & Semantic Diagram Matcher
-            data.questions = await matchDiagramsToQuestions(data.questions, candidateFigures, effectiveMediaFiles);
-          } catch (diagErr) {
-            console.warn('[Diagram matcher skipped]:', diagErr.message);
-          }
+
+        if (parsedChunkData && parsedChunkData.testTitle && parsedChunkData.testTitle !== 'Mathematics Test Paper') {
+          masterTestTitle = parsedChunkData.testTitle;
         }
-        return res.json({ success: true, data, mode: 'live_gemini' });
+
+        if (parsedChunkData && Array.isArray(parsedChunkData.questions)) {
+          // Remap diagram sourceFileIndex and pageIndex relative to original effectiveMediaFiles array
+          const remappedChunkQuestions = parsedChunkData.questions.map((q) => {
+            if (Array.isArray(q.diagrams)) {
+              q.diagrams = q.diagrams.map(diag => {
+                const chunkItem = (typeof diag.sourceFileIndex === 'number' && chunk[diag.sourceFileIndex])
+                  ? chunk[diag.sourceFileIndex]
+                  : chunk[0];
+                return {
+                  ...diag,
+                  sourceFileIndex: (chunkItem && typeof chunkItem.sourceFileIndex === 'number') ? chunkItem.sourceFileIndex : 0,
+                  pageIndex: (chunkItem && typeof chunkItem.pageIndex === 'number') ? chunkItem.pageIndex : (diag.pageIndex || 0)
+                };
+              });
+            }
+            return q;
+          });
+
+          aggregatedQuestions.push(...remappedChunkQuestions);
+        }
       }
 
-      if (provider.name === 'anthropic') {
-        console.log('[Parser] Attempting Anthropic Claude API for multi-media/PDF...');
-        const data = await parseWithClaude({
-          anthropicKey: provider.key,
-          type,
-          rawText,
-          imageBase64,
-          mediaType,
-          mediaFiles: effectiveMediaFiles,
-          docxStructure
-        });
-        if (!validateJsonSchema(data)) {
-          throw new Error('Claude response failed JSON schema shape validation');
-        }
-        if (Array.isArray(data.questions)) {
-          try {
-            // Stage 3: Spatial & Semantic Diagram Matcher
-            data.questions = await matchDiagramsToQuestions(data.questions, candidateFigures, effectiveMediaFiles);
-          } catch (diagErr) {
-            console.warn('[Diagram matcher skipped]:', diagErr.message);
-          }
-        }
-        return res.json({ success: true, data, mode: 'live_anthropic' });
+      // Re-index all aggregated questions cleanly: q1, q2, ... qN
+      aggregatedQuestions = aggregatedQuestions.map((q, idx) => ({
+        ...q,
+        id: `q${idx + 1}`
+      }));
+
+      const combinedData = {
+        testTitle: masterTestTitle,
+        questions: aggregatedQuestions
+      };
+
+      if (!validateJsonSchema(combinedData)) {
+        throw new Error(`${provider.name} response failed JSON schema shape validation after aggregation`);
       }
+
+      if (Array.isArray(combinedData.questions)) {
+        try {
+          // Stage 3: Spatial & Semantic Diagram Matcher
+          combinedData.questions = await matchDiagramsToQuestions(combinedData.questions, candidateFigures, effectiveMediaFiles);
+        } catch (diagErr) {
+          console.warn('[Diagram matcher skipped]:', diagErr.message);
+        }
+      }
+
+      return res.json({ success: true, data: combinedData, mode: `live_${provider.name}` });
+
     } catch (err) {
       console.warn(`[Parser Warning] Provider ${provider.name} failed: ${err.message}. Trying next provider...`);
       errors.push({ provider: provider.name, error: err.message });

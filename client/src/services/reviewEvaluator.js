@@ -55,12 +55,28 @@ export function computeNeedsReview(question) {
   const mathMatches = fullTextToTest.match(/<math>(.*?)<\/math>/gi) || [];
   let katexHasError = false;
 
+  const KATEX_EVAL_OPTIONS = {
+    throwOnError: true,
+    displayMode: false,
+    trust: true,
+    macros: {
+      "\\pu": "\\mathrm{#1}",
+      "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
+      "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
+      "\\vhat": "\\hat{\\mathbf{#1}}"
+    }
+  };
+
   for (const match of mathMatches) {
-    const rawFormula = match.replace(/<\/?math>/gi, '').trim();
+    let rawFormula = match.replace(/<\/?math>/gi, '').trim();
     if (!rawFormula) continue;
 
+    // Apply auto-repair before syntax check
+    const cleanFormula = repairMissingMathBackslashes(rawFormula)
+      .replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
+
     try {
-      katex.renderToString(rawFormula, { throwOnError: true, displayMode: false });
+      katex.renderToString(cleanFormula, KATEX_EVAL_OPTIONS);
     } catch (err) {
       katexHasError = true;
       break;

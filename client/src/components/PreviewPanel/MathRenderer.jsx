@@ -46,6 +46,9 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         // Fix unescaped physical unit tags e.g. pu{10cm} -> \mathrm{10cm}
         cleanMathContent = cleanMathContent.replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
 
+        // Auto-escape unescaped percent signs inside math tags so KaTeX does not treat them as comments
+        cleanMathContent = cleanMathContent.replace(/(?<!\\)%/g, '\\%');
+
         // Fix fill-in-the-blank underscores inside \text{} or standalone consecutive underscores
         cleanMathContent = cleanMathContent
           .replace(/\\text\{([^{}]*)\}/g, (_, inner) => `\\text{${inner.replace(/(?<!\\)_/g, '\\_')}}`)
