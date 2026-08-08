@@ -159,12 +159,30 @@ function repairJsonUnescapedBackslashes(str) {
   if (typeof str !== 'string') return str;
   let clean = str.trim();
 
-  // 1. Escape unescaped single backslashes in JSON strings (LaTeX backslashes)
-  // Valid JSON escape sequences are: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-  // Replace any single backslash that is not a valid JSON escape sequence with \\
-  clean = clean.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+  // Strip markdown code fences if present
+  if (clean.startsWith('```')) {
+    clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
 
-  // 2. Sanitize unescaped control characters (newlines, tabs) inside strings
+  // Find first '{'
+  const startIdx = clean.indexOf('{');
+  if (startIdx !== -1) {
+    clean = clean.substring(startIdx);
+  }
+
+  // 1. Repair control character escapes where HTTP/JS parser converted \f, \n, \r, \b, \t + LaTeX letters
+  // e.g. \frac -> \x0Crac, \nCr -> \x0ACr, \rho -> \x0Dho, \beta -> \x08eta, \times -> \x09imes
+  clean = clean
+    .replace(/\x0Crac/g, '\\\\frac')
+    .replace(/\x0ACr/g, '\\\\nCr')
+    .replace(/\x0Dho/g, '\\\\rho')
+    .replace(/\x08eta/g, '\\\\beta')
+    .replace(/\x09imes/g, '\\\\times');
+
+  // 2. Escape any single backslash that is not a valid JSON quote/backslash escape (e.g. \frac, \sqrt, \pu, \ce, \pi)
+  clean = clean.replace(/\\(?!["\\])/g, '\\\\');
+
+  // 3. Sanitize remaining unescaped control characters (newlines, tabs) inside string values
   clean = clean.replace(/[\u0000-\u001F]/g, (c) => {
     if (c === '\n') return '\\n';
     if (c === '\r') return '\\r';
@@ -263,35 +281,31 @@ function extractAndParseJson(text) {
     clean = clean.substring(startIdx);
   }
 
+  // Pre-sanitize LaTeX backslashes & unescaped control sequences before JSON.parse
+  clean = repairJsonUnescapedBackslashes(clean);
+
   let parsed;
   try {
     // Attempt 1: Direct JSON parse
     parsed = JSON.parse(clean);
   } catch (err1) {
-    console.warn('[Parser Repair 1/4] Direct JSON.parse failed:', err1.message, '- Attempting LaTeX backslash repair...');
+    console.warn('[Parser Repair 1/3] Direct JSON.parse failed:', err1.message, '- Attempting aggressive string escape repair...');
     try {
-      // Attempt 2: LaTeX backslash & control char repair
-      const repaired = repairJsonUnescapedBackslashes(clean);
-      parsed = JSON.parse(repaired);
+      // Attempt 2: Aggressive JSON string content escape
+      const aggressive = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+        return match.replace(/\\/g, '\\\\');
+      });
+      parsed = JSON.parse(aggressive);
     } catch (err2) {
-      console.warn('[Parser Repair 2/4] Sanitized parse failed:', err2.message, '- Attempting aggressive string escape repair...');
+      console.warn('[Parser Repair 2/3] Aggressive parse failed:', err2.message, '- Attempting truncated JSON repair...');
       try {
-        // Attempt 3: Aggressive JSON string content escape
-        const aggressive = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-          return match.replace(/\\/g, '\\\\');
-        });
-        parsed = JSON.parse(aggressive);
+        // Attempt 3: Truncated JSON auto-repair (closes unclosed quotes, brackets, and braces)
+        const fixedTruncated = repairTruncatedJson(clean);
+        parsed = JSON.parse(fixedTruncated);
+        console.log('[Parser Repair 3/3 Success] Truncated JSON successfully repaired!');
       } catch (err3) {
-        console.warn('[Parser Repair 3/4] Aggressive parse failed:', err3.message, '- Attempting truncated JSON repair...');
-        try {
-          // Attempt 4: Truncated JSON auto-repair (closes unclosed quotes, brackets, and braces)
-          const fixedTruncated = repairTruncatedJson(clean);
-          parsed = JSON.parse(fixedTruncated);
-          console.log('[Parser Repair 4/4 Success] Truncated JSON successfully repaired!');
-        } catch (err4) {
-          console.error('[Parser Repair 4/4 Failed]: All JSON parse attempts failed:', err4.message);
-          throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
-        }
+        console.error('[Parser Repair 3/3 Failed]: All JSON parse attempts failed:', err3.message);
+        throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
       }
     }
   }
