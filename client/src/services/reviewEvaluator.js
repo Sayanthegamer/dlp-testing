@@ -1,5 +1,5 @@
 import katex from 'katex';
-import { hasBareCommandRun } from './mathSanitizerService';
+import { hasBareCommandRun, repairMissingMathBackslashes } from './mathSanitizerService';
 
 
 /**
