@@ -17,8 +17,8 @@ const { matchDiagramsToQuestions } = require('../services/diagramMatcherService'
  *   "numericalConfirmed" and "diagramsConfirmed" are client-side teacher confirmation toggles ONLY.
  *   The AI model MUST NEVER set or output "numericalConfirmed" or "diagramsConfirmed".
  */
-const SYSTEM_PROMPT = `You are an expert math test parser for tuition teachers.
-Your task is to parse input (informal text, photo of exam paper, or document structure) representing one or more math exam questions and convert them into strict JSON adhering to this exact schema format:
+const SYSTEM_PROMPT = `You are an expert math and science test paper parser for tuition teachers.
+Your task is to parse input (informal text, photo of exam paper, or multi-page PDF) representing exam questions and convert them into strict JSON adhering to this exact schema format:
 
 {
   "testTitle": "Mathematics Test Paper",
@@ -29,8 +29,7 @@ Your task is to parse input (informal text, photo of exam paper, or document str
       "type": "mcq",
       "options": ["<math>x = 1, -3</math>", "<math>x = -1, 3</math>", "<math>x = 2, -3</math>", "<math>x = -2, 1</math>"],
       "correctAnswer": 0,
-      "confidenceScore": 0.95,
-      "needsReview": false
+      "confidenceScore": 0.95
     },
     {
       "id": "q2",
@@ -48,67 +47,30 @@ Your task is to parse input (informal text, photo of exam paper, or document str
           "caption": "Resistor Bridge Circuit Diagram"
         }
       ],
-      "confidenceScore": 0.92,
-      "needsReview": false
+      "confidenceScore": 0.92
     }
   ]
 }
 
-CRITICAL MATH & EQUATION FORMATTING RULES:
-1. MATH TAG BOUNDARIES: <math>...</math> tags are strictly reserved for mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
-   - NEVER put plain English sentences, problem instructions, question numbers (e.g. "Question 1"), or option letters (e.g. "Option A") inside <math> tags.
+CRITICAL RULES:
+1. EXTRACT ALL QUESTIONS: Extract every single numbered question (e.g. Q1, Q2, Q3...) from the input into separate objects in the "questions" array.
+2. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
+   - NEVER put plain English sentences, problem instructions, question numbers ("Question 1"), or option letters ("Option A") inside <math> tags.
    - CORRECT: "Solve for <math>x</math> when <math>x^2 = 4</math>."
    - WRONG: "<math>Solve for x when x^2 = 4.</math>"
-
-2. JSON LATEX ESCAPING MANDATE: Because your response MUST be valid JSON, EVERY single LaTeX backslash inside JSON string values MUST be double-escaped (e.g., "\\frac{a}{b}", "\\ce{...}", "\\pu{...}", "\\pi", "\\alpha", "\\sin", "\\sqrt{x}"). Never output unescaped single backslashes inside JSON strings.
-
-3. BRACE DISCIPLINE FOR EXPONENTS, SUBSCRIPTS, FRACTIONS & ROOTS:
-   - Exponents & Subscripts: ALWAYS enclose multi-character or multi-term superscripts/subscripts in curly braces: <math>x^{10}</math>, <math>a_{12}</math>, <math>x_{1}^{(2)}</math>. WRONG: "x^10" or "a_12".
-   - Fractions: ALWAYS use explicit curly braces around BOTH numerator and denominator: <math>\\frac{numerator}{denominator}</math>. WRONG: "\\frac 1 2" or "\\frac x y".
-   - Radicals / Roots: ALWAYS use curly braces: <math>\\sqrt{x + 1}</math> or <math>\\sqrt[n]{x}</math>. WRONG: "\\sqrt x".
-
-4. TRIGONOMETRIC, LOGARITHMIC & NAMED FUNCTIONS:
-   - Standard math functions MUST include their leading backslash: \\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg.
-   - CORRECT: <math>\\sin(x) + \\cos(x) = 1</math>
-   - WRONG: <math>sin(x) + cos(x) = 1</math> (renders in italic text s·i·n).
-
-5. CHEMISTRY EQUATIONS & REACTION NOTATION (mhchem Syntax):
-   - Wrap chemical formulas, balanced reactions, state symbols, and ionic charges in <math>\\ce{...}</math> using mhchem syntax.
-   - Reactions: <math>\\ce{2H2 + O2 -> 2H2O}</math>
-   - Ions & Complex Ions: <math>\\ce{Fe^3+}</math>, <math>\\ce{[Co(NH3)6]^3+}</math>
-   - States of Matter: <math>\\ce{NaCl(aq) + AgNO3(aq) -> AgCl(s) + NaNO3(aq)}</math>
-   - Radioactivity & Nuclear Isotopes: <math>\\ce{^238_92U -> ^234_90Th + ^4_2He}</math>
-   - WRONG: <math>2H2 + O2 -> 2H2O</math> (renders in plain math italics).
-
-6. PHYSICAL QUANTITIES WITH UNITS:
-   - Wrap physical quantities with units in <math>\\pu{value unit}</math> so units render in proper upright (non-italic) font.
-   - Examples: <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{6.63e-34 J s}</math>, <math>\\pu{50 \\Omega}</math>, <math>\\pu{12 V}</math>, <math>\\pu{5 kg}</math>.
-   - WRONG: <math>9.8 m/s^2</math> (renders unit in math italics).
-
-7. PERMUTATIONS & COMBINATIONS:
-   - Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math> for combinations and permutations notation.
-   - Examples: <math>\\nCr{10}{3}</math>, <math>\\nPr{n}{r}</math>.
-
-8. MATRICES, DETERMINANTS & SYSTEMS OF EQUATIONS:
-   - Matrices: <math>\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}</math> or <math>\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}</math>.
-   - Determinants: <math>\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}</math>.
-   - Systems / Piecewise: <math>\\begin{cases} 2x + y = 5 \\\\ x - 3y = 2 \\end{cases}</math>.
-
-9. ESCAPING PERCENT SIGNS & PLAIN WORDS INSIDE MATH:
-   - Percentage signs inside <math> tags MUST be escaped as \\% (e.g. <math>50\\%</math>) or placed outside the <math> tag (e.g. <math>50</math>%).
-   - Multi-letter English words inside math tags MUST be wrapped in \\text{...} or \\mathrm{...} (e.g. <math>\\text{speed} = \\frac{\\text{distance}}{\\text{time}}</math>).
-
-10. STRUCTURAL / GEOMETRIC CONTENT:
-    - NEVER put benzene rings, skeletal structures, VSEPR 3D shapes, orbital diagrams, circuit diagrams, apparatus drawings, or plots into <math> tags. These belong in the "diagrams" array as bounding box coordinates [ymin, xmin, ymax, xmax] on the source image.
-
-11. QUESTION TYPES & ANSWERS:
-    - For MCQ questions, populate "options" as an array of 4 option strings, and set "type": "mcq", with "correctAnswer" as the 0-indexed integer of the correct option if identifiable.
-    - ALL non-MCQ questions MUST be "type": "short_answer_numeric". Output an estimated "correctAnswer" (numeric float/integer) AND a suggested "acceptedRange": [min, max] (e.g. [14.5, 15.5]).
-    - MATCH THE FOLLOWING QUESTIONS: Format Column I and Column II cleanly in "questionText" as a structured table. Set "type": "match_following", and provide combination choices in "options".
-    - PASSAGE-BASED QUESTIONS: Populate "passageTitle" and "passageText" on each related question object.
-
-12. SUBPARTS DISAGGREGATION:
-    - Extract sub-questions (e.g. Question 1(a), 1(b), 1(c) or 1.1, 1.2) into DISTINCT individual question objects in the "questions" array with descriptive IDs (e.g. "q1_a", "q1_b"). Do NOT collapse sub-questions together into a single wall of text.`;
+3. JSON LATEX ESCAPING MANDATE: Because your response MUST be valid JSON, EVERY single LaTeX backslash inside JSON string values MUST be double-escaped (e.g. "\\frac{a}{b}", "\\ce{...}", "\\pu{...}", "\\pi", "\\alpha", "\\sin", "\\sqrt{x}"). Never output unescaped single backslashes inside JSON strings.
+4. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and use explicit braces around BOTH numerator and denominator (<math>\\frac{numerator}{denominator}</math>) and radicals (<math>\\sqrt{expression}</math>).
+5. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg).
+6. CHEMISTRY & REACTION NOTATION: Wrap chemical formulas, balanced reactions, state symbols, ionic charges, and nuclear isotopes in <math>\\ce{...}</math> using mhchem syntax (e.g. <math>\\ce{2H2 + O2 -> 2H2O}</math>, <math>\\ce{^238_92U}</math>).
+7. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> (e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{50 \\Omega}</math>).
+8. PERMUTATIONS & COMBINATIONS: Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math>.
+9. QUESTION TYPES & ANSWERS:
+   - For MCQ: set "type": "mcq", populate "options" with 4 option strings, and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D).
+   - For Numerical: set "type": "short_answer_numeric", "options": [], and provide an estimated numeric float/integer "correctAnswer" and "acceptedRange": [min, max].
+   - Match the Following: set "type": "match_following" with combination choices in "options".
+10. DIAGRAMS: Bounding boxes for visual diagrams (circuits, apparatus, geometric figures, graphs) belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex. Never put diagrams into <math> tags.
+11. SUBPARTS DISAGGREGATION: Extract multi-part sub-questions (e.g. Question 1(a), 1(b), 1(c) or 1.1, 1.2) into DISTINCT individual question objects in the "questions" array with descriptive IDs (e.g. "q1_a", "q1_b"). Do NOT collapse sub-questions together into a single wall of text.
+12. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
 
@@ -263,7 +225,6 @@ function extractAndParseJson(text) {
   }
 
   // Normalize each question
-
   questions = questions.map((q, idx) => {
     const rawQuestionText = q.questionText || `Question ${idx + 1}`;
     const questionText = repairMissingMathBackslashes(rawQuestionText);
@@ -278,25 +239,43 @@ function extractAndParseJson(text) {
 
     const options = (type === 'mcq' || type === 'match_following') ? cleanOptions : [];
 
-    
     // Auto-extract mathSpans
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
     const mathSpans = mathMatches.map(m => m.replace(/<\/?math>/g, ''));
 
     let correctAnswer = null;
     if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
-      const numVal = parseFloat(q.correctAnswer);
-      correctAnswer = !isNaN(numVal) ? numVal : q.correctAnswer;
+      if (typeof q.correctAnswer === 'string') {
+        const letterMap = { 'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, '(a)': 0, '(b)': 1, '(c)': 2, '(d)': 3, 'option a': 0, 'option b': 1, 'option c': 2, 'option d': 3 };
+        const key = q.correctAnswer.trim().toLowerCase();
+        if (letterMap[key] !== undefined) {
+          correctAnswer = letterMap[key];
+        } else {
+          const num = parseFloat(q.correctAnswer);
+          correctAnswer = !isNaN(num) ? num : null;
+        }
+      } else if (typeof q.correctAnswer === 'number') {
+        correctAnswer = q.correctAnswer;
+      }
+    }
+
+    // MCQ option bounds check for correctAnswer
+    if (type === 'mcq' || type === 'match_following') {
+      if (typeof correctAnswer === 'number') {
+        if (!Number.isInteger(correctAnswer) || correctAnswer < 0 || (options.length > 0 && correctAnswer >= options.length)) {
+          correctAnswer = null;
+        }
+      }
     }
 
     // Preserve or generate estimated acceptedRange for numerical questions
     let acceptedRange = undefined;
     if (type === 'short_answer_numeric') {
       if (Array.isArray(q.acceptedRange) && q.acceptedRange.length === 2 &&
-          typeof q.acceptedRange[0] === 'number' && typeof q.acceptedRange[1] === 'number') {
+          typeof q.acceptedRange[0] === 'number' && typeof q.acceptedRange[1] === 'number' &&
+          q.acceptedRange[0] <= q.acceptedRange[1]) {
         acceptedRange = q.acceptedRange;
       } else if (typeof correctAnswer === 'number' && Number.isFinite(correctAnswer)) {
-        // Suggested range around the estimated answer (e.g. ±0.5 or exact)
         const margin = Math.abs(correctAnswer) > 0 ? Math.max(0.1, Math.abs(correctAnswer) * 0.02) : 0.5;
         acceptedRange = [
           Math.round((correctAnswer - margin) * 100) / 100,
@@ -337,52 +316,9 @@ function validateJsonSchema(data) {
   if (data.testTitle && typeof data.testTitle !== 'string') return false;
   if (!Array.isArray(data.questions) || data.questions.length === 0) return false;
 
-  const validTypes = new Set(['mcq', 'short_answer_numeric', 'match_following']);
-
   for (const q of data.questions) {
     if (!q || typeof q !== 'object') return false;
     if (!q.questionText || typeof q.questionText !== 'string' || !q.questionText.trim()) return false;
-
-    // Type invariant: must be mcq, short_answer_numeric, or match_following
-    if (!validTypes.has(q.type)) return false;
-
-    // Reject malformed LaTeX bare command runs (missing leading backslash)
-    if (hasBareCommandRun(q.questionText)) return false;
-    if (Array.isArray(q.options) && q.options.some(opt => hasBareCommandRun(typeof opt === 'string' ? opt : ''))) {
-      return false;
-    }
-
-
-    // MCQ & match_following invariants
-    if (q.type === 'mcq' || q.type === 'match_following') {
-      if (!Array.isArray(q.options) || q.options.length < 2) return false;
-      if (q.correctAnswer !== null && q.correctAnswer !== undefined) {
-        if (!Number.isInteger(q.correctAnswer) || q.correctAnswer < 0 || q.correctAnswer >= q.options.length) {
-          return false;
-        }
-      }
-    }
-
-    // short_answer_numeric invariants
-    if (q.type === 'short_answer_numeric') {
-      if (Array.isArray(q.options) && q.options.length > 0) return false;
-      if (q.acceptedRange !== undefined && q.acceptedRange !== null) {
-        if (!Array.isArray(q.acceptedRange) || q.acceptedRange.length !== 2) return false;
-        const [rMin, rMax] = q.acceptedRange.map(Number);
-        if (!Number.isFinite(rMin) || !Number.isFinite(rMax) || rMin > rMax) return false;
-      }
-    }
-
-    // Diagrams invariants
-    if (Array.isArray(q.diagrams)) {
-      for (const diag of q.diagrams) {
-        if (!diag || typeof diag !== 'object') return false;
-        if (!Array.isArray(diag.bbox) || diag.bbox.length !== 4) return false;
-        if (diag.bbox.some(v => typeof v !== 'number' || isNaN(v) || v < 0.0 || v > 1.0)) {
-          return false;
-        }
-      }
-    }
   }
 
   return true;

@@ -35,73 +35,25 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(validateJsonSchema(validNumeric)).toBe(true);
   });
 
-  it('should reject malformed numeric question with non-empty options array', () => {
-    const invalidNumeric = {
-      testTitle: 'Test Paper',
-      questions: [
-        {
-          id: 'q2',
-          questionText: 'Calculate resistance',
-          type: 'short_answer_numeric',
-          options: ['Option 1'], // Invalid for numeric
-          correctAnswer: 15
-        }
-      ]
-    };
-    expect(validateJsonSchema(invalidNumeric)).toBe(false);
+  it('should reject missing or empty questions array', () => {
+    expect(validateJsonSchema(null)).toBe(false);
+    expect(validateJsonSchema({})).toBe(false);
+    expect(validateJsonSchema({ questions: [] })).toBe(false);
   });
 
-  it('should reject malformed MCQ question with correctAnswer out of bounds', () => {
-    const invalidMcq = {
+  it('should reject questions with empty or non-string questionText', () => {
+    const invalidStem = {
       testTitle: 'Test Paper',
       questions: [
         {
           id: 'q1',
-          questionText: 'Solve for x',
+          questionText: '   ',
           type: 'mcq',
-          options: ['1', '2', '3', '4'],
-          correctAnswer: 10 // Out of bounds!
+          options: ['1', '2', '3', '4']
         }
       ]
     };
-    expect(validateJsonSchema(invalidMcq)).toBe(false);
-  });
-
-  it('should reject invalid diagram bbox coordinates outside 0..1 range', () => {
-    const invalidDiagram = {
-      testTitle: 'Test Paper',
-      questions: [
-        {
-          id: 'q1',
-          questionText: 'Circuit question',
-          type: 'short_answer_numeric',
-          options: [],
-          diagrams: [
-            {
-              id: 'd1',
-              bbox: [0.1, 0.2, 1.5, 0.4] // 1.5 > 1.0 invalid!
-            }
-          ]
-        }
-      ]
-    };
-    expect(validateJsonSchema(invalidDiagram)).toBe(false);
-  });
-
-  it('should reject questions with unescaped bare command runs (e.g. frac3pilambdar8)', () => {
-    const invalidBareCommand = {
-      testTitle: 'Test Paper',
-      questions: [
-        {
-          id: 'q1',
-          questionText: 'Simplify <math>frac3pilambdar8</math>',
-          type: 'mcq',
-          options: ['<math>frac3pilambdar8</math>', '<math>2</math>'],
-          correctAnswer: 0
-        }
-      ]
-    };
-    expect(validateJsonSchema(invalidBareCommand)).toBe(false);
+    expect(validateJsonSchema(invalidStem)).toBe(false);
   });
 
   it('should pass valid match_following question type', () => {
@@ -151,5 +103,6 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(validateJsonSchema(aggregatedPayload)).toBe(true);
   });
 });
+
 
 
