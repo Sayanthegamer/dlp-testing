@@ -271,18 +271,18 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1c1b18]/85 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-[#FAF7F0] border border-[#DCD5C4] rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-[#1c1b18]/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-[#FAF7F0] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#E2DACD] pb-4">
+        <div className="flex items-center justify-between border-b border-[#E2DACD] p-4 sm:p-6 shrink-0 bg-[#FAF7F0] z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center shadow-md shrink-0">
               <Crop className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-xl text-[#232323]">Interactive Visual Diagram Cropper</h3>
-              <p className="text-xs text-[#736c62] font-sans">
+              <h3 className="font-serif font-bold text-lg sm:text-xl text-[#232323]">Interactive Visual Diagram Cropper</h3>
+              <p className="text-xs text-[#736c62] font-sans hidden sm:block">
                 Drag the selection box or corner handles directly on the image to fine-adjust crop borders
               </p>
             </div>
@@ -290,14 +290,14 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-[#736c62] hover:bg-[#EDE5D8] transition-colors"
+            className="p-2 rounded-xl text-[#736c62] hover:bg-[#EDE5D8] transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Cropper Container */}
-        <div className="space-y-4">
+        {/* Cropper Container - Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 font-sans">
           {sourceImageSrc ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
@@ -325,7 +325,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                 </div>
 
                 {/* Relative Image Canvas Container */}
-                <div className="relative border-2 border-[#DCD5C4] rounded-2xl bg-[#1c1b18] p-2 flex items-center justify-center overflow-hidden min-h-[300px] max-h-[380px] shadow-inner select-none">
+                <div className="relative border-2 border-[#DCD5C4] rounded-2xl bg-[#1c1b18] p-2 flex items-center justify-center overflow-hidden min-h-[260px] max-h-[360px] shadow-inner select-none">
                   
                   {/* Rendered Image Wrapper */}
                   <div
@@ -337,7 +337,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                       ref={imgRef}
                       src={sourceImageSrc}
                       alt="Source for crop"
-                      className="max-h-[360px] max-w-full w-auto object-contain block mx-auto pointer-events-none rounded-lg"
+                      className="max-h-[340px] max-w-full w-auto object-contain block mx-auto pointer-events-none rounded-lg"
                     />
 
                     {/* Selection Overlay Box & Handles (Mapped 100% to Image Pixel Bounds) */}
@@ -353,7 +353,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                       }}
                     >
                       {/* Label Badge */}
-                      <div className="absolute -top-6 left-0 bg-[#8c4a17] text-white text-[10px] font-mono px-2 py-0.5 rounded-md shadow-md pointer-events-none whitespace-nowrap">
+                      <div className="absolute -top-6 left-0 bg-[#8c4a17] text-white text-[10px] font-mono px-2 py-0.5 rounded-md shadow-md pointer-events-none whitespace-nowrap z-10">
                         Diagram Selection ({Math.round(cropRect.w * 100)}% × {Math.round(cropRect.h * 100)}%)
                       </div>
 
@@ -402,26 +402,25 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                       />
                     </div>
 
-
                   </div>
                 </div>
               </div>
 
-              {/* Right Col: Accurate Live Result Preview & Caption */}
+              {/* Right Col: Fixed-Height Live Result Preview & Caption (No layout shifts) */}
               <div className="space-y-4 flex flex-col justify-between">
                 <div>
                   <label className="block text-xs font-semibold text-[#5c5346] uppercase tracking-wider mb-2">
                     Live Extracted Crop Preview
                   </label>
-                  <div className="p-3 bg-white rounded-2xl border border-[#DCD5C4] text-center shadow-xs">
+                  <div className="h-44 w-full bg-[#1c1b18] rounded-2xl border border-[#DCD5C4] flex items-center justify-center overflow-hidden p-2 shadow-inner">
                     {croppedDataUrl ? (
                       <img
                         src={croppedDataUrl}
                         alt="Cropped Live Preview"
-                        className="max-h-48 max-w-full mx-auto rounded-xl object-contain border border-[#e2dacd] shadow-2xs"
+                        className="max-h-full max-w-full rounded-lg object-contain block mx-auto shadow-sm"
                       />
                     ) : (
-                      <p className="text-xs text-[#736c62] py-8">Select area to generate preview</p>
+                      <p className="text-xs text-[#736c62]">Select area to generate preview</p>
                     )}
                   </div>
                 </div>
@@ -442,7 +441,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
 
             </div>
           ) : (
-            <label className="border-2 border-dashed border-[#DCD5C4] hover:border-[#8c4a17] rounded-2xl p-12 bg-white text-center cursor-pointer transition-all block group">
+            <label className="border-2 border-dashed border-[#DCD5C4] hover:border-[#8c4a17] rounded-2xl p-8 sm:p-12 bg-white text-center cursor-pointer transition-all block group">
               <div className="w-14 h-14 rounded-2xl bg-[#FAF7F0] text-[#8c4a17] flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform shadow-xs">
                 <Image className="w-7 h-7" />
               </div>
@@ -462,9 +461,9 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
           )}
         </div>
 
-        {/* Modal Action Buttons */}
-        <div className="flex items-center justify-between border-t border-[#E2DACD] pt-4">
-          {diagrams.length > 0 && (
+        {/* Modal Action Buttons (Fixed Footer - Always accessible on mobile) */}
+        <div className="flex items-center justify-between border-t border-[#E2DACD] p-4 sm:p-6 shrink-0 bg-[#FAF7F0] z-10">
+          {diagrams.length > 0 ? (
             <button
               type="button"
               onClick={handleRemoveDiagram}
@@ -473,9 +472,9 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
               <Trash2 className="w-4 h-4" />
               <span>Clear Diagram</span>
             </button>
-          )}
+          ) : <div />}
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2.5 ml-auto">
             <button
               type="button"
               onClick={onClose}
@@ -487,7 +486,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
               type="button"
               onClick={handleSave}
               disabled={!croppedDataUrl}
-              className="px-6 py-2.5 rounded-xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 sm:px-6 py-2.5 rounded-xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>Apply Crop & Save</span>
