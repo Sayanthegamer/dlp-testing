@@ -130,13 +130,12 @@ describe('Strict JSON Schema Invariant Validation', () => {
 
   it('should double-escape LaTeX backslashes starting with f, n, r, b, t (\\frac, \\nCr, \\rho, \\beta, \\times) without throwing Bad escaped character', () => {
     const { extractAndParseJson } = require('../routes/parse.js');
-    // Raw JSON input with single backslashes in front of f, n, r, b, t
     const rawJsonWithSingleBackslashes = String.raw`{"testTitle": "LaTeX Exam", "questions": [{"id": "q1", "questionText": "Solve <math>\frac{a}{b} + \nCr{10}{3} + \rho + \beta + \times</math>", "type": "mcq", "options": ["1", "2"]}]}`;
     const parsed = extractAndParseJson(rawJsonWithSingleBackslashes);
     expect(parsed).toBeDefined();
-    expect(parsed.questions[0].questionText).toContain('\\frac{a}{b}');
-    expect(parsed.questions[0].questionText).toContain('\\nCr{10}{3}');
-    expect(parsed.questions[0].questionText).toContain('\\rho');
+    expect(parsed.questions[0].questionText).toContain(String.raw`\frac{a}{b}`);
+    expect(parsed.questions[0].questionText).toContain(String.raw`\nCr{10}{3}`);
+    expect(parsed.questions[0].questionText).toContain(String.raw`\rho`);
   });
 });
 

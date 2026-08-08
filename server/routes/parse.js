@@ -165,12 +165,12 @@ function repairJsonUnescapedBackslashes(str) {
   }
 
   // Find first '{'
-  const startIdx = clean.indexOf('{');
-  if (startIdx !== -1) {
-    clean = clean.substring(startIdx);
+  const firstBrace = clean.indexOf('{');
+  if (firstBrace !== -1) {
+    clean = clean.substring(firstBrace);
   }
 
-  // 1. Repair control character escapes where HTTP/JS parser converted \f, \n, \r, \b, \t + LaTeX letters
+  // 1. Repair control character escapes where HTTP parser converted \f, \n, \r, \b, \t + LaTeX letters
   // e.g. \frac -> \x0Crac, \nCr -> \x0ACr, \rho -> \x0Dho, \beta -> \x08eta, \times -> \x09imes
   clean = clean
     .replace(/\x0Crac/g, '\\\\frac')
@@ -179,15 +179,23 @@ function repairJsonUnescapedBackslashes(str) {
     .replace(/\x08eta/g, '\\\\beta')
     .replace(/\x09imes/g, '\\\\times');
 
-  // 2. Escape any single backslash that is not a valid JSON quote/backslash escape (e.g. \frac, \sqrt, \pu, \ce, \pi)
-  clean = clean.replace(/\\(?!["\\])/g, '\\\\');
+  // 2. Escape backslashes & unescaped control characters ONLY INSIDE JSON string tokens ("...")
+  // Leaves structural JSON formatting (newlines, tabs outside strings) intact as valid JSON whitespace
+  clean = clean.replace(/("(?:[^"\\]|\\.)*")/g, (token) => {
+    let inner = token;
 
-  // 3. Sanitize remaining unescaped control characters (newlines, tabs) inside string values
-  clean = clean.replace(/[\u0000-\u001F]/g, (c) => {
-    if (c === '\n') return '\\n';
-    if (c === '\r') return '\\r';
-    if (c === '\t') return '\\t';
-    return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
+    // Double-escape single backslashes followed by letters or math symbols (e.g. \frac, \nCr, \rho, \beta, \times, \sqrt, \pi)
+    inner = inner.replace(/\\(?=[a-zA-Z\{\}\_\^\%\#\$\&])/g, '\\\\');
+
+    // Escape unescaped literal raw newlines, carriage returns, or tabs INSIDE the string literal
+    inner = inner.replace(/[\u0000-\u001F]/g, (c) => {
+      if (c === '\n') return '\\n';
+      if (c === '\r') return '\\r';
+      if (c === '\t') return '\\t';
+      return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
+    });
+
+    return inner;
   });
 
   return clean;

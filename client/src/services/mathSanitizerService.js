@@ -135,6 +135,12 @@ export function repairMissingMathBackslashes(text) {
 
   const replaceInSpan = (inner) => {
     return inner
+      // Repair mangled control char escapes created by JSON.parse (\f -> \x0C, \n -> \x0A, \r -> \x0D, \b -> \x08, \t -> \x09)
+      .replace(/\x0Crac/g, '\\frac')
+      .replace(/\x0ACr/g, '\\nCr')
+      .replace(/\x0Dho/g, '\\rho')
+      .replace(/\x08eta/g, '\\beta')
+      .replace(/\x09imes/g, '\\times')
       // Collapse duplicate backslashes before command letters (e.g. \\frac -> \frac, \\pi -> \pi)
       .replace(/\\\\(?=[a-zA-Z])/g, '\\')
       // Repair square roots: sqrt(3), sqrt3, \sqrt(3) -> \sqrt{3}
