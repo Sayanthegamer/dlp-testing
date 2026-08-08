@@ -118,6 +118,15 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(converted).toContain('<math>a</math>');
     expect(converted).toContain('<math>b</math>');
   });
+
+  it('should auto-repair truncated JSON response from LLMs without throwing Unexpected end of JSON', () => {
+    const { extractAndParseJson } = require('../routes/parse.js');
+    const truncatedInput = `{"testTitle": "Truncated Exam", "questions": [{"id": "q1", "questionText": "Solve <math>x^2</math>", "type": "mcq", "options": ["1", "2"]`;
+    const parsed = extractAndParseJson(truncatedInput);
+    expect(parsed).toBeDefined();
+    expect(parsed.questions.length).toBe(1);
+    expect(parsed.questions[0].questionText).toBe('Solve <math>x^2</math>');
+  });
 });
 
 

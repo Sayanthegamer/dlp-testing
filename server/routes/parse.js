@@ -92,7 +92,7 @@ function isKeyValid(key) {
  * For multi-page PDFs, rasterizes pages into image chunks so each AI invocation processes
  * at most ~15 questions, eliminating schema validation errors and response truncations.
  */
-async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 3) {
+async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 2) {
   if (!Array.isArray(mediaFiles) || mediaFiles.length === 0) {
     return [[]];
   }
@@ -175,6 +175,76 @@ function repairJsonUnescapedBackslashes(str) {
   return clean;
 }
 
+function repairTruncatedJson(jsonStr) {
+  if (typeof jsonStr !== 'string' || !jsonStr.trim()) return jsonStr;
+
+  let str = jsonStr.trim();
+
+  // Strip markdown code fences if present
+  if (str.startsWith('```')) {
+    str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+
+  // Find first '{'
+  const firstBrace = str.indexOf('{');
+  if (firstBrace !== -1) {
+    str = str.substring(firstBrace);
+  }
+
+  // Step 1: If string cut off inside a quoted string value, close the quote
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '\\' && !escaped) {
+      escaped = true;
+    } else {
+      if (char === '"' && !escaped) {
+        inString = !inString;
+      }
+      escaped = false;
+    }
+  }
+  if (inString) {
+    str += '"';
+  }
+
+  // Step 2: Remove trailing partial keys, values, or trailing commas
+  str = str.replace(/,\s*"[^"]*"?\s*:?\s*[^,}\]]*$/, '');
+  str = str.replace(/,\s*$/, '');
+
+  // Step 3: Count and balance unclosed braces '{' and brackets '['
+  const stack = [];
+  inString = false;
+  escaped = false;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '\\' && !escaped) {
+      escaped = true;
+    } else {
+      if (char === '"' && !escaped) {
+        inString = !inString;
+      } else if (!inString) {
+        if (char === '{') stack.push('}');
+        else if (char === '[') stack.push(']');
+        else if (char === '}' || char === ']') {
+          if (stack.length > 0 && stack[stack.length - 1] === char) {
+            stack.pop();
+          }
+        }
+      }
+      escaped = false;
+    }
+  }
+
+  // Append closing brackets in reverse order
+  while (stack.length > 0) {
+    str += stack.pop();
+  }
+
+  return str;
+}
+
 function extractAndParseJson(text) {
   if (!text || typeof text !== 'string') {
     throw new Error('Received empty or invalid model response text');
@@ -187,11 +257,10 @@ function extractAndParseJson(text) {
     clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   }
 
-  // Find first '{' and last '}'
+  // Find first '{'
   const startIdx = clean.indexOf('{');
-  const endIdx = clean.lastIndexOf('}');
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    clean = clean.substring(startIdx, endIdx + 1);
+  if (startIdx !== -1) {
+    clean = clean.substring(startIdx);
   }
 
   let parsed;
@@ -199,13 +268,13 @@ function extractAndParseJson(text) {
     // Attempt 1: Direct JSON parse
     parsed = JSON.parse(clean);
   } catch (err1) {
-    console.warn('[Parser Repair 1/3] Direct JSON.parse failed:', err1.message, '- Attempting LaTeX backslash repair...');
+    console.warn('[Parser Repair 1/4] Direct JSON.parse failed:', err1.message, '- Attempting LaTeX backslash repair...');
     try {
       // Attempt 2: LaTeX backslash & control char repair
       const repaired = repairJsonUnescapedBackslashes(clean);
       parsed = JSON.parse(repaired);
     } catch (err2) {
-      console.warn('[Parser Repair 2/3] Sanitized parse failed:', err2.message, '- Attempting aggressive string escape repair...');
+      console.warn('[Parser Repair 2/4] Sanitized parse failed:', err2.message, '- Attempting aggressive string escape repair...');
       try {
         // Attempt 3: Aggressive JSON string content escape
         const aggressive = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
@@ -213,8 +282,16 @@ function extractAndParseJson(text) {
         });
         parsed = JSON.parse(aggressive);
       } catch (err3) {
-        console.error('[Parser Repair 3/3 Failed]: All JSON parse attempts failed:', err3.message);
-        throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
+        console.warn('[Parser Repair 3/4] Aggressive parse failed:', err3.message, '- Attempting truncated JSON repair...');
+        try {
+          // Attempt 4: Truncated JSON auto-repair (closes unclosed quotes, brackets, and braces)
+          const fixedTruncated = repairTruncatedJson(clean);
+          parsed = JSON.parse(fixedTruncated);
+          console.log('[Parser Repair 4/4 Success] Truncated JSON successfully repaired!');
+        } catch (err4) {
+          console.error('[Parser Repair 4/4 Failed]: All JSON parse attempts failed:', err4.message);
+          throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
+        }
       }
     }
   }
@@ -591,3 +668,5 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
 
 module.exports = router;
 module.exports.validateJsonSchema = validateJsonSchema;
+module.exports.extractAndParseJson = extractAndParseJson;
+module.exports.repairTruncatedJson = repairTruncatedJson;
