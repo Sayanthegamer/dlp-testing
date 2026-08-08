@@ -70,7 +70,10 @@ CRITICAL RULES:
    - Match the Following: set "type": "match_following" with combination choices in "options".
 10. DIAGRAMS: Bounding boxes for visual diagrams (circuits, apparatus, geometric figures, graphs) belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex. Never put diagrams into <math> tags.
 11. SUBPARTS DISAGGREGATION: Extract multi-part sub-questions (e.g. Question 1(a), 1(b), 1(c) or 1.1, 1.2) into DISTINCT individual question objects in the "questions" array with descriptive IDs (e.g. "q1_a", "q1_b"). Do NOT collapse sub-questions together into a single wall of text.
-12. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+12. ABSOLUTELY NO FAKE XML TAGS: <math>...</math> is the ONLY allowed XML tag format. NEVER output fake XML tags like <\pu>, <pu>, </pu>, <\ce>, <ce>, </ce>, <frac>, or <\pu>50 V<\pu>. Physical quantities and units MUST be written inside <math> tags using LaTeX macros: <math>\\pu{50 V}</math> or <math>\\ce{2H2 + O2 -> 2H2O}</math>.
+    - WRONG: "<\pu>50 V<\pu>" or "<pu>50 V</pu>" or "<\pu>50 V</\pu>"
+    - CORRECT: "<math>\\pu{50 V}</math>"
+13. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
 

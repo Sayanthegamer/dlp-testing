@@ -31,12 +31,31 @@ function hasBareCommandRun(text) {
 }
 
 /**
- * Auto-repairs missing LaTeX backslashes & brackets in math expressions.
+ * Auto-repairs missing LaTeX backslashes, fake XML tags, & brackets in math expressions.
  * @param {string} text 
  * @returns {string} Repaired LaTeX text
  */
 function repairMissingMathBackslashes(text) {
   if (typeof text !== 'string' || !text.trim()) return text;
+
+  let cleaned = text;
+
+  // 1. Repair fake AI XML tags like <\pu>50 V<\pu>, <pu>50 V</pu>, <\pu>50 V</\pu> -> <math>\pu{50 V}</math>
+  cleaned = cleaned.replace(/<\\?\/?pu\s*>([\s\S]*?)<\\?\/?pu\s*>/gi, (match, inner) => {
+    const trimmed = inner.replace(/^\\?\/?pu\s*/i, '').trim();
+    return `<math>\\pu{${trimmed}}</math>`;
+  });
+
+  // 2. Repair fake AI XML tags like <\ce>2H2 + O2 -> 2H2O<\ce>, <ce>...</ce> -> <math>\ce{...}</math>
+  cleaned = cleaned.replace(/<\\?\/?ce\s*>([\s\S]*?)<\\?\/?ce\s*>/gi, (match, inner) => {
+    const trimmed = inner.replace(/^\\?\/?ce\s*/i, '').trim();
+    return `<math>\\ce{${trimmed}}</math>`;
+  });
+
+  // 3. Repair unclosed stray <\pu>50 V
+  cleaned = cleaned.replace(/<\\?pu\s*>\s*([^<]+)/gi, (match, inner) => {
+    return `<math>\\pu{${inner.trim()}}</math>`;
+  });
 
   const replaceInSpan = (inner) => {
     return inner
@@ -56,11 +75,11 @@ function repairMissingMathBackslashes(text) {
       .replace(new RegExp(`(?<!\\\\)\\b(${OP_NAMES})\\b`, 'g'), '\\$1');
   };
 
-  if (text.includes('<math>')) {
-    return text.replace(/<math>(.*?)<\/math>/gi, (m, inner) => `<math>${replaceInSpan(inner)}</math>`);
+  if (cleaned.includes('<math>')) {
+    return cleaned.replace(/<math>(.*?)<\/math>/gi, (m, inner) => `<math>${replaceInSpan(inner)}</math>`);
   }
 
-  return replaceInSpan(text);
+  return replaceInSpan(cleaned);
 }
 
 module.exports = {

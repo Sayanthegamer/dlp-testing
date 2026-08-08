@@ -102,6 +102,13 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(aggregatedPayload.questions.length).toBe(30);
     expect(validateJsonSchema(aggregatedPayload)).toBe(true);
   });
+
+  it('should repair fake AI XML tags like <\\pu>50 V<\\pu> into <math>\\pu{50 V}</math>', () => {
+    const { repairMissingMathBackslashes } = require('../services/mathSanitizerService');
+    const input = 'Calculate voltage <\\pu>50 V<\\pu> across resistor';
+    const output = repairMissingMathBackslashes(input);
+    expect(output).toBe('Calculate voltage <math>\\pu{50 V}</math> across resistor');
+  });
 });
 
 
