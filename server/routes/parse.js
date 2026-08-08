@@ -73,7 +73,10 @@ CRITICAL RULES:
 12. ABSOLUTELY NO FAKE XML TAGS: <math>...</math> is the ONLY allowed XML tag format. NEVER output fake XML tags like <\pu>, <pu>, </pu>, <\ce>, <ce>, </ce>, <frac>, or <\pu>50 V<\pu>. Physical quantities and units MUST be written inside <math> tags using LaTeX macros: <math>\\pu{50 V}</math> or <math>\\ce{2H2 + O2 -> 2H2O}</math>.
     - WRONG: "<\pu>50 V<\pu>" or "<pu>50 V</pu>" or "<\pu>50 V</\pu>"
     - CORRECT: "<math>\\pu{50 V}</math>"
-13. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+13. ABSOLUTELY NO RAW MATHML TAGS: Never output raw MathML elements like <mn>, <mi>, <mo>, <mfrac>, <msup>, <msub>, <mrow>, or <annotation>. Always output standard KaTeX LaTeX inside <math>...</math> tags.
+    - WRONG: "<mn>50</mn><mo></mo><mi mathvariant=\"normal\">V</mi>"
+    - CORRECT: "<math>\\pu{50 V}</math>"
+14. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
 

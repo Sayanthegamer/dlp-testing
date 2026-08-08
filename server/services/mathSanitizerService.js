@@ -31,6 +31,83 @@ function hasBareCommandRun(text) {
 }
 
 /**
+ * Converts raw MathML tags (<mn>, <mi>, <mo>, <mfrac>, <msup>, <msub>, <annotation>, etc.) into clean KaTeX/LaTeX strings wrapped in <math>...</math>.
+ * @param {string} text 
+ * @returns {string} Repaired text with MathML tags converted to KaTeX
+ */
+function convertMathMLToKaTeX(text) {
+  if (typeof text !== 'string' || !text.trim()) return text;
+  if (!/<(?:mn|mi|mo|mfrac|msup|msub|msqrt|mrow|math|annotation)/i.test(text)) return text;
+
+  let cleaned = text;
+
+  // 1. If an explicit LaTeX annotation tag exists (<annotation encoding="application/x-tex">LATEX</annotation>), extract it
+  cleaned = cleaned.replace(/<annotation\s+encoding=["']application\/x-tex["']\s*>([\s\S]*?)<\/annotation>/gi, (match, latex) => {
+    return `<math>${latex.trim()}</math>`;
+  });
+
+  // 2. Convert MathML Value + Unit combinations:
+  // e.g. <mn>50</mn><mo></mo><mi mathvariant="normal">V</mi> -> <math>\pu{50 V}</math>
+  // e.g. <mn>2</mn><mo></mo><mi mathvariant="normal">A</r> -> <math>\pu{2 A}</math>
+  cleaned = cleaned.replace(/<mn>([\d\.]+)\s*<\/mn>\s*(?:<mo>.*?<\/mo>\s*)?<mi\s+mathvariant=["']normal["']\s*>([a-zA-Z\Omega]+)<\/mi>/gi, (match, val, unit) => {
+    return `<math>\\pu{${val} ${unit}}</math>`;
+  });
+
+  // 3. Convert fractions: <mfrac>(.*?)</mfrac> or <mfrac><mrow>(.*?)</mrow><mrow>(.*?)</mrow></mfrac>
+  cleaned = cleaned.replace(/<mfrac>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/mfrac>/gi, (match, num, den) => {
+    const cleanNum = num.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    const cleanDen = den.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    return `<math>\\frac{${cleanNum}}{${cleanDen}}</math>`;
+  });
+
+  // 4. Convert superscripts: <msup>(.*?)(.*?)</msup>
+  cleaned = cleaned.replace(/<msup>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/msup>/gi, (match, base, exp) => {
+    const cleanBase = base.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    const cleanExp = exp.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    return `<math>{${cleanBase}}^{${cleanExp}}</math>`;
+  });
+
+  // 5. Convert subscripts: <msub>(.*?)(.*?)</msub>
+  cleaned = cleaned.replace(/<msub>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/msub>/gi, (match, base, sub) => {
+    const cleanBase = base.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    const cleanSub = sub.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    return `<math>{${cleanBase}}_{${cleanSub}}</math>`;
+  });
+
+  // 6. Convert square roots: <msqrt>(.*?)</msqrt>
+  cleaned = cleaned.replace(/<msqrt>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/msqrt>/gi, (match, inner) => {
+    const cleanInner = inner.replace(/<\/?(?:mn|mi|mo|mrow)\b[^>]*>/gi, '').trim();
+    return `<math>\\sqrt{${cleanInner}}</math>`;
+  });
+
+  // 7. Convert upright text/unit identifiers: <mi mathvariant="normal">TEXT</mi> -> \mathrm{TEXT}
+  cleaned = cleaned.replace(/<mi\s+mathvariant=["']normal["']\s*>([\s\S]*?)<\/mi>/gi, (match, inner) => {
+    return `<math>\\mathrm{${inner.trim()}}</math>`;
+  });
+
+  // 8. Convert simple numbers: <mn>NUM</mn> -> NUM
+  cleaned = cleaned.replace(/<mn>([\s\S]*?)<\/mn>/gi, '$1');
+
+  // 9. Convert simple variables/identifiers: <mi>VAR</mi> -> <math>VAR</math>
+  cleaned = cleaned.replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, varName) => {
+    const trimmed = varName.trim();
+    return trimmed ? `<math>${trimmed}</math>` : '';
+  });
+
+  // 10. Convert operators: <mo>OP</mo> -> OP
+  cleaned = cleaned.replace(/<mo>([\s\S]*?)<\/mo>/gi, '$1');
+
+  // 11. Clean up structural containers: <mrow>, </mrow>, <math...>, </math>, <semantics>, <annotation...>, etc.
+  cleaned = cleaned.replace(/<\/?(?:mrow|semantics|annotation|style)\b[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<math\b[^>]*>/gi, '<math>').replace(/<\/math>/gi, '</math>');
+
+  // 12. Collapse duplicate consecutive math tags e.g. <math>a</math><math>b</math> -> <math>a b</math>
+  cleaned = cleaned.replace(/<\/math>\s*<math>/gi, ' ');
+
+  return cleaned;
+}
+
+/**
  * Auto-repairs missing LaTeX backslashes, fake XML tags, & brackets in math expressions.
  * @param {string} text 
  * @returns {string} Repaired LaTeX text
@@ -38,7 +115,8 @@ function hasBareCommandRun(text) {
 function repairMissingMathBackslashes(text) {
   if (typeof text !== 'string' || !text.trim()) return text;
 
-  let cleaned = text;
+  // Pre-pass 0: Convert raw MathML tags (<mn>, <mi>, <mo>, <mfrac>, etc.) to KaTeX
+  let cleaned = convertMathMLToKaTeX(text);
 
   // 1. Repair fake AI XML tags like <\pu>50 V<\pu>, <pu>50 V</pu>, <\pu>50 V</\pu> -> <math>\pu{50 V}</math>
   cleaned = cleaned.replace(/<\\?\/?pu\s*>([\s\S]*?)<\\?\/?pu\s*>/gi, (match, inner) => {
@@ -85,5 +163,6 @@ function repairMissingMathBackslashes(text) {
 module.exports = {
   hasBareCommandRun,
   repairMissingMathBackslashes,
+  convertMathMLToKaTeX,
   BARE_COMMAND_RUN_REGEX
 };

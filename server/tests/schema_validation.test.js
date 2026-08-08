@@ -109,6 +109,15 @@ describe('Strict JSON Schema Invariant Validation', () => {
     const output = repairMissingMathBackslashes(input);
     expect(output).toBe('Calculate voltage <math>\\pu{50 V}</math> across resistor');
   });
+
+  it('should convert raw MathML tags (<mn>50</mn><mo></mo><mi mathvariant="normal">V</mi>) into clean KaTeX \\pu{50 V}', () => {
+    const { convertMathMLToKaTeX } = require('../services/mathSanitizerService');
+    const rawMathML = 'A constant voltage of <mn>50</mn><mo></mo><mi mathvariant="normal">V</mi> is maintained between points <mi>a</mi> and <mi>b</mi>';
+    const converted = convertMathMLToKaTeX(rawMathML);
+    expect(converted).toContain('<math>\\pu{50 V}</math>');
+    expect(converted).toContain('<math>a</math>');
+    expect(converted).toContain('<math>b</math>');
+  });
 });
 
 

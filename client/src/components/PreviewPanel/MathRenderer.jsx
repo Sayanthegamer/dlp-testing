@@ -8,16 +8,19 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
     return <span className="italic text-[#8c8275]">No text transcribed yet.</span>;
   }
 
+  // Pre-sanitize incoming text to convert raw MathML tags (<mn>, <mi>, <mo>) & repair missing LaTeX backslashes
+  const sanitizedText = repairMissingMathBackslashes(text);
+
   // Split text by <math>...</math> tags
   const parts = [];
   const mathRegex = /<math>(.*?)<\/math>/gs;
   let lastIndex = 0;
   let match;
 
-  while ((match = mathRegex.exec(text)) !== null) {
+  while ((match = mathRegex.exec(sanitizedText)) !== null) {
     // Plain text before math
     if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
+      parts.push({ type: 'text', content: sanitizedText.substring(lastIndex, match.index) });
     }
     // Math content
     parts.push({ type: 'math', content: match[1] });
@@ -25,8 +28,8 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
   }
 
   // Remaining text
-  if (lastIndex < text.length) {
-    parts.push({ type: 'text', content: text.substring(lastIndex) });
+  if (lastIndex < sanitizedText.length) {
+    parts.push({ type: 'text', content: sanitizedText.substring(lastIndex) });
   }
 
   return (
