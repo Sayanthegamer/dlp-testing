@@ -351,9 +351,20 @@ function extractAndParseJson(text) {
   // Normalize each question
   questions = questions.map((q, idx) => {
     let rawQuestionText = (q.questionText || `Question ${idx + 1}`).replace(/\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi, ' ');
+    const originalRaw = rawQuestionText;
+    
     // Clean raw question number / exam metadata prefixes (e.g. "Q1. JEE Main 2026 (21 January Shift 2)\n")
-    rawQuestionText = rawQuestionText.replace(/^(?:Q\d+|Question\s*\d+)[\.\:]\s*(?:JEE\s*Main[^\n\r]*[\n\r]*)?/i, '');
-    const questionText = repairMissingMathBackslashes(rawQuestionText);
+    const cleanedText = rawQuestionText.replace(/^(?:Q\d+|Question\s*\d+)[\.\:]\s*(?:JEE\s*Main[^\n\r]*[\n\r]*)?/i, '').trim();
+    if (cleanedText.length > 0) {
+      rawQuestionText = cleanedText;
+    } else if (originalRaw.trim().length > 0) {
+      rawQuestionText = originalRaw.trim();
+    }
+    
+    let questionText = repairMissingMathBackslashes(rawQuestionText).trim();
+    if (!questionText) {
+      questionText = `Question ${idx + 1}`;
+    }
 
     // Force non-MCQ questions to short_answer_numeric unless match_following
     let type = q.type;
@@ -442,9 +453,12 @@ function validateJsonSchema(data) {
   if (data.testTitle && typeof data.testTitle !== 'string') return false;
   if (!Array.isArray(data.questions) || data.questions.length === 0) return false;
 
-  for (const q of data.questions) {
+  for (let i = 0; i < data.questions.length; i++) {
+    const q = data.questions[i];
     if (!q || typeof q !== 'object') return false;
-    if (!q.questionText || typeof q.questionText !== 'string' || !q.questionText.trim()) return false;
+    if (!q.questionText || typeof q.questionText !== 'string' || !q.questionText.trim()) {
+      q.questionText = `Question ${i + 1}`;
+    }
   }
 
   return true;
