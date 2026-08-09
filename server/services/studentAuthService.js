@@ -3,7 +3,13 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const { supabase, isConfigured } = require('./supabaseClient');
 
-const LOCAL_STUDENTS_FILE = path.join(__dirname, '../data/students.json');
+function getStudentsFilePath() {
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
+  if (isVercel) {
+    return path.join('/tmp', 'students.json');
+  }
+  return path.join(__dirname, '../data/students.json');
+}
 
 function getJwtSecret() {
   return process.env.JWT_SECRET || 'antigravity_dlp_secret_key_2026';
@@ -15,32 +21,54 @@ function getSupabaseClient() {
 
 // Ensure local JSON storage directory & file exist for fallback
 function ensureLocalStore() {
-  const dir = path.dirname(LOCAL_STUDENTS_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(LOCAL_STUDENTS_FILE)) {
-    fs.writeFileSync(LOCAL_STUDENTS_FILE, JSON.stringify([], null, 2), 'utf-8');
+  const filePath = getStudentsFilePath();
+  const dir = path.dirname(filePath);
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify([], null, 2), 'utf-8');
+    }
+    return filePath;
+  } catch (err) {
+    const tmpPath = path.join('/tmp', 'students.json');
+    try {
+      if (!fs.existsSync(tmpPath)) {
+        fs.writeFileSync(tmpPath, JSON.stringify([], null, 2), 'utf-8');
+      }
+    } catch (e) {}
+    return tmpPath;
   }
 }
 
 function readLocalStudents() {
+  const filePath = ensureLocalStore();
   try {
-    ensureLocalStore();
-    const data = fs.readFileSync(LOCAL_STUDENTS_FILE, 'utf-8');
-    return JSON.parse(data);
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(data) || [];
   } catch (err) {
-    console.warn('[Local Student Store Warning]:', err.message);
-    return [];
+    try {
+      const dataTmp = fs.readFileSync('/tmp/students.json', 'utf-8');
+      return JSON.parse(dataTmp) || [];
+    } catch (e) {
+      return [];
+    }
   }
 }
 
 function writeLocalStudents(students) {
+  const filePath = ensureLocalStore();
   try {
-    ensureLocalStore();
-    fs.writeFileSync(LOCAL_STUDENTS_FILE, JSON.stringify(students, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(students, null, 2), 'utf-8');
+    return true;
   } catch (err) {
-    console.error('[Local Student Store Error]:', err.message);
+    try {
+      fs.writeFileSync('/tmp/students.json', JSON.stringify(students, null, 2), 'utf-8');
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }
 
@@ -275,8 +303,9 @@ async function getTeacherRoster(teacherId) {
   if (supabase) {
     try {
       let query = supabase.from('students').select('*').order('created_at', { ascending: false });
-      if (teacherId && teacherId !== 'null' && teacherId !== 'undefined' && teacherId !== 'local-dev-user') {
-        query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null,teacher_id.eq.teacher_general,teacher_id.eq.00000000-0000-0000-0000-000000000001`);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(teacherId));
+      if (isUuid) {
+        query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null`);
       }
       const { data, error } = await query;
 
@@ -287,21 +316,10 @@ async function getTeacherRoster(teacherId) {
   }
 
   const localList = readLocalStudents();
-  const filteredLocal = localList.filter(s =>
-    !teacherId ||
-    teacherId === 'null' ||
-    teacherId === 'undefined' ||
-    teacherId === 'local-dev-user' ||
-    !s.teacher_id ||
-    s.teacher_id === 'null' ||
-    s.teacher_id === 'teacher_general' ||
-    s.teacher_id === teacherId ||
-    s.teacher_id === '00000000-0000-0000-0000-000000000001'
-  );
 
   // Merge Supabase & Local rosters seamlessly
   const map = new Map();
-  for (const s of [...supabaseStudents, ...filteredLocal]) {
+  for (const s of [...supabaseStudents, ...localList]) {
     const key = (s.admission_number || s.id).toUpperCase();
     if (!map.has(key)) {
       map.set(key, s);
