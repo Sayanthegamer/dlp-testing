@@ -154,12 +154,23 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
       .select()
       .single();
 
-    if (!error && data) {
-      const token = generateStudentToken(data);
-      return { student: data, token };
-    }
     if (error && error.code === '23505') {
       throw new Error(`Admission Number "${cleanAdm}" is already registered. Please log in.`);
+    }
+
+    if (!error && data) {
+      // Sync to local JSON cache as well
+      const localList = readLocalStudents();
+      const existingIdx = localList.findIndex(s => s.admission_number.toUpperCase() === cleanAdm);
+      if (existingIdx >= 0) {
+        localList[existingIdx] = data;
+      } else {
+        localList.unshift(data);
+      }
+      writeLocalStudents(localList);
+
+      const token = generateStudentToken(data);
+      return { student: data, token };
     }
   }
 
@@ -170,7 +181,7 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     throw new Error(`Admission Number "${cleanAdm}" is already registered. Please log in.`);
   }
 
-  localList.push(newStudent);
+  localList.unshift(newStudent);
   writeLocalStudents(localList);
 
   const token = generateStudentToken(newStudent);
@@ -185,23 +196,19 @@ async function getStudentSubmissions(studentId) {
 
   const supabase = getSupabaseClient();
   if (supabase) {
-    const { data, error } = await supabase
-      .from('submissions')
-      .select('*, exams(title, subject, grade)')
-      .eq('student_id', studentId)
-      .order('submitted_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('submissions')
+        .select('*, exams(title, subject, grade)')
+        .eq('student_id', studentId)
+        .order('submitted_at', { ascending: false });
 
-    if (!error && Array.isArray(data)) {
-      return data.map(sub => ({
-        ...sub,
-        examTitle: sub.exams ? sub.exams.title : 'Exam',
-        examSubject: sub.exams ? sub.exams.subject : 'General',
-        examGrade: sub.exams ? sub.exams.grade : 'JEE'
-      }));
-    }
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch (e) {}
   }
 
-  // Local JSON fallback
   try {
     const subsPath = path.join(__dirname, '../data/submissions.json');
     if (fs.existsSync(subsPath)) {
@@ -227,23 +234,35 @@ async function teacherCreateStudent({ teacherId, admissionNumber, fullName, dob 
  * Get all students enrolled under a teacher profile
  */
 async function getTeacherRoster(teacherId) {
+  let supabaseStudents = [];
   const supabase = getSupabaseClient();
-  if (supabase && teacherId) {
+  if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .eq('teacher_id', teacherId)
-        .order('created_at', { ascending: false });
+      let query = supabase.from('students').select('*').order('created_at', { ascending: false });
+      if (teacherId && teacherId !== 'null' && teacherId !== 'undefined') {
+        query = query.eq('teacher_id', teacherId);
+      }
+      const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
-        return data;
+      if (!error && Array.isArray(data)) {
+        supabaseStudents = data;
       }
     } catch (err) {}
   }
 
   const localList = readLocalStudents();
-  return localList.filter(s => !teacherId || s.teacher_id === teacherId);
+  const filteredLocal = localList.filter(s => !teacherId || teacherId === 'null' || teacherId === 'undefined' || s.teacher_id === teacherId);
+
+  // Merge Supabase & Local rosters seamlessly
+  const map = new Map();
+  for (const s of [...supabaseStudents, ...filteredLocal]) {
+    const key = (s.admission_number || s.id).toUpperCase();
+    if (!map.has(key)) {
+      map.set(key, s);
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 module.exports = {
