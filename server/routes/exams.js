@@ -129,7 +129,7 @@ router.get('/exams', async (req, res) => {
 
       if (error) {
         console.error('[Supabase Exams Fetch Error]:', error.message);
-        return res.status(500).json({ error: `Database error fetching exams: ${error.message}` });
+        return res.status(500).json({ error: 'Database error fetching exams.' });
       }
 
       const examList = Array.isArray(examsData) ? examsData : [];
@@ -164,7 +164,7 @@ router.get('/exams', async (req, res) => {
       return res.json({ success: true, exams: formatted });
     } catch (dbErr) {
       console.error('[Supabase DB Read Exception]:', dbErr.message);
-      return res.status(500).json({ error: `Database error fetching exams: ${dbErr.message}` });
+      return res.status(500).json({ error: 'Database error fetching exams.' });
     }
   } else {
     // Unconfigured local dev mode fallback

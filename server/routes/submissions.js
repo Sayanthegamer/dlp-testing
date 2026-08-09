@@ -156,7 +156,7 @@ router.post('/submissions', async (req, res) => {
 
       if (insertError) {
         console.error('[Supabase Submission Insert Error]:', insertError.message);
-        return res.status(500).json({ error: `Failed to save submission in database: ${insertError.message}` });
+        return res.status(500).json({ error: 'Failed to save submission. Please try submitting again.' });
       }
 
       console.log(`[Supabase Submissions] Successfully saved submission ${serverGeneratedId} for exam ${targetExamId}`);
@@ -167,7 +167,7 @@ router.post('/submissions', async (req, res) => {
       });
     } catch (dbErr) {
       console.error('[Supabase Submission Insert Exception]:', dbErr.message);
-      return res.status(500).json({ error: `Database error saving submission: ${dbErr.message}` });
+      return res.status(500).json({ error: 'Database error saving submission. Please try again.' });
     }
   } else {
     // Unconfigured local dev mode fallback
@@ -224,7 +224,7 @@ router.get('/submissions', async (req, res) => {
 
       if (error) {
         console.error('[Supabase Submissions Read Error]:', error.message);
-        return res.status(500).json({ success: false, error: `Database error fetching submissions: ${error.message}` });
+        return res.status(500).json({ success: false, error: 'Database error fetching submissions.' });
       }
 
       const formatted = Array.isArray(data) ? data.map(item => {
@@ -244,7 +244,7 @@ router.get('/submissions', async (req, res) => {
       return res.json({ success: true, submissions: formatted });
     } catch (e) {
       console.error('[Supabase Submissions Read Exception]:', e.message);
-      return res.status(500).json({ success: false, error: `Database connection error fetching submissions: ${e.message}` });
+      return res.status(500).json({ success: false, error: 'Database connection error fetching submissions.' });
     }
   } else {
     // Unconfigured local dev mode fallback
@@ -320,7 +320,7 @@ router.post('/submissions/:id/grade', async (req, res) => {
 
       if (updateErr) {
         console.error('[Supabase Grade Update Error]:', updateErr.message);
-        return res.status(500).json({ error: `Failed to update grade in database: ${updateErr.message}` });
+        return res.status(500).json({ error: 'Failed to update grade in database.' });
       }
 
       return res.json({
@@ -329,7 +329,7 @@ router.post('/submissions/:id/grade', async (req, res) => {
       });
     } catch (e) {
       console.error('[Supabase Grade Update Exception]:', e.message);
-      return res.status(500).json({ error: `Database error updating grade: ${e.message}` });
+      return res.status(500).json({ error: 'Database error updating grade.' });
     }
   } else {
     // Unconfigured local dev mode fallback

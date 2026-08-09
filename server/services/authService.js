@@ -14,8 +14,8 @@ async function verifyTeacherAuth(req) {
   const cleanHeader = headerPass.replace(/^Bearer\s+/i, '').trim();
   if (!cleanHeader) return false;
 
-  // 1. Placeholder dev tokens are ONLY permitted when Supabase is UNCONFIGURED (local dev mode)
-  if (!isConfigured()) {
+  // 1. Placeholder dev tokens are ONLY permitted when Supabase is UNCONFIGURED and NOT in production mode
+  if (!isConfigured() && process.env.NODE_ENV !== 'production') {
     if (cleanHeader === 'legacy-app-password-token' || cleanHeader === 'dev-fallback-token') {
       req.user = { id: 'local-dev-user' };
       req.accessToken = cleanHeader;
