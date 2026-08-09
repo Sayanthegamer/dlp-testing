@@ -19,7 +19,8 @@ describe('Student Authentication & Roster Service Integration', () => {
     const result = await studentSignup({
       admissionNumber: testAdm,
       fullName: 'Rahul Sharma',
-      dob: '2008-04-10'
+      dob: '2008-04-10',
+      teacherId: 'dlp_teacher_secret_passcode_2026'
     });
 
     expect(result).toBeDefined();
@@ -34,7 +35,8 @@ describe('Student Authentication & Roster Service Integration', () => {
     await studentSignup({
       admissionNumber: testAdm,
       fullName: 'Priya Verma',
-      dob: '2007-09-20'
+      dob: '2007-09-20',
+      teacherId: 'dlp_teacher_secret_passcode_2026'
     });
 
     const loginRes = await studentLogin({

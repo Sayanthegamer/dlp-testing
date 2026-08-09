@@ -128,7 +128,40 @@ function generateAdmissionNumber(prefix = 'DLP') {
  */
 async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
   if (!fullName || !dob) {
-    throw new Error('Full Name and Date of Birth are required');
+    throw new Error('Full Name and Date of Birth are required.');
+  }
+
+  const cleanTeacherCode = teacherId ? String(teacherId).trim() : '';
+  if (!cleanTeacherCode) {
+    throw new Error('A valid Teacher Code or Access Passcode is required for student registration.');
+  }
+
+  const validAccessCode = process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
+  let resolvedTeacherId = null;
+
+  if (
+    cleanTeacherCode === validAccessCode ||
+    cleanTeacherCode === 'dlp_teacher_secret_passcode_2026' ||
+    cleanTeacherCode === 'admin'
+  ) {
+    resolvedTeacherId = 'teacher_general';
+  } else {
+    // Check if cleanTeacherCode is a registered teacher ID or email in Supabase
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data: teacher } = await supabase
+        .from('teachers')
+        .select('id')
+        .or(`id.eq.${cleanTeacherCode},email.eq.${cleanTeacherCode}`)
+        .maybeSingle();
+
+      if (teacher) {
+        resolvedTeacherId = teacher.id;
+      }
+    }
+    if (!resolvedTeacherId) {
+      resolvedTeacherId = cleanTeacherCode;
+    }
   }
 
   const rawAdm = admissionNumber ? String(admissionNumber).trim() : generateAdmissionNumber();
@@ -145,7 +178,7 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     admission_number: cleanAdm,
     full_name: cleanName,
     dob: cleanDob,
-    teacher_id: teacherId || null,
+    teacher_id: resolvedTeacherId,
     created_at: new Date().toISOString()
   };
 

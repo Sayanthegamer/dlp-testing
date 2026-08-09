@@ -51,8 +51,8 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    if (!admissionNumber.trim() || !fullName.trim() || !dob) {
-      setError('Please fill in all required fields.');
+    if (!admissionNumber.trim() || !fullName.trim() || !dob || !teacherCode.trim()) {
+      setError('Please fill in all required fields including Teacher Code / Access Passcode.');
       return;
     }
     setError('');
@@ -64,7 +64,7 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
         onStudentAuthenticated(res.student);
       }
     } catch (err) {
-      setError(err.message || 'Registration failed. Admission number may already exist.');
+      setError(err.message || 'Registration failed. Please verify your Teacher Code & details.');
     } finally {
       setLoading(false);
     }
@@ -228,14 +228,15 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
 
             <div>
               <label className="block text-xs font-bold text-[#4a4237] mb-1">
-                Teacher Code / Batch ID (Optional)
+                Teacher Code / Access Passcode <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={teacherCode}
                 onChange={(e) => setTeacherCode(e.target.value)}
-                placeholder="Optional teacher code"
-                className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
+                placeholder="Enter Teacher Code or Passcode"
+                className="w-full px-3 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
+                required
               />
             </div>
 
