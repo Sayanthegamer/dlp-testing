@@ -478,12 +478,14 @@ router.post('/parse-question', async (req, res) => {
   // Stage 1: Deterministic Layout & Candidate Figure Extraction (Zero AI)
   const candidateFigures = await extractCandidateFigures(effectiveMediaFiles);
 
-  // Chunk media files into batches of max 3 pages (~15 questions per chunk call)
+  // Chunk media files into smaller batches (1 page on Vercel to prevent 504 Gateway Timeout)
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV;
+  const chunkSize = isVercel ? 1 : 2;
   const mediaChunks = (type === 'image' || type === 'media')
-    ? await chunkMediaFiles(effectiveMediaFiles, 3)
+    ? await chunkMediaFiles(effectiveMediaFiles, chunkSize)
     : [[{ type, rawText, docxStructure }]];
 
-  console.log(`[Parser] Prepared ${mediaChunks.length} chunk(s) for parsing (${effectiveMediaFiles.length} file(s) total).`);
+  console.log(`[Parser] Prepared ${mediaChunks.length} chunk(s) for parsing (${effectiveMediaFiles.length} file(s) total, chunk size ${chunkSize}).`);
 
   const errors = [];
 
@@ -610,7 +612,7 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.1,
-      maxOutputTokens: 16384
+      maxOutputTokens: 8192
     }
   });
 
