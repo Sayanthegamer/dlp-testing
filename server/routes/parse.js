@@ -79,7 +79,8 @@ CRITICAL RULES:
 14. ABSOLUTELY NO RAW MATHML TAGS: Never output raw MathML elements like <mn>, <mi>, <mo>, <mfrac>, <msup>, <msub>, <mrow>, or <annotation>. Always output standard KaTeX LaTeX inside <math>...</math> tags.
     - WRONG: "<mn>50</mn><mo></mo><mi mathvariant=\"normal\">V</mi>"
     - CORRECT: "<math>\\pu{50 V}</math>"
-15. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+15. HARD STOP ON ANSWERS AND SOLUTIONS SECTION: Stop extracting questions if you reach an "ANSWERS AND SOLUTIONS", "HINTS & SOLUTIONS", or "ANSWER KEY" section. Do NOT extract worked solutions, answer explanations, or solution booklet entries (e.g. "1. (1) The circuit has...") as questions.
+16. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
 
@@ -332,16 +333,30 @@ function extractAndParseJson(text) {
     throw new Error('AI response JSON has unrecognized structure: missing "questions" array and "questionText" field');
   }
 
+  // Truncate at "ANSWERS AND SOLUTIONS" or "ANSWER KEY" section boundary
+  const solutionHeaderIdx = questions.findIndex(q => {
+    const text = (q.questionText || '').trim();
+    return /^(?:ANSWERS?\s*(?:AND|&)?\s*SOLUTIONS?|HINTS?\s*(?:AND|&)?\s*SOLUTIONS?|ANSWER\s*KEY)\b/i.test(text);
+  });
+
+  if (solutionHeaderIdx >= 0) {
+    console.log(`[Parser Section Boundary] Truncating question list at section header #${solutionHeaderIdx + 1}`);
+    questions = questions.slice(0, solutionHeaderIdx);
+  }
+
   // Filter out solution explanation paragraphs mistakenly extracted as separate questions
   questions = questions.filter(q => {
     const text = (q.questionText || '').trim();
     if (!text) return false;
 
-    const isSolutionText = /^(?:Solution|Explanation|Answer|Reason|Hence|Therefore|In electrostatics and circuit theory|Absolute voltage is not|Correct option is)\b/i.test(text) ||
-                           /Therefore,?\s+[a-z0-9\s]+is not a/i.test(text);
-    const hasNoOptions = !Array.isArray(q.options) || q.options.length === 0;
+    const isSolutionText =
+      /^(?:Solution|Explanation|Answer|Reason|Hence|Therefore|In electrostatics and circuit theory|Absolute voltage is not|Correct option is)\b/i.test(text) ||
+      /Therefore,?\s+[a-z0-9\s]+is not a/i.test(text) ||
+      /^\d+[\.\:\)]\s*\([1-4a-dA-D]\)\s*/i.test(text) ||
+      /^\d+[\.\:\)]\s*(?:Ans|Answer|Sol|Solution)\b/i.test(text) ||
+      /^(?:ANSWERS?\s*(?:AND|&)?\s*SOLUTIONS?|HINTS?\s*(?:AND|&)?\s*SOLUTIONS?|ANSWER\s*KEY)\b/i.test(text);
 
-    if (isSolutionText && hasNoOptions) {
+    if (isSolutionText) {
       console.log('[Parser Filter] Excluded solution/explanation paragraph:', text.substring(0, 80));
       return false;
     }

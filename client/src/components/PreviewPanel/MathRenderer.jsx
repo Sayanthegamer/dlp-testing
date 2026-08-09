@@ -8,8 +8,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
     return <span className="italic text-[#8c8275]">No text transcribed yet.</span>;
   }
 
-  // Pre-sanitize incoming text to convert raw MathML tags (<mn>, <mi>, <mo>) & repair missing LaTeX backslashes
-  const sanitizedText = repairMissingMathBackslashes(text);
+  const sanitizedText = text;
 
   // Split text by <math>...</math> tags
   const parts = [];
@@ -40,8 +39,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
           return <span key={idx}>{part.content}</span>;
         }
 
-        // Clean & repair math content using shared mathSanitizerService
-        let cleanMathContent = repairMissingMathBackslashes(part.content.replace(/<\/?math>/gi, '')).trim();
+        let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
         if (!cleanMathContent) return null;
 
 
