@@ -304,6 +304,102 @@ export async function startRollingSession(examId) {
   return await response.json();
 }
 
+export async function loginStudent(admissionNumber, dob) {
+  const response = await fetch('/api/student/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ admissionNumber, dob })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Student login failed.');
+  }
+  if (data.token) {
+    localStorage.setItem('student_auth_token', data.token);
+  }
+  if (data.student) {
+    localStorage.setItem('student_profile', JSON.stringify(data.student));
+  }
+  return data;
+}
+
+export async function signupStudent(admissionNumber, fullName, dob, teacherCode) {
+  const response = await fetch('/api/student/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ admissionNumber, fullName, dob, teacherCode })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Student registration failed.');
+  }
+  if (data.token) {
+    localStorage.setItem('student_auth_token', data.token);
+  }
+  if (data.student) {
+    localStorage.setItem('student_profile', JSON.stringify(data.student));
+  }
+  return data;
+}
+
+export function logoutStudent() {
+  localStorage.removeItem('student_auth_token');
+  localStorage.removeItem('student_profile');
+}
+
+export function getStoredStudentProfile() {
+  try {
+    const raw = localStorage.getItem('student_profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function fetchStudentHistory() {
+  const token = localStorage.getItem('student_auth_token');
+  if (!token) return [];
+  const response = await fetch('/api/student/submissions', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch student test history');
+  }
+  const data = await response.json();
+  return data.data || [];
+}
+
+export async function teacherCreateStudent(teacherId, admissionNumber, fullName, dob) {
+  const response = await authenticatedFetch('/api/teacher/students', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teacherId, admissionNumber, fullName, dob })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to enroll student');
+  }
+  return await response.json();
+}
+
+export async function fetchTeacherRoster(teacherId) {
+  const response = await authenticatedFetch(`/api/teacher/students?teacherId=${encodeURIComponent(teacherId || '')}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch student roster');
+  }
+  const data = await response.json();
+  return data.data || [];
+}
+
 async function handleApiResponse(response) {
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));

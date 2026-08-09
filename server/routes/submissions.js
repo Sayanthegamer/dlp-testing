@@ -91,6 +91,10 @@ router.post('/submissions', async (req, res) => {
   const rawExamId = (body.examId || '').trim();
   const rollingCodeUsed = (body.rollingCodeUsed || '').trim();
 
+  const studentId = body.studentId || body.student_id || null;
+  const isDevDemo = Boolean(body.isDevDemo || body.is_dev_demo);
+  const attemptNumber = typeof body.attemptNumber === 'number' ? body.attemptNumber : 1;
+
   if (isConfigured()) {
     if (!rawExamId || rawExamId === 'exam_default') {
       return res.status(400).json({ error: 'Missing examId: Submissions must be linked to a valid published exam.' });
@@ -111,8 +115,11 @@ router.post('/submissions', async (req, res) => {
     const submissionObj = {
       id: serverGeneratedId,
       examId: targetExamId,
+      studentId,
+      isDevDemo,
+      attemptNumber,
       testTitle,
-      studentName,
+      studentName: isDevDemo ? `[Dev Demo] ${studentName}` : studentName,
       rollingCodeUsed,
       submittedAt,
       autoGraded,
@@ -134,12 +141,15 @@ router.post('/submissions', async (req, res) => {
       const { error: insertError } = await supabase.from('submissions').insert({
         id: serverGeneratedId,
         exam_id: targetExamId,
-        student_name: studentName,
+        student_id: studentId,
+        student_name: submissionObj.studentName,
         rolling_code_used: rollingCodeUsed,
         total_score: autoGraded.score || 0,
         max_possible: questions.length || 0,
         percentage: autoGraded.percentage || 0,
         time_taken_seconds: body.timeTakenSeconds || 0,
+        is_dev_demo: isDevDemo,
+        attempt_number: attemptNumber,
         responses: submissionObj,
         submitted_at: submittedAt
       });

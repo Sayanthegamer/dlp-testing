@@ -75,6 +75,7 @@ function safeMount(pathPrefix, loadFn, ...middleware) {
 
 // 3. Defensively Mount Application Routes with Literal Require Strings for Vercel Tracing
 safeMount('/api/auth', () => require('../server/routes/auth'));
+safeMount('/api', () => require('../server/routes/studentAuth'));
 safeMount('/api', () => require('../server/routes/submissions'));
 safeMount('/api', () => require('../server/routes/exams'));
 safeMount('/api', () => require('../server/routes/parse'), authMiddleware);

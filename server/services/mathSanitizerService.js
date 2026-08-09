@@ -118,22 +118,47 @@ function repairMissingMathBackslashes(text) {
   // Pre-pass 0: Convert raw MathML tags (<mn>, <mi>, <mo>, <mfrac>, etc.) to KaTeX
   let cleaned = convertMathMLToKaTeX(text);
 
-  // 1. Repair fake AI XML tags like <\pu>50 V<\pu>, <pu>50 V</pu>, <\pu>50 V</\pu> -> <math>\pu{50 V}</math>
-  cleaned = cleaned.replace(/<\\?\/?pu\s*>([\s\S]*?)<\\?\/?pu\s*>/gi, (match, inner) => {
-    const trimmed = inner.replace(/^\\?\/?pu\s*/i, '').trim();
+  // 1. Repair fake / mangled AI XML unit tags (e.g. <_p u >, <_p u>, <_pu>, <p u>, <\p u>, <\pu>, <pu>, </pu>, </_pu>)
+  // 1a. Explicitly paired unit tags with opening tag and closing slash tag: <_p u> ... </_p u>
+  cleaned = cleaned.replace(/<\\?_?\s*p\s*u\s*>([\s\S]*?)<[\/\\]_?\s*p\s*u\s*>/gi, (match, inner) => {
+    const trimmed = inner.replace(/^\\?\/?_?\s*p\s*u\s*/i, '').trim();
     return `<math>\\pu{${trimmed}}</math>`;
   });
 
-  // 2. Repair fake AI XML tags like <\ce>2H2 + O2 -> 2H2O<\ce>, <ce>...</ce> -> <math>\ce{...}</math>
-  cleaned = cleaned.replace(/<\\?\/?ce\s*>([\s\S]*?)<\\?\/?ce\s*>/gi, (match, inner) => {
-    const trimmed = inner.replace(/^\\?\/?ce\s*/i, '').trim();
+  // 1b. Explicitly paired chemistry tags with opening tag and closing slash tag: <_ce> ... </_ce>
+  cleaned = cleaned.replace(/<\\?_?\s*c\s*e\s*>([\s\S]*?)<[\/\\]_?\s*c\s*e\s*>/gi, (match, inner) => {
+    const trimmed = inner.replace(/^\\?\/?_?\s*c\s*e\s*/i, '').trim();
     return `<math>\\ce{${trimmed}}</math>`;
   });
 
-  // 3. Repair unclosed stray <\pu>50 V
-  cleaned = cleaned.replace(/<\\?pu\s*>\s*([^<]+)/gi, (match, inner) => {
-    return `<math>\\pu{${inner.trim()}}</math>`;
+  // 1c. Unclosed mangled unit tags followed by values / units (e.g. <_p u > 50 Ampere-hour, <_p u > 50A, <_p u > 1hour, <_p u > 100\Omega)
+  cleaned = cleaned.replace(/<\\?_?\s*p\s*u\s*>\s*([0-9\.\-]+(?:\s*\\?[a-zA-Z\Omega\%]+(?:-[a-zA-Z]+)?)?)/gi, (match, valUnit) => {
+    return `<math>\\pu{${valUnit.trim()}}</math>`;
   });
+
+  // 1d. Clean up any leftover orphaned closing or mangled tags
+  cleaned = cleaned.replace(/<\/?_?\s*p\s*u\s*>/gi, '');
+  cleaned = cleaned.replace(/<\/?_?\s*c\s*e\s*>/gi, '');
+
+  // 2. Repair orphaned or broken <math> / </math> tags
+  // 2a. Handle missing <math> when </math> exists (e.g. "8cm </math>", "2A </math>", "2.5A </math>")
+  if (cleaned.includes('</math>') && !cleaned.includes('<math>')) {
+    cleaned = cleaned.replace(/^([\s\S]+?)\s*<\/math>/gi, (match, inner) => {
+      const trimmed = inner.trim();
+      return `<math>${trimmed}</math>`;
+    });
+  }
+
+  // 2b. Handle missing </math> when <math> exists without closing tag
+  const openCount = (cleaned.match(/<math>/gi) || []).length;
+  const closeCount = (cleaned.match(/<\/math>/gi) || []).length;
+  if (openCount > closeCount) {
+    cleaned += '</math>'.repeat(openCount - closeCount);
+  }
+
+  // 2c. Clean up empty <math></math> or duplicate nested tags
+  cleaned = cleaned.replace(/<math>\s*<\/math>/gi, '');
+  cleaned = cleaned.replace(/<math>\s*<math>/gi, '<math>').replace(/<\/math>\s*<\/math>/gi, '</math>');
 
   const replaceInSpan = (inner) => {
     return inner

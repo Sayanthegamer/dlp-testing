@@ -65,16 +65,30 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 5. Student Submissions & Auto-Graded Scores Table
+-- 5. Students Table (Admission Number + DOB Authentication)
+CREATE TABLE IF NOT EXISTS students (
+    id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    admission_number TEXT UNIQUE NOT NULL,
+    full_name TEXT NOT NULL,
+    dob DATE NOT NULL,
+    teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 6. Student Submissions & Auto-Graded Scores Table
 CREATE TABLE IF NOT EXISTS submissions (
     id TEXT PRIMARY KEY,
     exam_id TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+    student_id TEXT REFERENCES students(id) ON DELETE SET NULL,
     student_name TEXT NOT NULL,
     rolling_code_used TEXT,
     total_score NUMERIC(5,2) DEFAULT 0.00,
     max_possible NUMERIC(5,2) DEFAULT 0.00,
     percentage NUMERIC(5,2) DEFAULT 0.00,
     time_taken_seconds INTEGER DEFAULT 0,
+    is_dev_demo BOOLEAN DEFAULT FALSE,
+    attempt_number INTEGER DEFAULT 1,
     responses JSONB NOT NULL, -- Detailed student answers & question-by-question marks
     submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -84,6 +98,8 @@ CREATE INDEX IF NOT EXISTS idx_exams_teacher_id ON exams(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_questions_exam_id ON questions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_exam_rolling ON exam_sessions(exam_id, rolling_code) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_submissions_exam_id ON submissions(exam_id);
+CREATE INDEX IF NOT EXISTS idx_students_admission_number ON students(admission_number);
+CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON submissions(student_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE teachers ENABLE ROW LEVEL SECURITY;
@@ -91,6 +107,7 @@ ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exam_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (Teacher Isolation & Public Student Access to Sessions)
 -- 1. Teachers Policies

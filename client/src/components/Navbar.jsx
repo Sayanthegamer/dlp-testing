@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RefreshCw, Printer, Award, Share2, UploadCloud, FileText, LogOut } from 'lucide-react';
+import { BookOpen, RefreshCw, Printer, Award, Share2, UploadCloud, FileText, LogOut, Users } from 'lucide-react';
 import { checkServerHealth } from '../services/apiService';
 
-export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, onPublishExam, onLogout, onScrollToInput }) {
+export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, onOpenRoster, onSwitchToStudentPortal, onPublishExam, onLogout, onScrollToInput }) {
   const [serverHealth, setServerHealth] = useState({ status: 'checking' });
 
   useEffect(() => {
@@ -32,24 +32,16 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, on
 
           {/* Desktop Actions Bar (Screen >= sm) */}
           <div className="hidden sm:flex items-center gap-2.5">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#f4eee4] border border-[#e0d6c7] text-xs text-[#5c5549]">
-              {serverHealth.hasApiKey ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Active API Engine: <strong>{serverHealth.providers?.gemini === 'active' ? 'Gemini Flash' : 'Claude Sonnet'}</strong></span>
-                </>
-              ) : serverHealth.status === 'ok' ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                  <span>Mode: <strong>Smart Demo Fallback</strong></span>
-                </>
-              ) : (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-                  <span>Checking Server...</span>
-                </>
-              )}
-            </div>
+            {/* Student Roster Button */}
+            <button
+              type="button"
+              onClick={onOpenRoster}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] text-xs font-semibold border border-[#dcd0be] transition-all"
+              title="Open Student Roster & Printable Admit Cards"
+            >
+              <Users className="w-4 h-4 text-[#8c4a17]" />
+              <span>Student Roster</span>
+            </button>
 
             {/* Submissions Dashboard Button */}
             <button

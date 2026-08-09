@@ -137,6 +137,22 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(parsed.questions[0].questionText).toContain(String.raw`\nCr{10}{3}`);
     expect(parsed.questions[0].questionText).toContain(String.raw`\rho`);
   });
+
+  it('should repair mangled <_p u > tags in stem and options into clean <math>\\pu{...}</math>', () => {
+    const { repairMissingMathBackslashes } = require('../services/mathSanitizerService');
+    const input = 'A <_p u > 50 Ampere-hour battery can supply a current of <_p u > 50A for <_p u > 1hour';
+    const output = repairMissingMathBackslashes(input);
+    expect(output).toContain('<math>\\pu{50 Ampere-hour}</math>');
+    expect(output).toContain('<math>\\pu{50A}</math>');
+    expect(output).toContain('<math>\\pu{1hour}</math>');
+    expect(output).not.toContain('<_p u >');
+  });
+
+  it('should repair orphaned closing </math> options like "8cm </math>" and "2.5A </math>" into clean <math> spans', () => {
+    const { repairMissingMathBackslashes } = require('../services/mathSanitizerService');
+    expect(repairMissingMathBackslashes('8cm </math>')).toBe('<math>8cm</math>');
+    expect(repairMissingMathBackslashes('2.5A </math>')).toBe('<math>2.5A</math>');
+  });
 });
 
 

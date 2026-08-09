@@ -7,6 +7,7 @@ const parseRoutes = require('./routes/parse');
 const submissionsRoutes = require('./routes/submissions');
 const examsRoutes = require('./routes/exams');
 const authRoutes = require('./routes/auth');
+const studentAuthRoutes = require('./routes/studentAuth');
 const { verifyTeacherAuth } = require('./services/authService');
 
 const authMiddleware = async (req, res, next) => {
@@ -42,9 +43,6 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-
-
-
 app.get('/api/health', (req, res) => {
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
   const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
@@ -61,8 +59,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Submissions, Exams & Auth API routes
+// Submissions, Exams, Auth & Student API routes
 app.use('/api/auth', authRoutes);
+app.use('/api', studentAuthRoutes);
 app.use('/api', submissionsRoutes);
 app.use('/api', examsRoutes);
 

@@ -6,8 +6,8 @@ import FloatingMathPopover from './components/VisualMathEditor/FloatingMathPopov
 import PrintViewModal from './components/Common/PrintViewModal';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import AccessGateModal from './components/Common/AccessGateModal';
-import StudentAccessGateModal from './components/Student/StudentAccessGateModal';
-import StudentNameCapture from './components/Student/StudentNameCapture';
+import StudentAuthModal from './components/Student/StudentAuthModal';
+import StudentPortal from './components/Student/StudentPortal';
 import TestIntroScreen from './components/Student/TestIntroScreen';
 import TestQuestionView from './components/Student/TestQuestionView';
 import TestReviewScreen from './components/Student/TestReviewScreen';
@@ -15,8 +15,19 @@ import TestResultScreen from './components/Student/TestResultScreen';
 import ProctoringSecurityGuard from './components/Student/ProctoringSecurityGuard';
 import SubmissionsDashboardModal from './components/TeacherDashboard/SubmissionsDashboardModal';
 import PublishExamModal from './components/TeacherDashboard/PublishExamModal';
-import { parseQuestionText, parseQuestionImage, parseDocxStructure, publishExam, fetchExamSnapshot, logoutTeacher } from './services/apiService';
+import StudentRosterTab from './components/TeacherDashboard/StudentRosterTab';
+import {
+  parseQuestionText,
+  parseQuestionImage,
+  parseDocxStructure,
+  publishExam,
+  fetchExamSnapshot,
+  logoutTeacher,
+  getStoredStudentProfile,
+  logoutStudent
+} from './services/apiService';
 import { computeNeedsReview } from './services/reviewEvaluator';
+import { GraduationCap, ArrowLeft, Terminal } from 'lucide-react';
 
 const INITIAL_CATALOGUE = {
   testTitle: "Mathematics Practice Test",
@@ -62,20 +73,23 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState('Processing...');
   const [isJustParsed, setIsJustParsed] = useState(false);
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('catalogue'); // 'catalogue' | 'roster'
 
-  // Mode Switch Detection: ?mode=student & ?testId=exam_... or ?examId=exam_...
+  // URL parameters check
   const searchParams = new URLSearchParams(window.location.search);
-  const isStudentMode = searchParams.get('mode') === 'student';
+  const isStudentUrl = searchParams.get('mode') === 'student';
   const targetTestId = searchParams.get('testId') || searchParams.get('examId');
+
+  // Application View Mode
+  const [viewMode, setViewMode] = useState(() => isStudentUrl ? 'student_portal' : 'teacher');
+  const [studentUser, setStudentUser] = useState(() => getStoredStudentProfile());
+  const [isDevDemo, setIsDevDemo] = useState(false);
 
   const [publishedExamInfo, setPublishedExamInfo] = useState(null);
   const [isFetchingExam, setIsFetchingExam] = useState(false);
-  const [examFetchError, setExamFetchError] = useState(null);
 
-  // Student Flow State Machine
-  const [isStudentAuthenticated, setIsStudentAuthenticated] = useState(false);
-  const [studentStep, setStudentStep] = useState('intro'); // 'intro' | 'test' | 'review' | 'result'
-  const [studentName, setStudentName] = useState('');
+  // Student Test Flow State Machine
+  const [studentStep, setStudentStep] = useState('portal'); // 'portal' | 'intro' | 'test' | 'review' | 'result'
   const [rollingCodeUsed, setRollingCodeUsed] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [studentAnswers, setStudentAnswers] = useState({});
@@ -96,48 +110,16 @@ export default function App() {
     setStudentStep('result');
   };
 
-  // Check stored teacher & student session on load
   useEffect(() => {
     const savedPwd = localStorage.getItem('app_access_password');
     if (savedPwd) {
       setIsAuthenticated(true);
     }
-
-    const savedStudentName = localStorage.getItem('student_name') || '';
-    if (savedStudentName) {
-      setStudentName(savedStudentName);
-    }
   }, []);
 
-
-  // Restore student in-progress answers from sessionStorage
-  useEffect(() => {
-    if (isStudentMode) {
-      try {
-        const sessionKey = `student_answers_${testTitle}`;
-        const savedSession = sessionStorage.getItem(sessionKey);
-        if (savedSession) {
-          const parsed = JSON.parse(savedSession);
-          if (parsed && typeof parsed === 'object') {
-            setStudentAnswers(parsed);
-          }
-        }
-      } catch (e) {
-        console.warn('Could not restore sessionStorage answers:', e);
-      }
-    }
-  }, [isStudentMode, testTitle]);
-
-  // Mirror student answers to sessionStorage
   const handleStudentAnswerChange = (questionId, value) => {
     const updated = { ...studentAnswers, [questionId]: value };
     setStudentAnswers(updated);
-    try {
-      const sessionKey = `student_answers_${testTitle}`;
-      sessionStorage.setItem(sessionKey, JSON.stringify(updated));
-    } catch (e) {
-      console.warn('Could not save to sessionStorage:', e);
-    }
   };
 
   const handleClearStudentSession = () => {
@@ -145,21 +127,12 @@ export default function App() {
     setQuestionStatuses({});
     setCheatingFlagged(false);
     setCheatingReason('');
-    setIsStudentAuthenticated(false);
-    localStorage.removeItem('student_rolling_code');
-    try {
-      const sessionKey = `student_answers_${testTitle}`;
-      sessionStorage.removeItem(sessionKey);
-    } catch (e) {}
   };
 
-  // Floating Math Popover state
-  const [activeMathEdit, setActiveMathEdit] = useState(null); // { questionId, mathLatex }
-  
-  // Print Modal state
+  // Popovers & Modals
+  const [activeMathEdit, setActiveMathEdit] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
-  // Reset catalogue
   const handleReset = () => {
     setTestTitle(INITIAL_CATALOGUE.testTitle);
     setQuestions(INITIAL_CATALOGUE.questions);
@@ -167,7 +140,6 @@ export default function App() {
     setActiveMathEdit(null);
   };
 
-  // Process imported text
   const handleSubmitText = async (rawText) => {
     setIsLoading(true);
     setIsJustParsed(false);
@@ -186,7 +158,6 @@ export default function App() {
     }
   };
 
-  // Process imported photo / multi-image / PDF documents
   const handleSubmitImage = async (payload, mediaType) => {
     setIsLoading(true);
     setIsJustParsed(false);
@@ -205,7 +176,6 @@ export default function App() {
     }
   };
 
-  // Process imported docx
   const handleSubmitDocx = async (docxStatus) => {
     setIsLoading(true);
     setIsJustParsed(false);
@@ -224,7 +194,6 @@ export default function App() {
     }
   };
 
-  // Load Docx Sample
   const handleLoadDocxSample = () => {
     setTestTitle("Word OMML Document Test Paper");
     setQuestions([
@@ -247,7 +216,6 @@ export default function App() {
     setIsJustParsed(true);
   };
 
-  // Catalogue mutation handlers
   const handleUpdateQuestion = (questionId, updatedData) => {
     setQuestions(prev => prev.map(q => q.id === questionId ? { ...q, ...updatedData } : q));
   };
@@ -289,12 +257,10 @@ export default function App() {
     setQuestions(prev => [...prev, newQ]);
   };
 
-  // Trigger floating math popover editor for a specific question
   const handleSelectMathForEdit = (questionId, mathLatex) => {
     setActiveMathEdit({ questionId, mathLatex });
   };
 
-  // Save updated formula from Floating Math Popover
   const handleSaveEditedMath = (oldLatex, newLatex) => {
     if (!activeMathEdit) return;
 
@@ -302,7 +268,6 @@ export default function App() {
     setQuestions(prev => prev.map(q => {
       if (q.id !== questionId) return q;
 
-      // Replace in question stem
       let updatedStem = q.questionText;
       if (oldLatex) {
         updatedStem = updatedStem.replace(
@@ -311,7 +276,6 @@ export default function App() {
         );
       }
 
-      // Replace in options
       const updatedOptions = (q.options || []).map(opt => {
         if (oldLatex && opt.includes(oldLatex)) {
           return opt.replace(
@@ -333,9 +297,7 @@ export default function App() {
     setActiveMathEdit(null);
   };
 
-  // Handle Publish Exam snapshot
   const handlePublishExam = async () => {
-    // Validate that all questions are confirmed and ready
     const unreviewedQuestions = [];
     questions.forEach((q, idx) => {
       const evaluation = computeNeedsReview(q);
@@ -348,13 +310,7 @@ export default function App() {
       const details = unreviewedQuestions
         .map(u => `Question #${u.index}: ${u.reasons.join(', ')}`)
         .join('\n');
-      alert(`Cannot publish exam paper yet!\n\nPlease review and confirm all numerical ranges and answer keys before publishing:\n\n${details}`);
-      
-      const firstUnreviewedIdx = unreviewedQuestions[0].index - 1;
-      const cardElem = document.getElementById(`question-card-${firstUnreviewedIdx}`);
-      if (cardElem) {
-        cardElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      alert(`Cannot publish exam paper yet!\n\nPlease review all numerical ranges and answer keys:\n\n${details}`);
       return;
     }
 
@@ -376,72 +332,61 @@ export default function App() {
     }
   };
 
-  // Render Student Flow if ?mode=student query param is present
-  if (isStudentMode) {
-    if (isFetchingExam) {
-      return (
-        <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center p-6 text-center font-sans">
-          <LoadingSpinner message="Loading published examination paper..." />
-        </div>
-      );
+  // Student Exam Join Handler
+  const handleStudentJoinExam = async (code) => {
+    setRollingCodeUsed(code);
+    setIsLoading(true);
+    setLoadingMessage('Validating exam rolling code...');
+    try {
+      if (targetTestId) {
+        const snap = await fetchExamSnapshot(targetTestId);
+        if (snap && snap.snapshot_data) {
+          if (snap.snapshot_data.testTitle) setTestTitle(snap.snapshot_data.testTitle);
+          if (Array.isArray(snap.snapshot_data.questions)) setQuestions(snap.snapshot_data.questions);
+        }
+      }
+      setStudentStep('intro');
+    } catch (err) {
+      alert(`Error joining exam: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    if (examFetchError) {
+  // -------------------------------------------------------------
+  // RENDER: STUDENT PORTAL MODE
+  // -------------------------------------------------------------
+  if (viewMode === 'student_portal') {
+    // Unauthenticated student prompt (unless in Dev Demo mode)
+    if (!studentUser && !isDevDemo) {
       return (
-        <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center p-6 text-center font-sans">
-          <div className="bg-white border border-[#dcd2c4] rounded-3xl p-8 max-w-md w-full shadow-lg space-y-4">
-            <h2 className="font-serif font-bold text-xl text-red-700">Exam Paper Not Found</h2>
-            <p className="text-xs text-gray-600">{examFetchError}</p>
-            <button
-              type="button"
-              onClick={() => window.location.href = window.location.pathname}
-              className="px-5 py-2.5 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-white text-xs font-semibold shadow-xs"
-            >
-              Return to Main Portal
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (!isStudentAuthenticated) {
-      return (
-        <StudentAccessGateModal
-          examId={targetTestId}
-          onAuthenticated={(data) => {
-            if (data) {
-              if (data.studentName) setStudentName(data.studentName);
-              if (data.rollingCodeUsed) setRollingCodeUsed(data.rollingCodeUsed);
-              if (data.exam) {
-                if (data.exam.testTitle) setTestTitle(data.exam.testTitle);
-                if (Array.isArray(data.exam.questions)) setQuestions(data.exam.questions);
-              }
-            }
-            setIsStudentAuthenticated(true);
-            setStudentStep('intro');
+        <StudentAuthModal
+          onStudentAuthenticated={(stu) => {
+            setStudentUser(stu);
+            setIsDevDemo(false);
+          }}
+          onLaunchDevDemo={() => {
+            setIsDevDemo(true);
+            setStudentUser({
+              id: 'dev_demo_candidate',
+              admission_number: 'DEMO-999',
+              full_name: 'Developer Demo Candidate'
+            });
           }}
         />
       );
     }
 
-    if (studentStep === 'name') {
-      return (
-        <StudentNameCapture
-          defaultName={studentName}
-          onNameSubmit={(name) => {
-            setStudentName(name);
-            setStudentStep('intro');
-          }}
-        />
-      );
-    }
+    const currentStudentName = isDevDemo
+      ? '[Dev Demo] Developer Candidate'
+      : (studentUser ? (studentUser.full_name || studentUser.fullName) : 'Student Candidate');
 
     if (studentStep === 'intro') {
       return (
         <TestIntroScreen
           testTitle={testTitle}
           questionCount={questions.length}
-          studentName={studentName}
+          studentName={currentStudentName}
           onStartTest={() => {
             setStudentStep('test');
             setCurrentQuestionIndex(0);
@@ -458,7 +403,7 @@ export default function App() {
           <ProctoringSecurityGuard
             isActive={isExamActive}
             onDisqualifyCheating={handleDisqualifyCheating}
-            studentName={studentName}
+            studentName={currentStudentName}
           />
           <TestQuestionView
             questions={questions}
@@ -474,7 +419,7 @@ export default function App() {
             onSubmitExam={() => setStudentStep('review')}
             onDisqualifyCheating={handleDisqualifyCheating}
             cheatingFlagged={cheatingFlagged}
-            studentName={studentName}
+            studentName={currentStudentName}
           />
         </div>
       );
@@ -486,7 +431,7 @@ export default function App() {
           <ProctoringSecurityGuard
             isActive={isExamActive}
             onDisqualifyCheating={handleDisqualifyCheating}
-            studentName={studentName}
+            studentName={currentStudentName}
           />
           <TestReviewScreen
             questions={questions}
@@ -506,27 +451,76 @@ export default function App() {
         <TestResultScreen
           examId={targetTestId || publishedExamInfo?.examId || 'exam_default'}
           rollingCodeUsed={rollingCodeUsed}
+          studentId={studentUser?.id}
+          isDevDemo={isDevDemo}
           questions={questions}
           studentAnswers={studentAnswers}
-          studentName={studentName}
+          studentName={currentStudentName}
           testTitle={testTitle}
           cheatingFlagged={cheatingFlagged}
           cheatingReason={cheatingReason}
           onRestartTest={() => {
             handleClearStudentSession();
-            setStudentStep('intro');
+            setStudentStep('portal');
           }}
           onExitStudentMode={() => {
-            window.location.href = window.location.pathname;
+            handleClearStudentSession();
+            setStudentStep('portal');
+            setViewMode('teacher');
           }}
         />
       );
     }
 
+    // Default Student Portal View
+    return (
+      <div className="min-h-screen bg-[#f7f3ed]">
+        {/* Dev Mode Top Banner */}
+        {isDevDemo && (
+          <div className="bg-purple-900 text-purple-100 px-4 py-2 text-xs font-mono font-bold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-purple-300" />
+              <span>DEV DEMO EXAM MODE (No Account Required • Submissions Sent to Teacher Dashboard)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsDevDemo(false)}
+              className="text-xs bg-purple-800 hover:bg-purple-700 text-white px-2.5 py-1 rounded-md"
+            >
+              Exit Dev Demo
+            </button>
+          </div>
+        )}
+
+        {/* Back to Teacher Dashboard Button */}
+        <div className="max-w-5xl mx-auto p-4 flex justify-between items-center">
+          <button
+            type="button"
+            onClick={() => setViewMode('teacher')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e2d8ca] text-xs font-bold text-[#4a4237] hover:bg-[#faf7f2] shadow-2xs"
+          >
+            <ArrowLeft className="w-4 h-4 text-[#8c4a17]" />
+            <span>Switch to Teacher Mode</span>
+          </button>
+        </div>
+
+        <StudentPortal
+          student={studentUser || { full_name: 'Developer Candidate', admission_number: 'DEMO-999' }}
+          onJoinExam={handleStudentJoinExam}
+          onLogout={() => {
+            logoutStudent();
+            setStudentUser(null);
+            setIsDevDemo(false);
+          }}
+        />
+      </div>
+    );
   }
 
-  // Enforce zero-DOM rendering for unauthenticated users (prevents DevTools bypass)
-  if (!isAuthenticated && !isStudentMode) {
+  // -------------------------------------------------------------
+  // RENDER: TEACHER MODE (Default)
+  // -------------------------------------------------------------
+  if (!isAuthenticated) {
     return (
       <div className="min-h-dvh bg-[#1c1b18] flex items-center justify-center p-4 font-sans">
         <AccessGateModal onAuthenticated={() => setIsAuthenticated(true)} />
@@ -534,14 +528,14 @@ export default function App() {
     );
   }
 
-  // Teacher Catalogue Mode (Default)
   return (
     <div className="min-h-dvh bg-[#f7f4ee] flex flex-col font-sans">
-      {/* Navbar */}
       <Navbar
         onReset={handleReset}
         onOpenPrintView={() => setShowPrintModal(true)}
         onOpenSubmissions={() => setShowSubmissionsModal(true)}
+        onOpenRoster={() => setActiveTab('roster')}
+        onSwitchToStudentPortal={() => setViewMode('student_portal')}
         onPublishExam={handlePublishExam}
         onLogout={() => {
           logoutTeacher();
@@ -553,57 +547,79 @@ export default function App() {
         }}
       />
 
-      {/* Main Content Area */}
+      {/* Mode Switch Bar: Catalogue vs Student Roster */}
+      <div className="bg-[#f0e6d8] border-b border-[#e2d8ca] px-4 sm:px-6 py-2">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('catalogue')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'catalogue'
+                  ? 'bg-white text-[#8c4a17] shadow-2xs'
+                  : 'text-[#6b6255] hover:text-[#2c2825]'
+              }`}
+            >
+              Question Catalogue & Editor
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('roster')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'roster'
+                  ? 'bg-white text-[#8c4a17] shadow-2xs'
+                  : 'text-[#6b6255] hover:text-[#2c2825]'
+              }`}
+            >
+              Student Roster & Credentials
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('student_portal')}
+            className="flex items-center gap-1 text-xs font-bold text-[#8c4a17] hover:underline"
+          >
+            <GraduationCap className="w-4 h-4" />
+            <span>Open Student Portal</span>
+          </button>
+        </div>
+      </div>
+
       <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 sm:pb-8 space-y-6 sm:space-y-8 print:hidden">
-        
-        {/* Top Import Drawer */}
-        <div id="input-drawer-container">
-          <InputDrawer
-            onSubmitText={handleSubmitText}
-            onSubmitImage={handleSubmitImage}
-            onSubmitDocx={handleSubmitDocx}
-            isLoading={isLoading}
-            onLoadDocxSample={handleLoadDocxSample}
-          />
-        </div>
-
-        {/* Processing Spinner */}
-        {isLoading ? (
-          <LoadingSpinner message={loadingMessage} />
+        {activeTab === 'roster' ? (
+          <StudentRosterTab />
         ) : (
-          /* Google Forms Style Catalogue Container */
-          <QuestionCatalogue
-            testTitle={testTitle}
-            questions={questions}
-            onUpdateTestTitle={setTestTitle}
-            onUpdateQuestion={handleUpdateQuestion}
-            onDeleteQuestion={handleDeleteQuestion}
-            onDuplicateQuestion={handleDuplicateQuestion}
-            onAddQuestion={handleAddQuestion}
-            onSelectMathForEdit={handleSelectMathForEdit}
-            isJustParsed={isJustParsed}
-          />
+          <>
+            <div id="input-drawer-container">
+              <InputDrawer
+                onSubmitText={handleSubmitText}
+                onSubmitImage={handleSubmitImage}
+                onSubmitDocx={handleSubmitDocx}
+                isLoading={isLoading}
+                onLoadDocxSample={handleLoadDocxSample}
+              />
+            </div>
+
+            {isLoading ? (
+              <LoadingSpinner message={loadingMessage} />
+            ) : (
+              <QuestionCatalogue
+                testTitle={testTitle}
+                questions={questions}
+                onUpdateTestTitle={setTestTitle}
+                onUpdateQuestion={handleUpdateQuestion}
+                onDeleteQuestion={handleDeleteQuestion}
+                onDuplicateQuestion={handleDuplicateQuestion}
+                onAddQuestion={handleAddQuestion}
+                onSelectMathForEdit={handleSelectMathForEdit}
+                isJustParsed={isJustParsed}
+              />
+            )}
+          </>
         )}
-
-        {/* Developer JSON Schema Inspector */}
-        <div className="bg-[#f2ece2] border border-[#e2d8ca] rounded-2xl p-4">
-          <details className="group">
-            <summary className="text-xs font-semibold text-[#736a5c] uppercase tracking-wider cursor-pointer list-none flex items-center justify-between">
-              <span>
-                <span className="hidden sm:inline">🔍 View Full Catalogue JSON Pipeline Schema (Developer Verification)</span>
-                <span className="sm:hidden text-[11px]">🔍 View Catalogue JSON Pipeline Schema</span>
-              </span>
-              <span className="group-open:rotate-180 transition-transform text-[#9c907e] ml-2">▼</span>
-            </summary>
-            <pre className="mt-3 p-4 bg-[#1c1b18] text-[#81c784] rounded-xl text-xs font-mono overflow-x-auto">
-              {JSON.stringify({ testTitle, questions }, null, 2)}
-            </pre>
-          </details>
-        </div>
-
       </main>
 
-      {/* Floating Math Popover Editor */}
       {activeMathEdit && (
         <FloatingMathPopover
           activeMath={activeMathEdit.mathLatex}
@@ -612,7 +628,6 @@ export default function App() {
         />
       )}
 
-      {/* Printable Exam Paper Modal */}
       {showPrintModal && (
         <PrintViewModal
           testTitle={testTitle}
@@ -621,14 +636,12 @@ export default function App() {
         />
       )}
 
-      {/* Submissions & Grading Dashboard Modal */}
       {showSubmissionsModal && (
         <SubmissionsDashboardModal
           onClose={() => setShowSubmissionsModal(false)}
         />
       )}
 
-      {/* Published Exam Snapshot Share Link Modal */}
       {publishedExamInfo && (
         <PublishExamModal
           examId={publishedExamInfo.examId}
