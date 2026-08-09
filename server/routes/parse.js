@@ -453,12 +453,9 @@ function validateJsonSchema(data) {
   if (data.testTitle && typeof data.testTitle !== 'string') return false;
   if (!Array.isArray(data.questions) || data.questions.length === 0) return false;
 
-  for (let i = 0; i < data.questions.length; i++) {
-    const q = data.questions[i];
+  for (const q of data.questions) {
     if (!q || typeof q !== 'object') return false;
-    if (!q.questionText || typeof q.questionText !== 'string' || !q.questionText.trim()) {
-      q.questionText = `Question ${i + 1}`;
-    }
+    if (!q.questionText || typeof q.questionText !== 'string' || !q.questionText.trim()) return false;
   }
 
   return true;
