@@ -24,3 +24,5 @@ yarn-error.log*
 # Local data & debug crops
 server/data/debug_*
 server/data/students.json
+server/data/submissions.json
+server/data/exams.json

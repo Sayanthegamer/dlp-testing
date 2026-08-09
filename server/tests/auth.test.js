@@ -32,7 +32,7 @@ describe('Teacher Auth API Integration', () => {
         email: 'teacher_test_2026@example.com',
         password: 'Password123!',
         fullName: 'Prof. Test Teacher',
-        accessCode: 'admin'
+        accessCode: process.env.TEACHER_ACCESS_CODE || 'dlp_teacher_secret_passcode_2026'
       });
 
     expect([200, 400]).toContain(res.status);

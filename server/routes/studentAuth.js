@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const { verifyTeacherAuth } = require('../services/authService');
 const {
   studentLogin,
   studentSignup,
@@ -9,7 +10,14 @@ const {
   getTeacherRoster
 } = require('../services/studentAuthService');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'antigravity_dlp_secret_key_2026';
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.warn('[SECURITY WARNING] JWT_SECRET environment variable is missing! Using fallback secret.');
+    return 'antigravity_dlp_secret_key_2026';
+  }
+  return secret;
+}
 
 // Middleware to verify student token
 function authenticateStudentToken(req, res, next) {
@@ -20,7 +28,7 @@ function authenticateStudentToken(req, res, next) {
     return res.status(401).json({ success: false, error: 'Student authentication token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, getJwtSecret(), (err, decoded) => {
     if (err || !decoded || decoded.role !== 'student') {
       return res.status(403).json({ success: false, error: 'Invalid or expired student session' });
     }
@@ -75,9 +83,13 @@ router.get('/student/submissions', authenticateStudentToken, async (req, res) =>
 
 // POST /api/teacher/students - Teacher enrolls a student
 router.post('/teacher/students', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
+  }
   try {
     const { teacherId, admissionNumber, fullName, dob } = req.body;
-    const result = await teacherCreateStudent({ teacherId, admissionNumber, fullName, dob });
+    const effectiveTeacherId = req.user?.id || teacherId;
+    const result = await teacherCreateStudent({ teacherId: effectiveTeacherId, admissionNumber, fullName, dob });
     return res.json({ success: true, student: result.student });
   } catch (err) {
     return res.status(400).json({ success: false, error: err.message });
@@ -86,8 +98,11 @@ router.post('/teacher/students', async (req, res) => {
 
 // GET /api/teacher/students - Teacher views enrolled student roster
 router.get('/teacher/students', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
+  }
   try {
-    const teacherId = req.query.teacherId;
+    const teacherId = req.user?.id || req.query.teacherId;
     const roster = await getTeacherRoster(teacherId);
     return res.json({ success: true, data: roster });
   } catch (err) {

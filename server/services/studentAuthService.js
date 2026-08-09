@@ -3,8 +3,11 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const { supabase, isConfigured } = require('./supabaseClient');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'antigravity_dlp_secret_key_2026';
 const LOCAL_STUDENTS_FILE = path.join(__dirname, '../data/students.json');
+
+function getJwtSecret() {
+  return process.env.JWT_SECRET || 'antigravity_dlp_secret_key_2026';
+}
 
 function getSupabaseClient() {
   return isConfigured() ? supabase : null;
@@ -63,8 +66,8 @@ function generateStudentToken(student) {
       fullName: student.full_name,
       role: 'student'
     },
-    JWT_SECRET,
-    { expiresIn: '30d' }
+    getJwtSecret(),
+    { expiresIn: '24h' }
   );
 }
 
@@ -242,7 +245,7 @@ async function getTeacherRoster(teacherId) {
       if (teacherId && teacherId !== 'null' && teacherId !== 'undefined') {
         query = query.eq('teacher_id', teacherId);
       }
-      const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: false });
+      const { data, error } = await query;
 
       if (!error && Array.isArray(data)) {
         supabaseStudents = data;

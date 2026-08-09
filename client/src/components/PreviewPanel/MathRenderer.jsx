@@ -71,7 +71,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
           renderedHtml = katex.renderToString(cleanMathContent, {
             displayMode: false,
             throwOnError: true,
-            trust: true,
+            trust: false,
             macros: {
               "\\pu": "\\mathrm{#1}",
               "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",

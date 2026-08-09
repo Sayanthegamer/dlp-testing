@@ -1,9 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { supabase, isConfigured } = require('../services/supabaseClient');
 
-// Teacher access code for account creation gate & dev mode fallback
-const TEACHER_ACCESS_CODE = process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'admin';
+function getTeacherAccessCode() {
+  return process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
+}
+
+function safeCompareStrings(inputStr, expectedStr) {
+  const bufA = Buffer.from(String(inputStr).trim());
+  const bufB = Buffer.from(String(expectedStr).trim());
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 /**
  * POST /api/auth/signup
@@ -16,7 +25,7 @@ router.post('/signup', async (req, res) => {
     return res.status(400).json({ error: 'Email, password, and access code are required.' });
   }
 
-  if (accessCode.trim() !== TEACHER_ACCESS_CODE.trim()) {
+  if (!safeCompareStrings(accessCode, getTeacherAccessCode())) {
     return res.status(401).json({ error: 'Invalid access code.' });
   }
 
@@ -85,7 +94,7 @@ router.post('/login', async (req, res) => {
   }
 
   if (!isConfigured()) {
-    if (password.trim() === TEACHER_ACCESS_CODE.trim()) {
+    if (safeCompareStrings(password, getTeacherAccessCode())) {
       return res.json({
         success: true,
         mode: 'dev_fallback',
