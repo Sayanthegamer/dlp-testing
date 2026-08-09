@@ -562,17 +562,22 @@ router.post('/parse-question', async (req, res) => {
         questions: aggregatedQuestions
       };
 
+      if (combinedData.questions.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No exam questions could be extracted from the uploaded document. If uploading a PDF, please select pages containing questions rather than cover pages.'
+        });
+      }
+
       if (!validateJsonSchema(combinedData)) {
         throw new Error(`${provider.name} response failed JSON schema shape validation after aggregation`);
       }
 
-      if (Array.isArray(combinedData.questions)) {
-        try {
-          // Stage 3: Spatial & Semantic Diagram Matcher
-          combinedData.questions = await matchDiagramsToQuestions(combinedData.questions, candidateFigures, effectiveMediaFiles);
-        } catch (diagErr) {
-          console.warn('[Diagram matcher skipped]:', diagErr.message);
-        }
+      try {
+        // Stage 3: Spatial & Semantic Diagram Matcher
+        combinedData.questions = await matchDiagramsToQuestions(combinedData.questions, candidateFigures, effectiveMediaFiles);
+      } catch (diagErr) {
+        console.warn('[Diagram matcher skipped]:', diagErr.message);
       }
 
       return res.json({ success: true, data: combinedData, mode: `live_${provider.name}` });
