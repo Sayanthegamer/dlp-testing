@@ -4,7 +4,7 @@
  */
 
 function getAuthHeader() {
-  const token = localStorage.getItem('teacher_auth_token') || '';
+  const token = localStorage.getItem('teacher_auth_token') || 'dev-fallback-token';
   const headers = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
