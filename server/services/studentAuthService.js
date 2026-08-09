@@ -275,8 +275,8 @@ async function getTeacherRoster(teacherId) {
   if (supabase) {
     try {
       let query = supabase.from('students').select('*').order('created_at', { ascending: false });
-      if (teacherId && teacherId !== 'null' && teacherId !== 'undefined') {
-        query = query.eq('teacher_id', teacherId);
+      if (teacherId && teacherId !== 'null' && teacherId !== 'undefined' && teacherId !== 'local-dev-user') {
+        query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null,teacher_id.eq.teacher_general,teacher_id.eq.00000000-0000-0000-0000-000000000001`);
       }
       const { data, error } = await query;
 
@@ -287,7 +287,17 @@ async function getTeacherRoster(teacherId) {
   }
 
   const localList = readLocalStudents();
-  const filteredLocal = localList.filter(s => !teacherId || teacherId === 'null' || teacherId === 'undefined' || s.teacher_id === teacherId);
+  const filteredLocal = localList.filter(s =>
+    !teacherId ||
+    teacherId === 'null' ||
+    teacherId === 'undefined' ||
+    teacherId === 'local-dev-user' ||
+    !s.teacher_id ||
+    s.teacher_id === 'null' ||
+    s.teacher_id === 'teacher_general' ||
+    s.teacher_id === teacherId ||
+    s.teacher_id === '00000000-0000-0000-0000-000000000001'
+  );
 
   // Merge Supabase & Local rosters seamlessly
   const map = new Map();
