@@ -53,30 +53,33 @@ Your task is to parse input (informal text, photo of exam paper, or multi-page P
 }
 
 CRITICAL RULES:
-1. EXTRACT ALL QUESTIONS: Extract every single numbered question (e.g. Q1, Q2, Q3...) from the input into separate objects in the "questions" array.
-2. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
+1. EXTRACT STRICTLY ORIGINAL EXAM QUESTIONS ONLY: Extract ONLY actual numbered exam questions that students are expected to solve.
+   - NEVER create questions out of solution notes, answer key explanations, solution booklets, header/footer page numbers, copyright notices, or exam instructions.
+   - Example of solution text to IGNORE: "In electrostatics and circuit theory... Therefore, absolute voltage is not a measurable quantity." -> THIS IS A SOLUTION EXPLANATION, NOT A QUESTION. DO NOT EXTRACT IT AS A QUESTION.
+2. NO LITERAL "\\n" IN STRINGS: Do not put literal "\\n" string characters inside JSON string values. Replace all line breaks with clean space separators.
+3. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
    - NEVER put plain English sentences, problem instructions, question numbers ("Question 1"), or option letters ("Option A") inside <math> tags.
    - CORRECT: "Solve for <math>x</math> when <math>x^2 = 4</math>."
    - WRONG: "<math>Solve for x when x^2 = 4.</math>"
-3. JSON LATEX ESCAPING MANDATE: Because your response MUST be valid JSON, EVERY single LaTeX backslash inside JSON string values MUST be double-escaped (e.g. "\\frac{a}{b}", "\\ce{...}", "\\pu{...}", "\\pi", "\\alpha", "\\sin", "\\sqrt{x}"). Never output unescaped single backslashes inside JSON strings.
-4. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and use explicit braces around BOTH numerator and denominator (<math>\\frac{numerator}{denominator}</math>) and radicals (<math>\\sqrt{expression}</math>).
-5. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg).
-6. CHEMISTRY & REACTION NOTATION: Wrap chemical formulas, balanced reactions, state symbols, ionic charges, and nuclear isotopes in <math>\\ce{...}</math> using mhchem syntax (e.g. <math>\\ce{2H2 + O2 -> 2H2O}</math>, <math>\\ce{^238_92U}</math>).
-7. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> (e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{50 \\Omega}</math>).
-8. PERMUTATIONS & COMBINATIONS: Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math>.
-9. QUESTION TYPES & ANSWERS:
+4. JSON LATEX ESCAPING MANDATE: Because your response MUST be valid JSON, EVERY single LaTeX backslash inside JSON string values MUST be double-escaped (e.g. "\\frac{a}{b}", "\\ce{...}", "\\pu{...}", "\\pi", "\\alpha", "\\sin", "\\sqrt{x}"). Never output unescaped single backslashes inside JSON strings.
+5. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and use explicit braces around BOTH numerator and denominator (<math>\\frac{numerator}{denominator}</math>) and radicals (<math>\\sqrt{expression}</math>).
+6. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg).
+7. CHEMISTRY & REACTION NOTATION: Wrap chemical formulas, balanced reactions, state symbols, ionic charges, and nuclear isotopes in <math>\\ce{...}</math> using mhchem syntax (e.g. <math>\\ce{2H2 + O2 -> 2H2O}</math>, <math>\\ce{^238_92U}</math>).
+8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> (e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{50 \\Omega}</math>).
+9. PERMUTATIONS & COMBINATIONS: Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math>.
+10. QUESTION TYPES & ANSWERS:
    - For MCQ: set "type": "mcq", populate "options" with 4 option strings, and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D).
    - For Numerical: set "type": "short_answer_numeric", "options": [], and provide an estimated numeric float/integer "correctAnswer" and "acceptedRange": [min, max].
    - Match the Following: set "type": "match_following" with combination choices in "options".
-10. DIAGRAMS: Bounding boxes for visual diagrams (circuits, apparatus, geometric figures, graphs) belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex. Never put diagrams into <math> tags.
-11. SUBPARTS DISAGGREGATION: Extract multi-part sub-questions (e.g. Question 1(a), 1(b), 1(c) or 1.1, 1.2) into DISTINCT individual question objects in the "questions" array with descriptive IDs (e.g. "q1_a", "q1_b"). Do NOT collapse sub-questions together into a single wall of text.
-12. ABSOLUTELY NO FAKE XML TAGS: <math>...</math> is the ONLY allowed XML tag format. NEVER output fake XML tags like <\pu>, <pu>, </pu>, <\ce>, <ce>, </ce>, <frac>, or <\pu>50 V<\pu>. Physical quantities and units MUST be written inside <math> tags using LaTeX macros: <math>\\pu{50 V}</math> or <math>\\ce{2H2 + O2 -> 2H2O}</math>.
+11. DIAGRAMS: Bounding boxes for visual diagrams (circuits, apparatus, geometric figures, graphs) belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex. Never put diagrams into <math> tags.
+12. SUBPARTS DISAGGREGATION: Extract multi-part sub-questions (e.g. Question 1(a), 1(b), 1(c) or 1.1, 1.2) into DISTINCT individual question objects in the "questions" array with descriptive IDs (e.g. "q1_a", "q1_b"). Do NOT collapse sub-questions together into a single wall of text.
+13. ABSOLUTELY NO FAKE XML TAGS: <math>...</math> is the ONLY allowed XML tag format. NEVER output fake XML tags like <\pu>, <pu>, </pu>, <\ce>, <ce>, </ce>, <frac>, or <\pu>50 V<\pu>. Physical quantities and units MUST be written inside <math> tags using LaTeX macros: <math>\\pu{50 V}</math> or <math>\\ce{2H2 + O2 -> 2H2O}</math>.
     - WRONG: "<\pu>50 V<\pu>" or "<pu>50 V</pu>" or "<\pu>50 V</\pu>"
     - CORRECT: "<math>\\pu{50 V}</math>"
-13. ABSOLUTELY NO RAW MATHML TAGS: Never output raw MathML elements like <mn>, <mi>, <mo>, <mfrac>, <msup>, <msub>, <mrow>, or <annotation>. Always output standard KaTeX LaTeX inside <math>...</math> tags.
+14. ABSOLUTELY NO RAW MATHML TAGS: Never output raw MathML elements like <mn>, <mi>, <mo>, <mfrac>, <msup>, <msub>, <mrow>, or <annotation>. Always output standard KaTeX LaTeX inside <math>...</math> tags.
     - WRONG: "<mn>50</mn><mo></mo><mi mathvariant=\"normal\">V</mi>"
     - CORRECT: "<math>\\pu{50 V}</math>"
-14. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
+15. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
 const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
 
@@ -329,9 +332,27 @@ function extractAndParseJson(text) {
     throw new Error('AI response JSON has unrecognized structure: missing "questions" array and "questionText" field');
   }
 
+  // Filter out solution explanation paragraphs mistakenly extracted as separate questions
+  questions = questions.filter(q => {
+    const text = (q.questionText || '').trim();
+    if (!text) return false;
+
+    const isSolutionText = /^(?:Solution|Explanation|Answer|Reason|Hence|Therefore|In electrostatics and circuit theory|Absolute voltage is not|Correct option is)\b/i.test(text) ||
+                           /Therefore,?\s+[a-z0-9\s]+is not a/i.test(text);
+    const hasNoOptions = !Array.isArray(q.options) || q.options.length === 0;
+
+    if (isSolutionText && hasNoOptions) {
+      console.log('[Parser Filter] Excluded solution/explanation paragraph:', text.substring(0, 80));
+      return false;
+    }
+    return true;
+  });
+
   // Normalize each question
   questions = questions.map((q, idx) => {
-    const rawQuestionText = q.questionText || `Question ${idx + 1}`;
+    let rawQuestionText = (q.questionText || `Question ${idx + 1}`).replace(/\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi, ' ');
+    // Clean raw question number / exam metadata prefixes (e.g. "Q1. JEE Main 2026 (21 January Shift 2)\n")
+    rawQuestionText = rawQuestionText.replace(/^(?:Q\d+|Question\s*\d+)[\.\:]\s*(?:JEE\s*Main[^\n\r]*[\n\r]*)?/i, '');
     const questionText = repairMissingMathBackslashes(rawQuestionText);
 
     // Force non-MCQ questions to short_answer_numeric unless match_following

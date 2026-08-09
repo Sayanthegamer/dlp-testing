@@ -116,6 +116,16 @@ export function repairMissingMathBackslashes(text) {
   // Pre-pass 0: Convert raw MathML tags (<mn>, <mi>, <mo>, <mfrac>, etc.) to KaTeX
   let cleaned = convertMathMLToKaTeX(text);
 
+  // Pre-pass 0b: Clean literal \\n string artifacts from LLM stems OUTSIDE <math> tags, preserving LaTeX commands (\nCr, \nPr, \nu, \nabla, \neq, \neg, \newline)
+  cleaned = cleaned.replace(/\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi, ' ');
+
+  // Pre-pass 0c: Sanitize \\pu{\\Omega} and \\mathrm{\\Omega} which break KaTeX renderer
+  cleaned = cleaned
+    .replace(/\\pu\{\\?(?:Omega|ohm)\}/gi, '\\Omega')
+    .replace(/\\mathrm\{\\?(?:Omega|ohm)\}/gi, '\\Omega')
+    .replace(/\\pu\{([0-9\.\-]+)\s*\\?(?:Omega|ohm)\}/gi, '$1\\ \\Omega')
+    .replace(/\\pu\{([0-9\.\-]+)\s*([a-zA-Z]+)\}/gi, '$1\\ \\mathrm{$2}');
+
   // 1. Repair fake / mangled AI XML unit tags (e.g. <_p u >, <_p u>, <_pu>, <p u>, <\p u>, <\pu>, <pu>, </pu>, </_pu>)
   // 1a. Explicitly paired unit tags with opening tag and closing slash tag: <_p u> ... </_p u>
   cleaned = cleaned.replace(/<\\?_?\s*p\s*u\s*>([\s\S]*?)<[\/\\]_?\s*p\s*u\s*>/gi, (match, inner) => {

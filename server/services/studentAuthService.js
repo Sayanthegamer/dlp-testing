@@ -214,15 +214,17 @@ async function teacherCreateStudent({ teacherId, admissionNumber, fullName, dob 
 async function getTeacherRoster(teacherId) {
   const supabase = getSupabaseClient();
   if (supabase && teacherId) {
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .eq('teacher_id', teacherId)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('teacher_id', teacherId)
+        .order('created_at', { ascending: false });
 
-    if (!error && Array.isArray(data)) {
-      return data;
-    }
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch (err) {}
   }
 
   const localList = readLocalStudents();
