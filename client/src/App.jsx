@@ -420,6 +420,8 @@ export default function App() {
             onDisqualifyCheating={handleDisqualifyCheating}
             cheatingFlagged={cheatingFlagged}
             studentName={currentStudentName}
+            examId={targetTestId || publishedExamInfo?.examId}
+            rollingCode={rollingCodeUsed}
           />
         </div>
       );

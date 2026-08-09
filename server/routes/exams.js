@@ -326,8 +326,20 @@ router.post('/exams/session/start', async (req, res) => {
         return res.status(500).json({ error: `Failed to record active test session in database: ${sessionErr.message}` });
       }
 
+      const durationMins = parseInt(req.body.durationMinutes, 10) || 180;
+      const startTime = Date.now();
+      const sessionInfo = {
+        examId,
+        rollingCode,
+        createdAt,
+        startTime,
+        durationMinutes: durationMins,
+        extendedMinutes: 0
+      };
+
       evictExpiredSessions();
-      activeRollingSessions.set(rollingCode, { examId, rollingCode, createdAt });
+      activeRollingSessions.set(rollingCode, sessionInfo);
+      activeRollingSessions.set(examId, sessionInfo);
 
       return res.json({
         success: true,
@@ -335,6 +347,8 @@ router.post('/exams/session/start', async (req, res) => {
         rollingCode,
         secondsRemaining,
         intervalMinutes: 5,
+        durationMinutes: durationMins,
+        extendedMinutes: 0,
         createdAt,
         message: 'Active 5-minute rolling session code fetched successfully.'
       });
@@ -350,8 +364,20 @@ router.post('/exams/session/start', async (req, res) => {
       return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Please re-open the exam first.' });
     }
 
+    const durationMins = parseInt(req.body.durationMinutes, 10) || 180;
+    const startTime = Date.now();
+    const sessionInfo = {
+      examId,
+      rollingCode,
+      createdAt,
+      startTime,
+      durationMinutes: durationMins,
+      extendedMinutes: 0
+    };
+
     evictExpiredSessions();
-    activeRollingSessions.set(rollingCode, { examId, rollingCode, createdAt });
+    activeRollingSessions.set(rollingCode, sessionInfo);
+    activeRollingSessions.set(examId, sessionInfo);
 
     return res.json({
       success: true,
@@ -359,10 +385,103 @@ router.post('/exams/session/start', async (req, res) => {
       rollingCode,
       secondsRemaining,
       intervalMinutes: 5,
+      durationMinutes: durationMins,
+      extendedMinutes: 0,
       createdAt,
       message: 'Active 5-minute rolling session code fetched successfully.'
     });
   }
+});
+
+/**
+ * PROTECTED Teacher Endpoint: POST /api/exams/session/extend
+ * Allows teacher to extend the duration of an active exam mid-test (+5m, +10m, +15m, etc.).
+ */
+router.post('/exams/session/extend', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
+  }
+
+  const { examId, rollingCode, extraMinutes } = req.body || {};
+  const minutesToAdd = parseInt(extraMinutes, 10) || 5;
+
+  let session = null;
+  if (rollingCode && activeRollingSessions.has(rollingCode)) {
+    session = activeRollingSessions.get(rollingCode);
+  } else if (examId && activeRollingSessions.has(examId)) {
+    session = activeRollingSessions.get(examId);
+  } else if (examId) {
+    for (const s of activeRollingSessions.values()) {
+      if (s.examId === examId) {
+        session = s;
+        break;
+      }
+    }
+  }
+
+  if (!session) {
+    session = {
+      examId: examId || 'default',
+      rollingCode: rollingCode || '000000',
+      createdAt: new Date().toISOString(),
+      startTime: Date.now(),
+      durationMinutes: 180,
+      extendedMinutes: 0
+    };
+    if (rollingCode) activeRollingSessions.set(rollingCode, session);
+    if (examId) activeRollingSessions.set(examId, session);
+  }
+
+  session.extendedMinutes = (session.extendedMinutes || 0) + minutesToAdd;
+  const totalDuration = (session.durationMinutes || 180) + session.extendedMinutes;
+
+  console.log(`[Exam Time Extended] Added +${minutesToAdd}m to exam ${session.examId}. New Total: ${totalDuration}m (Extended: +${session.extendedMinutes}m)`);
+
+  return res.json({
+    success: true,
+    examId: session.examId,
+    durationMinutes: session.durationMinutes || 180,
+    extendedMinutes: session.extendedMinutes,
+    addedMinutes: minutesToAdd,
+    totalDurationMinutes: totalDuration,
+    message: `Successfully extended exam duration by +${minutesToAdd} minutes.`
+  });
+});
+
+/**
+ * PUBLIC Student Endpoint: GET /api/exams/session/status
+ * Fetches real-time duration, startTime, and extendedMinutes for the active exam.
+ */
+router.get('/exams/session/status', (req, res) => {
+  const { examId, rollingCode } = req.query || {};
+
+  let session = null;
+  if (rollingCode && activeRollingSessions.has(rollingCode)) {
+    session = activeRollingSessions.get(rollingCode);
+  } else if (examId && activeRollingSessions.has(examId)) {
+    session = activeRollingSessions.get(examId);
+  } else if (examId) {
+    for (const s of activeRollingSessions.values()) {
+      if (s.examId === examId) {
+        session = s;
+        break;
+      }
+    }
+  }
+
+  const durationMinutes = session?.durationMinutes || 180;
+  const extendedMinutes = session?.extendedMinutes || 0;
+  const startTime = session?.startTime || Date.now();
+
+  return res.json({
+    success: true,
+    examId: examId || session?.examId || null,
+    durationMinutes,
+    extendedMinutes,
+    totalDurationMinutes: durationMinutes + extendedMinutes,
+    startTime,
+    serverTime: Date.now()
+  });
 });
 
 /**

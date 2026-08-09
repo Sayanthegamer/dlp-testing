@@ -291,17 +291,49 @@ export async function toggleExamStatus(examId, status) {
   return await response.json();
 }
 
-export async function startRollingSession(examId) {
+export async function startRollingSession(examId, durationMinutes = 180) {
   const response = await authenticatedFetch('/api/exams/session/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ examId })
+    body: JSON.stringify({ examId, durationMinutes })
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || `Failed to start rolling session (${response.status})`);
   }
   return await response.json();
+}
+
+export async function extendExamSessionTime(examId, rollingCode, extraMinutes = 10) {
+  const response = await authenticatedFetch('/api/exams/session/extend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ examId, rollingCode, extraMinutes })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to extend exam session time (${response.status})`);
+  }
+  return await response.json();
+}
+
+export async function fetchExamSessionStatus(examId, rollingCode) {
+  try {
+    const params = new URLSearchParams();
+    if (examId) params.append('examId', examId);
+    if (rollingCode) params.append('rollingCode', rollingCode);
+
+    const response = await fetch(`/api/exams/session/status?${params.toString()}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) {
+      return { success: false, durationMinutes: 180, extendedMinutes: 0 };
+    }
+    return await response.json();
+  } catch (err) {
+    return { success: false, durationMinutes: 180, extendedMinutes: 0 };
+  }
 }
 
 export function generateAdmissionNumber(prefix = 'DLP') {

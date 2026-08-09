@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Copy, Check, Share2, ExternalLink, ShieldCheck, KeyRound, RefreshCw } from 'lucide-react';
-import { startRollingSession } from '../../services/apiService';
+import { X, Copy, Check, Share2, ExternalLink, ShieldCheck, KeyRound, RefreshCw, Clock, PlusCircle } from 'lucide-react';
+import { startRollingSession, extendExamSessionTime } from '../../services/apiService';
 
 export default function PublishExamModal({ examId, testTitle, questionsCount, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -8,18 +8,22 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   const [rollingCode, setRollingCode] = useState('');
   const [secondsRemaining, setSecondsRemaining] = useState(300);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [durationMinutes, setDurationMinutes] = useState(180);
+  const [extendedMinutes, setExtendedMinutes] = useState(0);
+  const [extendNotice, setExtendNotice] = useState('');
+  const [isExtending, setIsExtending] = useState(false);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?mode=student&testId=${examId}`;
 
   // Automatically start/fetch live rolling passcode session on modal mount
   useEffect(() => {
-    handleStartRollingSession();
+    handleStartRollingSession(durationMinutes);
   }, []);
 
   // 1-Second Countdown Timer
   useEffect(() => {
     if (secondsRemaining <= 0) {
-      handleStartRollingSession();
+      handleStartRollingSession(durationMinutes);
       return;
     }
 
@@ -43,20 +47,39 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
     setTimeout(() => setCopiedCode(false), 2500);
   }
 
-  async function handleStartRollingSession() {
+  async function handleStartRollingSession(mins = durationMinutes) {
     setIsGenerating(true);
     try {
-      const data = await startRollingSession(examId);
+      const data = await startRollingSession(examId, mins);
       if (data.success && data.rollingCode) {
         setRollingCode(data.rollingCode);
         if (typeof data.secondsRemaining === 'number') {
           setSecondsRemaining(data.secondsRemaining);
+        }
+        if (typeof data.durationMinutes === 'number') {
+          setDurationMinutes(data.durationMinutes);
         }
       }
     } catch (err) {
       console.error('[Start Rolling Session Error]:', err);
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleExtend(extraMins) {
+    setIsExtending(true);
+    try {
+      const res = await extendExamSessionTime(examId, rollingCode, extraMins);
+      if (res.success) {
+        setExtendedMinutes(res.extendedMinutes);
+        setExtendNotice(`⏱️ Added +${extraMins} mins live! Active students notified.`);
+        setTimeout(() => setExtendNotice(''), 4000);
+      }
+    } catch (err) {
+      console.error('[Extend Time Error]:', err);
+    } finally {
+      setIsExtending(false);
     }
   }
 
@@ -97,69 +120,86 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
           </button>
         </div>
 
-        {/* Rolling Code Session Generator */}
-        <div className="p-4.5 rounded-2xl bg-[#f4ece1] border border-[#dfd4c4] space-y-3">
+        {/* Exam Duration & Mid-Exam Time Extension Controls */}
+        <div className="p-4.5 rounded-2xl bg-white border border-[#e2d8ca] space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-bold text-sm text-[#1c1b18]">
-              <KeyRound className="w-4 h-4 text-[#8c4a17]" />
-              <span>Dynamic Rolling Security Passcode</span>
+              <Clock className="w-4 h-4 text-[#8c4a17]" />
+              <span>Configurable Test Duration</span>
             </div>
-            <button
-              type="button"
-              onClick={handleStartRollingSession}
-              disabled={isGenerating}
-              className="flex items-center gap-1 text-xs font-semibold text-[#8c4a17] hover:underline"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
-              <span>{rollingCode ? 'Roll New Code' : 'Generate Code'}</span>
-            </button>
+            <span className="text-xs font-mono font-bold text-[#8c4a17] bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+              Total: {durationMinutes + extendedMinutes} Mins {extendedMinutes > 0 ? `(+${extendedMinutes}m extra)` : ''}
+            </span>
           </div>
 
-          {rollingCode ? (
-            <div className="p-4 bg-white border border-[#dcd2c4] rounded-2xl text-center space-y-2 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#736c62] uppercase tracking-wider flex items-center gap-1">
-                  <span>Active 5-Min Passcode</span>
-                  <span className="text-[10px] text-[#8c4a17] bg-[#f8f3eb] border border-[#e8decb] px-2 py-0.5 rounded-full font-mono font-semibold">
-                    ⏱️ Auto-rolls in {formatTimer(secondsRemaining)}
-                  </span>
-                </span>
+          {/* Preset Duration Selector */}
+          <div className="space-y-1.5 font-sans">
+            <label className="text-[11px] font-semibold text-[#736c62] block">Set Initial Test Time Limit:</label>
+            <div className="flex flex-wrap items-center gap-2">
+              {[60, 90, 120, 180, 240].map(mins => (
                 <button
+                  key={mins}
                   type="button"
-                  onClick={handleCopyCode}
-                  className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
-                    copiedCode ? 'bg-emerald-600 text-white' : 'bg-[#f0e6d8] hover:bg-[#e4d8c5] text-[#8c4a17]'
+                  onClick={() => {
+                    setDurationMinutes(mins);
+                    handleStartRollingSession(mins);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    durationMinutes === mins
+                      ? 'bg-[#8c4a17] text-white shadow-2xs'
+                      : 'bg-[#f4ece1] hover:bg-[#e8decb] text-[#5c5346]'
                   }`}
                 >
-                  {copiedCode ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Code Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Code</span>
-                    </>
-                  )}
+                  {mins >= 60 ? `${mins / 60} Std Hr${mins >= 120 ? 's' : ''}` : `${mins} Mins`}
                 </button>
+              ))}
+              <div className="flex items-center gap-1 bg-[#f4ece1] border border-[#dfd4c4] px-2 py-1 rounded-xl">
+                <input
+                  type="number"
+                  min="1"
+                  max="600"
+                  value={durationMinutes}
+                  onChange={(e) => {
+                    const v = Math.max(1, parseInt(e.target.value, 10) || 180);
+                    setDurationMinutes(v);
+                    handleStartRollingSession(v);
+                  }}
+                  className="w-12 text-xs font-mono font-bold bg-transparent text-center focus:outline-none"
+                />
+                <span className="text-[11px] font-semibold text-[#736c62]">mins</span>
               </div>
-              <div className="font-mono font-extrabold text-4xl tracking-widest text-[#8c4a17] py-1">
-                {rollingCode}
+            </div>
+          </div>
+
+          {/* Live Mid-Exam Extension Toolbar */}
+          <div className="border-t border-[#f0e6d8] pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#1c1b18] flex items-center gap-1.5">
+                <PlusCircle className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Live Mid-Exam Extension (Instant Student Alert)</span>
+              </span>
+            </div>
+
+            {extendNotice && (
+              <div className="p-2 rounded-xl bg-emerald-800 text-white text-xs font-bold flex items-center gap-2 animate-pulse">
+                <span>{extendNotice}</span>
               </div>
-              <p className="text-[11px] text-[#736c62]">
-                Code automatically refreshes every 5 minutes (with 5-min grace period for students).
-              </p>
-            </div>
-          ) : (
+            )}
 
-            <div className="py-4 text-center">
-              <p className="text-xs text-[#736c62]">
-                {isGenerating ? 'Generating active rolling passcode...' : 'Click Generate Code to create a live 6-digit passcode for your students.'}
-              </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {[5, 10, 15, 30].map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={isExtending}
+                  onClick={() => handleExtend(m)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <span>+{m} Mins</span>
+                </button>
+              ))}
             </div>
-          )}
-
+          </div>
         </div>
 
         {/* Info Banner */}

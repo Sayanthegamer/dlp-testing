@@ -18,6 +18,8 @@ import {
   Clock
 } from 'lucide-react';
 
+import { fetchExamSessionStatus } from '../../services/apiService';
+
 export default function TestQuestionView({
   questions = [],
   currentIndex = 0,
@@ -32,8 +34,86 @@ export default function TestQuestionView({
   onSubmitExam,
   onDisqualifyCheating,
   cheatingFlagged = false,
-  studentName = 'Candidate'
+  studentName = 'Candidate',
+  examId,
+  rollingCode,
+  durationMinutes = 180
 }) {
+  const [secondsLeft, setSecondsLeft] = useState(durationMinutes * 60);
+  const [extendedNotice, setExtendedNotice] = useState('');
+  const [prevExtendedMins, setPrevExtendedMins] = useState(0);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [totalSessionMins, setTotalSessionMins] = useState(durationMinutes);
+  const [timeExpiredModal, setTimeExpiredModal] = useState(false);
+
+  // Initialize or restore session start time
+  useEffect(() => {
+    let start = localStorage.getItem(`exam_start_${examId || 'current'}`);
+    if (!start) {
+      start = Date.now().toString();
+      localStorage.setItem(`exam_start_${examId || 'current'}`, start);
+    }
+    setSessionStartTime(parseInt(start, 10));
+  }, [examId]);
+
+  // Poll Session Status every 5s for Live Extensions
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (!examId && !rollingCode) return;
+      const res = await fetchExamSessionStatus(examId, rollingCode);
+      if (res.success) {
+        const ext = res.extendedMinutes || 0;
+        const base = res.durationMinutes || durationMinutes;
+        const total = base + ext;
+        setTotalSessionMins(total);
+
+        if (ext > prevExtendedMins && prevExtendedMins > 0) {
+          const diff = ext - prevExtendedMins;
+          setExtendedNotice(`⏱️ Time Extended! The teacher added +${diff} minutes to your exam.`);
+          setTimeout(() => setExtendedNotice(''), 6000);
+        }
+        setPrevExtendedMins(ext);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [examId, rollingCode, prevExtendedMins, durationMinutes]);
+
+  // 1-Second Countdown Timer Tick
+  useEffect(() => {
+    if (!sessionStartTime) return;
+
+    const tick = () => {
+      const elapsedSec = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const totalAllowedSec = totalSessionMins * 60;
+      const remSec = Math.max(0, totalAllowedSec - elapsedSec);
+      setSecondsLeft(remSec);
+
+      if (remSec === 0 && !timeExpiredModal) {
+        setTimeExpiredModal(true);
+        setTimeout(() => {
+          if (onSubmitExam) onSubmitExam();
+        }, 3000);
+      }
+    };
+
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [sessionStartTime, totalSessionMins, timeExpiredModal, onSubmitExam]);
+
+  const formatCountdown = (sec) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const question = questions[currentIndex];
   if (!question) return null;
 
@@ -98,6 +178,37 @@ export default function TestQuestionView({
         </div>
       )}
 
+      {/* Live Time Extension Notification Toast */}
+      {extendedNotice && (
+        <div className="max-w-7xl w-full mx-auto mb-4 p-3.5 rounded-2xl bg-emerald-800 text-white shadow-xl flex items-center justify-between gap-3 text-xs sm:text-sm font-sans font-bold animate-bounce border-2 border-emerald-300">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 shrink-0 text-emerald-200" />
+            <span>{extendedNotice}</span>
+          </div>
+          <span className="bg-emerald-950 px-3 py-1 rounded-xl text-xs font-mono font-bold text-emerald-200">Updated Live</span>
+        </div>
+      )}
+
+      {/* Time Expired Auto-Submit Modal */}
+      {timeExpiredModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 font-sans">
+          <div className="bg-white border border-[#e2d8ca] rounded-3xl p-8 max-w-md w-full shadow-2xl text-center space-y-4 animate-scaleUp">
+            <div className="w-16 h-16 rounded-full bg-red-100 text-red-700 mx-auto flex items-center justify-center shadow-inner">
+              <Clock className="w-8 h-8 animate-spin" />
+            </div>
+            <h3 className="font-serif font-bold text-2xl text-[#1c1b18]">
+              Exam Time Expired!
+            </h3>
+            <p className="text-xs text-[#736c62] leading-relaxed">
+              Your allotted test duration has ended. Your candidate response sheet is being automatically compiled and submitted to the evaluation system now.
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-mono font-bold text-amber-900">
+              Submitting test paper...
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main 2-Column CBT Container */}
       <div className="max-w-7xl w-full mx-auto flex flex-col sm:flex-row gap-6 flex-1">
         
@@ -106,11 +217,23 @@ export default function TestQuestionView({
           <div className="space-y-4 sm:space-y-6">
             
             {/* Top Progress & Header Bar */}
-            <div className="flex items-center justify-between border-b border-[#DCD5C4] pb-3 sm:pb-4 font-sans text-xs text-[#5c5346] gap-2">
+            <div className="flex items-center justify-between border-b border-[#DCD5C4] pb-3 sm:pb-4 font-sans text-xs text-[#5c5346] gap-2 flex-wrap">
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 <span className="font-serif font-bold text-base sm:text-xl text-[#232323]">
                   Question {currentIndex + 1} <span className="text-[#8c8275] text-xs sm:text-sm font-normal">of {totalQuestions}</span>
                 </span>
+              </div>
+
+              {/* Real-time Countdown Clock Badge */}
+              <div className={`px-3.5 py-1.5 rounded-xl font-mono font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-2xs border ${
+                secondsLeft <= 300
+                  ? 'bg-red-50 text-red-700 border-red-300 animate-pulse'
+                  : secondsLeft <= 900
+                  ? 'bg-amber-50 text-amber-800 border-amber-300'
+                  : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+              }`}>
+                <Clock className={`w-4 h-4 ${secondsLeft <= 300 ? 'text-red-600' : 'text-emerald-700'}`} />
+                <span>Time Left: {formatCountdown(secondsLeft)}</span>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-4">
