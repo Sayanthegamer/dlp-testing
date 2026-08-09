@@ -506,14 +506,11 @@ router.post('/parse-question', async (req, res) => {
       let aggregatedQuestions = [];
       let masterTestTitle = 'Mathematics Test Paper';
 
-      for (let chunkIdx = 0; chunkIdx < mediaChunks.length; chunkIdx++) {
-        const chunk = mediaChunks[chunkIdx];
-        console.log(`[Parser Chunk ${chunkIdx + 1}/${mediaChunks.length}] Attempting parsing via ${provider.name}...`);
-
-        let parsedChunkData;
+      // Execute all chunks in parallel to complete within Vercel execution limits
+      const chunkPromises = mediaChunks.map(async (chunk, chunkIdx) => {
+        console.log(`[Parser Chunk ${chunkIdx + 1}/${mediaChunks.length}] Launching parallel parsing via ${provider.name}...`);
+        let parsedChunkData = null;
         if (provider.name === 'gemini') {
-          const activeModel = getGeminiModelName();
-          console.log(`[Parser] Attempting Gemini API (${activeModel}) for chunk ${chunkIdx + 1}...`);
           parsedChunkData = await parseWithGemini({
             geminiKey: provider.key,
             type,
@@ -524,7 +521,6 @@ router.post('/parse-question', async (req, res) => {
             docxStructure
           });
         } else if (provider.name === 'anthropic') {
-          console.log(`[Parser] Attempting Anthropic Claude API for chunk ${chunkIdx + 1}...`);
           parsedChunkData = await parseWithClaude({
             anthropicKey: provider.key,
             type,
@@ -535,7 +531,12 @@ router.post('/parse-question', async (req, res) => {
             docxStructure
           });
         }
+        return { chunk, parsedChunkData };
+      });
 
+      const chunkResults = await Promise.all(chunkPromises);
+
+      for (const { chunk, parsedChunkData } of chunkResults) {
         if (parsedChunkData && parsedChunkData.testTitle && parsedChunkData.testTitle !== 'Mathematics Test Paper') {
           masterTestTitle = parsedChunkData.testTitle;
         }
