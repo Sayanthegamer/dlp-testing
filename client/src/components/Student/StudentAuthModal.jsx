@@ -190,8 +190,8 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
                 <input
                   type="text"
                   value={admissionNumber}
-                  onChange={(e) => setAdmissionNumber(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                  placeholder="Auto-generated e.g. ADM8K9P2"
+                  onChange={(e) => setAdmissionNumber(e.target.value.replace(/[^A-Za-z0-9_\-]/g, '').toUpperCase())}
+                  placeholder="Auto-generated e.g. DLP-26-8K39X"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] font-mono font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
                   required
                 />

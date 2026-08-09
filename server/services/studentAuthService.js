@@ -110,13 +110,14 @@ async function studentLogin({ admissionNumber, dob }) {
   return { student: found, token };
 }
 
-function generateAdmissionNumber(prefix = 'ADM') {
-  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  let rand = '';
-  for (let i = 0; i < 6; i++) {
-    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+function generateAdmissionNumber(prefix = 'DLP') {
+  const year = new Date().getFullYear().toString().slice(-2);
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let entropy = '';
+  for (let i = 0; i < 5; i++) {
+    entropy += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `${prefix}${rand}`;
+  return `${prefix}-${year}-${entropy}`;
 }
 
 /**

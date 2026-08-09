@@ -218,8 +218,8 @@ export default function StudentRosterTab() {
                 <input
                   type="text"
                   value={admNum}
-                  onChange={(e) => setAdmNum(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                  placeholder="Auto-generated e.g. ADM8K9P2"
+                  onChange={(e) => setAdmNum(e.target.value.replace(/[^A-Za-z0-9_\-]/g, '').toUpperCase())}
+                  placeholder="Auto-generated e.g. DLP-26-8K39X"
                   className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-wider text-sm"
                   required
                 />

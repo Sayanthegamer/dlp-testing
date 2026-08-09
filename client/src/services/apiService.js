@@ -304,13 +304,14 @@ export async function startRollingSession(examId) {
   return await response.json();
 }
 
-export function generateAdmissionNumber(prefix = 'ADM') {
-  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  let rand = '';
-  for (let i = 0; i < 6; i++) {
-    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+export function generateAdmissionNumber(prefix = 'DLP') {
+  const year = new Date().getFullYear().toString().slice(-2);
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let entropy = '';
+  for (let i = 0; i < 5; i++) {
+    entropy += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `${prefix}${rand}`;
+  return `${prefix}-${year}-${entropy}`;
 }
 
 export async function loginStudent(admissionNumber, dob) {
