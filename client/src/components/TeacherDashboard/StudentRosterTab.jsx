@@ -72,7 +72,7 @@ export default function StudentRosterTab() {
   return (
     <div className="space-y-6">
       {/* Top Header & Actions Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm print:hidden">
         <div>
           <div className="flex items-center gap-2 font-serif font-bold text-xl sm:text-2xl text-[#2c2825]">
             <Users className="w-6 h-6 text-[#8c4a17]" />
@@ -112,7 +112,7 @@ export default function StudentRosterTab() {
       </div>
 
       {/* Search & Roster Table */}
-      <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm space-y-4 font-sans">
+      <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm space-y-4 font-sans print:hidden">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="relative max-w-xs w-full">
             <input

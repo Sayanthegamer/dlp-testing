@@ -548,7 +548,7 @@ export default function App() {
       />
 
       {/* Mode Switch Bar: Catalogue vs Student Roster */}
-      <div className="bg-[#f0e6d8] border-b border-[#e2d8ca] px-4 sm:px-6 py-2">
+      <div className="bg-[#f0e6d8] border-b border-[#e2d8ca] px-4 sm:px-6 py-2 mode-switch-bar print:hidden">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -586,7 +586,7 @@ export default function App() {
         </div>
       </div>
 
-      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 sm:pb-8 space-y-6 sm:space-y-8 print:hidden">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 sm:pb-8 space-y-6 sm:space-y-8">
         {activeTab === 'roster' ? (
           <StudentRosterTab />
         ) : (
