@@ -85,10 +85,10 @@ function writeExamsLocal(data) {
 const { verifyTeacherAuth } = require('../services/authService');
 
 /**
- * Generate 6-digit numeric rolling code
+ * Generate 6-digit numeric rolling code using cryptographically secure random bytes
  */
 function generate6DigitCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 /**
@@ -207,7 +207,7 @@ router.post('/exams/publish', async (req, res) => {
     return res.status(400).json({ error: 'Invalid exam snapshot: questions array required' });
   }
 
-  const serverGeneratedId = `exam_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const serverGeneratedId = `exam_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const createdAt = new Date().toISOString();
   const cleanTitle = typeof testTitle === 'string' && testTitle.trim() ? testTitle.trim() : 'Mathematics Practice Test';
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const sharp = require('sharp');
 const { uploadDiagramToStorage } = require('./supabaseClient');
 
@@ -223,7 +224,7 @@ async function attachCroppedDiagrams(questions, mediaFiles) {
             const cleanStr = stripBase64Header(rawData);
             sourceBuffer = Buffer.from(cleanStr, 'base64');
           }
-          const diagId = d.id || `diag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const diagId = d.id || `diag_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
           const dataUrl = await cropDiagram(sourceBuffer, d.bbox, `q${i + 1}_${diagId}`);
           if (dataUrl) {
             let sourcePageImage = dataUrl;

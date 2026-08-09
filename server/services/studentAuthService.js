@@ -141,12 +141,15 @@ async function studentLogin({ admissionNumber, dob }) {
   return { student: found, token };
 }
 
+const crypto = require('crypto');
+
 function generateAdmissionNumber(prefix = 'DLP') {
   const year = new Date().getFullYear().toString().slice(-2);
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let entropy = '';
   for (let i = 0; i < 5; i++) {
-    entropy += chars.charAt(Math.floor(Math.random() * chars.length));
+    const randomIndex = crypto.randomInt(0, chars.length);
+    entropy += chars.charAt(randomIndex);
   }
   return `${prefix}-${year}-${entropy}`;
 }
@@ -202,7 +205,7 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
   const cleanName = String(fullName).trim();
 
   const newStudent = {
-    id: `stu_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: `stu_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
     admission_number: cleanAdm,
     full_name: cleanName,
     dob: cleanDob,

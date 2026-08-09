@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { supabase, isConfigured, createUserClient } = require('../services/supabaseClient');
 const { verifyTeacherAuth } = require('../services/authService');
 
@@ -81,7 +82,7 @@ router.post('/submissions', async (req, res) => {
     return res.status(400).json({ error: 'Invalid submission payload: questions array required' });
   }
 
-  const serverGeneratedId = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const serverGeneratedId = `sub_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const submittedAt = new Date().toISOString();
 
   const autoGraded = body.autoGraded || { score: 0, total: 0, percentage: 0 };
