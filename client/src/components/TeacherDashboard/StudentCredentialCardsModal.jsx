@@ -1,9 +1,15 @@
 import React from 'react';
-import { Printer, X, Contact, Sparkles, QrCode } from 'lucide-react';
+import { Printer, X, Contact, Sparkles } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function StudentCredentialCardsModal({ roster = [], onClose }) {
   const handlePrint = () => {
     window.print();
+  };
+
+  const getQrUrl = (adm, dob) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/?adm=${encodeURIComponent(adm || '')}&dob=${encodeURIComponent(dob || '')}`;
   };
 
   return (
@@ -83,9 +89,17 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
                     </div>
                   </div>
 
-                  {/* QR Graphic placeholder */}
-                  <div className="w-12 h-12 border border-[#1c1b18] rounded-lg bg-gray-50 flex items-center justify-center p-1 shrink-0">
-                    <QrCode className="w-9 h-9 text-[#1c1b18]" />
+                  {/* Real Scannable QR Code */}
+                  <div className="flex flex-col items-center justify-center shrink-0">
+                    <div className="p-1 bg-white border border-[#1c1b18] rounded-xl shadow-2xs">
+                      <QRCodeSVG
+                        value={getQrUrl(student.admission_number || student.admissionNumber, student.dob)}
+                        size={56}
+                        level="M"
+                        marginSize={1}
+                      />
+                    </div>
+                    <span className="text-[8px] font-bold text-[#8c4a17] tracking-tighter mt-1 uppercase">Scan to Login</span>
                   </div>
                 </div>
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Award, PlayCircle, History, Clock, FileText, CheckCircle, XCircle, ChevronRight, RefreshCw, Eye } from 'lucide-react';
+import { LogOut, Award, PlayCircle, History, Clock, FileText, CheckCircle, XCircle, ChevronRight, RefreshCw, Eye, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { fetchStudentHistory, logoutStudent } from '../../services/apiService';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 
@@ -9,6 +10,10 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [selectedReviewSub, setSelectedReviewSub] = useState(null);
   const [joinError, setJoinError] = useState('');
+  const [showQrModal, setShowQrModal] = useState(false);
+
+  const admNum = student.admission_number || student.admissionNumber || '';
+  const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/?adm=${encodeURIComponent(admNum)}&dob=${encodeURIComponent(student.dob || '')}` : '';
 
   useEffect(() => {
     loadTestHistory();
@@ -65,18 +70,65 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              logoutStudent();
-              onLogout();
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all cursor-pointer border border-red-200"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Digital Candidate QR Ticket */}
+            <div
+              onClick={() => setShowQrModal(true)}
+              className="bg-white border border-[#e2d8ca] p-2 rounded-2xl flex items-center gap-2.5 shadow-2xs hover:border-[#8c4a17] transition-all cursor-pointer group"
+              title="Click to view full Digital Hall Ticket QR"
+            >
+              <div className="p-1 bg-[#fdfaf5] border border-[#e2d8ca] rounded-xl group-hover:border-[#8c4a17] transition-all">
+                <QRCodeSVG value={qrUrl} size={42} level="M" />
+              </div>
+              <div className="hidden sm:block text-left pr-1">
+                <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#8c4a17] block">DIGITAL QR</span>
+                <span className="text-[11px] font-bold text-[#2c2825] block">Hall Ticket</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                logoutStudent();
+                onLogout();
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all cursor-pointer border border-red-200"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
         </div>
+
+        {/* Digital QR Modal Popup */}
+        {showQrModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+              <div className="border-b border-[#e2d8ca] pb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#8c4a17]">DISTANCE LEARNING PROGRAM</span>
+                <h3 className="text-lg font-serif font-bold text-[#1c1b18] mt-0.5">Candidate Digital Hall Ticket</h3>
+              </div>
+
+              <div className="bg-white border-2 border-[#1c1b18] p-4 rounded-2xl inline-block shadow-md">
+                <QRCodeSVG value={qrUrl} size={180} level="H" includeMargin={true} />
+              </div>
+
+              <div className="space-y-1 font-mono text-xs text-[#4a4237]">
+                <p className="font-bold text-sm text-[#1c1b18]">{student.full_name || student.fullName}</p>
+                <p className="text-[#8c4a17] font-bold">Roll No: {admNum}</p>
+                <p className="text-gray-500 text-[11px]">DOB: {student.dob}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="w-full py-2.5 rounded-xl bg-[#1c1b18] hover:bg-black text-white text-xs font-bold transition-all"
+              >
+                Close Ticket
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Stats Summary Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

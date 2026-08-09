@@ -12,6 +12,17 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Parse QR scan query params e.g. ?adm=DLP-26-8K39X&dob=2008-04-10
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlAdm = params.get('adm') || params.get('admissionNumber');
+      const urlDob = params.get('dob');
+      if (urlAdm) setAdmissionNumber(urlAdm.trim().toUpperCase());
+      if (urlDob) setDob(urlDob.trim());
+    }
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'signup' && !admissionNumber) {
       setAdmissionNumber(generateAdmissionNumber());
     }
