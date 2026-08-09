@@ -9,6 +9,7 @@ export default function StudentRosterTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [selectedPrintRoster, setSelectedPrintRoster] = useState([]);
 
   // Add Student Form State
   const [admNum, setAdmNum] = useState('');
@@ -97,12 +98,15 @@ export default function StudentRosterTab() {
 
           <button
             type="button"
-            onClick={() => setShowPrintModal(true)}
+            onClick={() => {
+              setSelectedPrintRoster(roster);
+              setShowPrintModal(true);
+            }}
             disabled={roster.length === 0}
             className="px-4 py-2.5 rounded-xl bg-[#2c2825] hover:bg-black text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
-            <span>Print WYSIWYG Credential Cards ({roster.length})</span>
+            <span>Print All Admit Cards ({roster.length})</span>
           </button>
         </div>
       </div>
@@ -115,8 +119,8 @@ export default function StudentRosterTab() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Name or Admission #..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#c9bea9] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
+              placeholder="Search by candidate name or roll #"
+              className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#c9bea9] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
             />
             <Search className="w-3.5 h-3.5 text-[#8c8275] absolute left-3 top-2.5" />
           </div>
@@ -151,6 +155,7 @@ export default function StudentRosterTab() {
                   <th className="pb-3 px-3">Candidate Name</th>
                   <th className="pb-3 px-3">Date of Birth (Login Key)</th>
                   <th className="pb-3 px-3">Enrolled Date</th>
+                  <th className="pb-3 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0e6d8]">
@@ -170,6 +175,20 @@ export default function StudentRosterTab() {
                     </td>
                     <td className="py-3.5 px-3 text-[#736c62] font-mono">
                       {st.created_at ? new Date(st.created_at).toLocaleDateString() : 'Active'}
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPrintRoster([st]);
+                          setShowPrintModal(true);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-[#f0e6d8] hover:bg-[#8c4a17] text-[#4a4237] hover:text-white text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                        title="Print admit card for this candidate"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>Print Card</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -260,7 +279,7 @@ export default function StudentRosterTab() {
       {/* WYSIWYG Credentials Modal */}
       {showPrintModal && (
         <StudentCredentialCardsModal
-          roster={roster}
+          roster={selectedPrintRoster.length > 0 ? selectedPrintRoster : roster}
           onClose={() => setShowPrintModal(false)}
         />
       )}

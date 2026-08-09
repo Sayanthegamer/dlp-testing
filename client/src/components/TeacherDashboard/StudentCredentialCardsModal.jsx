@@ -44,11 +44,24 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
 
         {/* Printable Grid Area */}
         <div className="print:m-0">
-          <div className="text-xs text-[#736c62] font-sans mb-4 print:hidden">
-            Showing {roster.length} student card(s). The layout is optimized as a 3×3 grid per A4 page for physical printing.
+          <div className="text-xs text-[#736c62] font-sans mb-4 print:hidden flex items-center justify-between">
+            <span>
+              {roster.length === 1
+                ? `Printing singular admit card for candidate: ${roster[0].full_name || roster[0].fullName}`
+                : `Showing ${roster.length} student card(s) (3×3 A4 grid optimized).`}
+            </span>
+            <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[11px]">
+              🔒 DOB hidden for candidate security
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 print:grid-cols-3 print:gap-3 print:w-full">
+          <div
+            className={
+              roster.length === 1
+                ? 'max-w-sm mx-auto print:max-w-xs'
+                : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 print:grid-cols-3 print:gap-3 print:w-full'
+            }
+          >
             {roster.map((student, idx) => (
               <div
                 key={student.id || idx}
@@ -65,8 +78,8 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
                 </div>
 
                 {/* Card Body */}
-                <div className="flex items-start justify-between gap-2 pt-1 font-sans">
-                  <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3 pt-1 font-sans">
+                  <div className="space-y-2 min-w-0 flex-1">
                     <div>
                       <span className="text-[9px] uppercase tracking-wider font-semibold text-[#736c62] block">CANDIDATE NAME</span>
                       <span className="text-sm font-serif font-bold text-[#1c1b18] truncate block">
@@ -76,15 +89,8 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
 
                     <div>
                       <span className="text-[9px] uppercase tracking-wider font-semibold text-[#736c62] block">ADMISSION / ROLL NO.</span>
-                      <span className="text-xs font-mono font-bold text-[#8c4a17]">
+                      <span className="text-xs font-mono font-bold text-[#8c4a17] bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md inline-block">
                         {student.admission_number || student.admissionNumber}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[9px] uppercase tracking-wider font-semibold text-[#736c62] block">DATE OF BIRTH (LOGIN KEY)</span>
-                      <span className="text-xs font-mono font-semibold text-[#2c2825]">
-                        {student.dob}
                       </span>
                     </div>
                   </div>
@@ -94,7 +100,7 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
                     <div className="p-1 bg-white border border-[#1c1b18] rounded-xl shadow-2xs">
                       <QRCodeSVG
                         value={getQrUrl(student.admission_number || student.admissionNumber, student.dob)}
-                        size={56}
+                        size={64}
                         level="M"
                         marginSize={1}
                       />
@@ -105,7 +111,7 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
 
                 {/* Footer instructions */}
                 <div className="border-t border-dashed border-gray-400 pt-2 text-[9px] text-[#736c62] leading-tight text-center font-sans">
-                  Keep this card safe. Use Admission # and DOB to log into the CBT portal.
+                  Scan QR code or use Roll Number on CBT portal to take test.
                 </div>
               </div>
             ))}
