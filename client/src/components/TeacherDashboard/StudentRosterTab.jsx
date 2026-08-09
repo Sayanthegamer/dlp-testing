@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Printer, Search, RefreshCw, Contact, Calendar, CheckCircle } from 'lucide-react';
-import { fetchTeacherRoster, teacherCreateStudent } from '../../services/apiService';
+import { fetchTeacherRoster, teacherCreateStudent, generateAdmissionNumber } from '../../services/apiService';
 import StudentCredentialCardsModal from './StudentCredentialCardsModal';
 
 export default function StudentRosterTab() {
@@ -85,7 +85,10 @@ export default function StudentRosterTab() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setAdmNum(generateAdmissionNumber());
+              setShowAddModal(true);
+            }}
             className="px-4 py-2.5 rounded-xl bg-[#8c4a17] hover:bg-[#733b11] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
@@ -201,13 +204,23 @@ export default function StudentRosterTab() {
               </div>
 
               <div>
-                <label className="block font-bold text-[#4a4237] mb-1">Admission / Roll Number *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-[#4a4237]">Admission / Roll Number *</label>
+                  <button
+                    type="button"
+                    onClick={() => setAdmNum(generateAdmissionNumber())}
+                    className="text-[11px] font-bold text-[#8c4a17] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Auto-Generate</span>
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={admNum}
-                  onChange={(e) => setAdmNum(e.target.value.toUpperCase())}
-                  placeholder="e.g. ADM-2026-101"
-                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono text-sm"
+                  onChange={(e) => setAdmNum(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                  placeholder="Auto-generated e.g. ADM8K9P2"
+                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-wider text-sm"
                   required
                 />
               </div>

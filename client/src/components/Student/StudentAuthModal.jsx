@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { UserCheck, Calendar, Contact, LogIn, UserPlus, ShieldAlert, Sparkles, Terminal } from 'lucide-react';
-import { loginStudent, signupStudent } from '../../services/apiService';
+import React, { useState, useEffect } from 'react';
+import { UserCheck, Calendar, Contact, LogIn, UserPlus, ShieldAlert, Sparkles, Terminal, RefreshCw } from 'lucide-react';
+import { loginStudent, signupStudent, generateAdmissionNumber } from '../../services/apiService';
 
 export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDemo }) {
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'signup'
@@ -10,6 +10,12 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
   const [teacherCode, setTeacherCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'signup' && !admissionNumber) {
+      setAdmissionNumber(generateAdmissionNumber());
+    }
+  }, [activeTab]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -167,16 +173,26 @@ export default function StudentAuthModal({ onStudentAuthenticated, onLaunchDevDe
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#4a4237] mb-1">
-                Admission / Roll Number <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-[#4a4237]">
+                  Admission / Roll Number <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAdmissionNumber(generateAdmissionNumber())}
+                  className="text-[11px] font-bold text-[#8c4a17] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Auto-Generate</span>
+                </button>
+              </div>
               <div className="relative">
                 <input
                   type="text"
                   value={admissionNumber}
-                  onChange={(e) => setAdmissionNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g. ADM-2026-001"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] font-mono focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
+                  onChange={(e) => setAdmissionNumber(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                  placeholder="Auto-generated e.g. ADM8K9P2"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] font-mono font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
                   required
                 />
                 <Contact className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />

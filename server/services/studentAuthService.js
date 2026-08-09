@@ -110,15 +110,29 @@ async function studentLogin({ admissionNumber, dob }) {
   return { student: found, token };
 }
 
+function generateAdmissionNumber(prefix = 'ADM') {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let rand = '';
+  for (let i = 0; i < 6; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefix}${rand}`;
+}
+
 /**
  * Register a new student profile with Admission Number, Full Name, & DOB
  */
 async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
-  if (!admissionNumber || !fullName || !dob) {
-    throw new Error('Admission Number, Full Name, and Date of Birth are required');
+  if (!fullName || !dob) {
+    throw new Error('Full Name and Date of Birth are required');
   }
 
-  const cleanAdm = String(admissionNumber).trim().toUpperCase();
+  const rawAdm = admissionNumber ? String(admissionNumber).trim() : generateAdmissionNumber();
+  let cleanAdm = rawAdm.replace(/[^A-Z0-9_\-]/gi, '').toUpperCase();
+  if (!cleanAdm) {
+    cleanAdm = generateAdmissionNumber();
+  }
+
   const cleanDob = formatDob(dob);
   const cleanName = String(fullName).trim();
 
@@ -237,5 +251,6 @@ module.exports = {
   getStudentSubmissions,
   teacherCreateStudent,
   getTeacherRoster,
-  formatDob
+  formatDob,
+  generateAdmissionNumber
 };

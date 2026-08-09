@@ -304,6 +304,15 @@ export async function startRollingSession(examId) {
   return await response.json();
 }
 
+export function generateAdmissionNumber(prefix = 'ADM') {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let rand = '';
+  for (let i = 0; i < 6; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefix}${rand}`;
+}
+
 export async function loginStudent(admissionNumber, dob) {
   const response = await fetch('/api/student/login', {
     method: 'POST',
