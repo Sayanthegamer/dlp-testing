@@ -130,7 +130,8 @@
 
 /* Print Stylesheet Rules */
 @media print {
-  /* Hide main app UI, navbar, drawer, cards, dev inspector when print modal is open */
+  /* Hide main app UI (#root) and background elements when print portal modal is active */
+  #root,
   main,
   nav,
   header,
@@ -150,7 +151,47 @@
     overflow: visible !important;
   }
 
-  /* Ensure modal container becomes normal document flow without fixed overlay or rounded card borders */
+  /* Target Portal Admit Cards Modal */
+  .credential-cards-portal {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    z-index: 99999 !important;
+  }
+
+  .credential-cards-portal .modal-controls-bar {
+    display: none !important;
+  }
+
+  .credential-cards-portal .credential-modal-card {
+    background: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .admit-card-item {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    border: 2px solid #1c1b18 !important;
+    border-radius: 12px !important;
+    background: #ffffff !important;
+    padding: 12px !important;
+  }
+
+  /* Ensure modal container becomes normal document flow without fixed overlay */
   .print-modal-overlay {
     position: static !important;
     display: block !important;

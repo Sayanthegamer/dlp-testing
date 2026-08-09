@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Printer, X, Contact, Sparkles } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -12,12 +13,12 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
     return `${origin}/?adm=${encodeURIComponent(adm || '')}&dob=${encodeURIComponent(dob || '')}`;
   };
 
-  return (
-    <div className="print-modal-overlay fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="print-modal-container bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-5xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:bg-white print:p-0">
+  const modalContent = (
+    <div className="credential-cards-portal fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+      <div className="credential-modal-card bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-5xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
         
         {/* Modal Controls (Hidden during print) */}
-        <div className="flex items-center justify-between border-b border-[#e2d8ca] pb-4 print:hidden">
+        <div className="modal-controls-bar flex items-center justify-between border-b border-[#e2d8ca] pb-4 print:hidden">
           <div className="flex items-center gap-2 font-serif font-bold text-xl text-[#2c2825]">
             <Contact className="w-6 h-6 text-[#8c4a17]" />
             <h2>WYSIWYG Student Credential Admit Cards</h2>
@@ -43,7 +44,7 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
         </div>
 
         {/* Printable Grid Area */}
-        <div className="print:m-0">
+        <div className="printable-cards-container font-sans">
           <div className="text-xs text-[#736c62] font-sans mb-4 print:hidden flex items-center justify-between">
             <span>
               {roster.length === 1
@@ -65,7 +66,7 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
             {roster.map((student, idx) => (
               <div
                 key={student.id || idx}
-                className="border-2 border-[#1c1b18] rounded-2xl p-4 bg-white relative space-y-3 shadow-xs break-inside-avoid print:rounded-xl print:p-3"
+                className="admit-card-item border-2 border-[#1c1b18] rounded-2xl p-4 bg-white relative space-y-3 shadow-xs break-inside-avoid print:rounded-xl print:p-3"
               >
                 {/* Card Header */}
                 <div className="border-b-2 border-[#1c1b18] pb-2 text-center space-y-0.5">
@@ -120,4 +121,7 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modalContent, document.body);
 }
