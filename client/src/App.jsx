@@ -78,7 +78,7 @@ export default function App() {
   // URL parameters check
   const searchParams = new URLSearchParams(window.location.search);
   const isStudentUrl = searchParams.get('mode') === 'student';
-  const targetTestId = searchParams.get('testId') || searchParams.get('examId');
+  const [targetTestId, setTargetTestId] = useState(() => searchParams.get('testId') || searchParams.get('examId') || '');
 
   // Application View Mode
   const [viewMode, setViewMode] = useState(() => isStudentUrl ? 'student_portal' : 'teacher');
