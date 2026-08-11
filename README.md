@@ -2,11 +2,11 @@
 
 # 📐 Math Exam & Input Pipeline
 
-### *An Intelligent, Zero-LaTeX Math Assessment & AI Parsing Platform*
+### *An Intelligent, Zero-LaTeX Math Assessment, AI Parsing & Student Testing Platform*
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.2-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6.2-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-4.19-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
@@ -17,7 +17,7 @@
 ---
 
 <p align="center">
-  <b>Transform informal math text, photos of exam papers, and Word documents into interactive, auto-graded web assessments.</b>
+  <b>Transform informal math text, photos of physical exam papers, multi-page PDFs, and Word documents into interactive, auto-graded web assessments with secure student authentication and 5-minute TOTP rolling passcodes.</b>
 </p>
 
 [✨ Core Features](#-core-features) •
@@ -32,7 +32,7 @@
 </div>
 
 > [!NOTE]
-> **No LaTeX Knowledge Required**: Built with an exam-native philosophy. Teachers can author, edit, and convert complex math formulas ($\frac{a}{b}$, $\sqrt{x}$, $\int f(x)dx$) using visual block components. Students get clean, distraction-free test-taking views with instant auto-grading.
+> **Zero-LaTeX Philosophy**: Authors and students can create, view, and solve complex math formulas ($\frac{a}{b}$, $\sqrt{x}$, $\int f(x)dx$, $\pu{50 V}$, $\ce{2H2 + O2 -> 2H2O}$) without typing LaTeX syntax manually. Includes automated vision layout figure extraction and robust mathematical expression typesetting.
 
 ---
 
@@ -41,21 +41,25 @@
 <details open>
 <summary><b>👩‍🏫 For Teachers & Content Authors</b></summary>
 
-* 📄 **Multi-Source Exam Parsing**: Import math questions from raw unformatted text, pasted problem sets, photos of physical test papers, or Word documents (`.docx`).
+* 📄 **Multi-Source Exam AI Parsing**: Import math questions from raw unformatted text, pasted problem sets, multi-page PDFs (with cover page detection and automatic worked solution truncation), or Microsoft Word documents (`.docx`).
+* ⚡ **Parallel Concurrency Engine**: Process multi-page PDFs concurrently via `Promise.all` parallel AI extraction to prevent serverless timeouts.
+* 🖼️ **Deterministic Layout & Diagram Matcher**: Automatically extracts visual diagrams, circuit schematics, and geometric figures from documents and crops bounding boxes cleanly.
 * 📝 **Native Word OMML/MathML Processing**: Unpacks `.docx` archives directly to extract Office Math Markup Language (OMML) formulas and maps them to standard math representations without symbol loss.
 * 🧩 **Visual Math Block Editor**: Modify questions, choices, and solutions using an intuitive visual block builder with real-time rendered preview.
 * 🎯 **Flexible Question Types**: Author Multiple Choice Questions (MCQ), Numeric Short-Answer questions with customizable error tolerance brackets ($\pm \text{tolerance}$), and Text Short-Answer questions.
-* 🗂️ **Exam Catalogue Management**: Create, update, tag, and publish test suites with title metadata.
-* 📊 **Teacher Grading Dashboard**: Review auto-graded student attempts, adjust individual scores, and manually grade subjective free-text math answers.
+* 🔒 **5-Minute TOTP Rolling Passcodes**: Teacher screens display auto-refreshing 6-digit rolling codes to protect active exam sessions against link sharing and unauthorized access.
+* 📋 **Student Roster Management**: View registered students, assign unique admission numbers, and manage student accounts.
 
 </details>
 
 <details open>
 <summary><b>👨‍🎓 For Students & Test Takers</b></summary>
 
+* 🎓 **Student Portal Authentication**: Authenticate using Admission Number and Date of Birth (DOB) or scan digital Hall Ticket QR codes for seamless login.
+* 🔑 **6-Digit Rolling Code Access**: Enter the 6-digit passcode displayed by the teacher on the whiteboard to unlock and attempt live examination papers.
 * 📝 **Exam-Native Interface**: One-question-at-a-time flow mimicking real examination conditions without confusing editor widgets.
-* ⚡ **Instant Grading & Solution Breakdowns**: Immediate score calculations alongside per-question feedback and correct answer reveals.
-* 🛡️ **Session Protection**: In-progress test attempts are cached in session storage so accidental page refreshes won't lose work.
+* ⚡ **Instant Auto-Grading**: Immediate score calculations alongside per-question feedback and correct answer reveals upon submission.
+* 🛡️ **Session & Proctoring Protection**: In-progress test attempts are cached locally so accidental page refreshes won't lose work, backed by proctoring security guards.
 
 </details>
 
@@ -73,19 +77,20 @@ flowchart TD
     classDef serverStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
     classDef aiStyle fill:#31103f,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
 
-    subgraph Client ["🖥️ Client Layer (React 18 + Vite)"]
-        UI["Authoring & Test-Taking UI"]:::clientStyle
+    subgraph Client ["🖥️ Client Layer (React 18 + Vite 6)"]
+        UI["Authoring & Student Portal UI"]:::clientStyle
         Editor["Visual Math Editor"]:::clientStyle
         State["React State & SessionStorage"]:::clientStyle
-        Katex["KaTeX Formula Renderer"]:::clientStyle
+        Katex["KaTeX & MathML Typesetter"]:::clientStyle
     end
 
     subgraph Backend ["⚙️ Server Layer (Node.js + Express)"]
         Router["Express API Router"]:::serverStyle
-        AuthGate["Dual Password Gate Middleware"]:::serverStyle
-        ParserService["OMML / XML DOCX Engine"]:::serverStyle
-        ExamsDB[("Exams Store\n/tmp/exams.json")]:::serverStyle
-        SubmissionsDB[("Submissions Store\n/tmp/submissions.json")]:::serverStyle
+        AuthGate["Teacher & Student Auth Middleware"]:::serverStyle
+        TOTPEngine["5-Min TOTP Rolling Code Engine"]:::serverStyle
+        ParserService["OMML / Parallel Vision AI Engine"]:::serverStyle
+        DiagramService["Layout & Bounding Box Matcher"]:::serverStyle
+        ExamsDB[("Exams & Sessions Store")]:::serverStyle
     end
 
     subgraph AI ["🤖 AI Extraction & Resilience"]
@@ -96,9 +101,10 @@ flowchart TD
 
     UI <--> Router
     Router --> AuthGate
+    AuthGate --> TOTPEngine
     AuthGate --> ParserService
+    AuthGate --> DiagramService
     AuthGate --> ExamsDB
-    AuthGate --> SubmissionsDB
 
     ParserService --> Gemini
     Gemini -- Automatic Failover --> Claude
@@ -111,13 +117,13 @@ flowchart TD
 
 | Layer | Technology | Key Capabilities |
 | :--- | :--- | :--- |
-| **Frontend Framework** | **React 18** + **Vite 5** | Lightning-fast HMR, component isolation, modular rendering |
-| **Design System** | **Tailwind CSS** + **shadcn/ui** | Responsive dark/light theme, accessible dialogs & inputs |
-| **Math Engine** | **KaTeX 0.16** | Sub-millisecond mathematical expression typesetting |
-| **Document Processing** | **JSZip** | Unpacks `.docx` container files to parse `word/document.xml` |
-| **Backend Gateway** | **Node.js 18+** / **Express 4** | REST API endpoints, input validation, header-based auth |
-| **AI Extraction (Primary)** | **Google Gemini AI SDK** | Multimodal OCR and structured text extraction |
-| **AI Extraction (Fallback)**| **Anthropic Claude SDK** | High-precision fallback for complex mathematical structures |
+| **Frontend Framework** | **React 18** + **Vite 6.2** | Sub-second HMR, modular SPA architecture, zero security vulnerabilities |
+| **Design System** | **Tailwind CSS** + **shadcn/ui** | Clean dark/light theme, accessible dialogs, QR components |
+| **Math Engine** | **KaTeX 0.16** + **Idempotent Sanitizer** | Sub-millisecond mathematical, `\pu{...}` unit, and `\ce{...}` chemistry typesetting |
+| **Document Processing** | **JSZip** + **PDF.js** + **Sharp** | Parses `.docx` OMML XML structures and rasterizes PDF page candidate figures |
+| **Backend Gateway** | **Node.js 18+** / **Express 4** | REST API endpoints, input validation, rate limiting, helmet security |
+| **Security & PRNG** | **CSPRNG (`crypto.randomInt`)** | Cryptographically secure rolling codes, student admission numbers, and session tokens |
+| **AI Extraction** | **Google Gemini AI SDK** | Multimodal OCR and parallel vision structured text extraction |
 | **Cloud Deployment** | **Vercel Serverless** | Serverless function deployment via `api/index.js` wrapper |
 
 ---
@@ -134,7 +140,7 @@ cd dlp-testing
 ```
 
 ### 2️⃣ Install Workspace Dependencies
-Run the workspace installer to install dependencies for the root, client, and server in one command:
+Run the workspace installer to install dependencies for the root, client, and server:
 ```bash
 npm run install:all
 ```
@@ -149,19 +155,20 @@ cp server/.env.example server/.env
 Copy-Item server\.env.example server\.env
 ```
 
-Open `server/.env` and update your settings:
+Open `server/.env` and configure your keys:
 ```env
 PORT=5000
 APP_PASSWORD=teacher123
 STUDENT_PASSWORD=student123
+JWT_SECRET=antigravity_dlp_secret_key_2026
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 > [!TIP]
-> **No API Key? Zero Problem!** If `GEMINI_API_KEY` is omitted or left as placeholder, the server automatically enables **Smart Demo Fallback Mode**. You can test all parsing, test-taking, and grading features without spending API credits!
+> **No API Key? Zero Problem!** If `GEMINI_API_KEY` is omitted, the server automatically activates **Smart Demo Fallback Mode**. You can test all parsing, student testing, rolling code validation, and grading features without spending API credits!
 
-### 4️⃣ Launch Development Server
+### 4️⃣ Launch Development Servers
 ```bash
 npm run dev
 ```
@@ -176,10 +183,11 @@ npm run dev
 | Variable | Required | Default Value | Description |
 | :--- | :---: | :--- | :--- |
 | `PORT` | Optional | `5000` | Local Express server port. |
-| `APP_PASSWORD` | Optional | *(None)* | Password for unlocking Teacher Authoring & Editing tools. |
-| `STUDENT_PASSWORD` | Optional | *(None)* | Password for unlocking Student Test-Taking views. |
-| `GEMINI_API_KEY` | Optional | *(None)* | Google Gemini API key for text/vision OCR parsing. |
-| `GEMINI_MODEL` | Optional | `gemini-3.5-flash-lite` | Model identifier for Gemini extraction. |
+| `APP_PASSWORD` | Optional | *(None)* | Passcode for unlocking Teacher Authoring & Editing tools. |
+| `STUDENT_PASSWORD` | Optional | *(None)* | Passcode for unlocking Student Test-Taking views. |
+| `JWT_SECRET` | Optional | `antigravity_dlp_secret...` | Secret key for signing student JWT authentication tokens. |
+| `GEMINI_API_KEY` | Optional | *(None)* | Google Gemini API key for vision and text AI parsing. |
+| `GEMINI_MODEL` | Optional | `gemini-3.5-flash-lite` | Model identifier for Gemini extraction (Invariant: `gemini-3.5-flash-lite`). |
 | `ANTHROPIC_API_KEY` | Optional | *(None)* | Anthropic Claude API key for secondary failover. |
 
 ---
@@ -196,6 +204,9 @@ npm run install:all
 # Build frontend production bundle into client/dist
 npm run build
 
+# Run automated vitest suite (40 unit tests)
+npm run test
+
 # Start standalone Node.js production Express server
 npm run start
 
@@ -205,11 +216,28 @@ npm run vercel-build
 
 ---
 
+## 🔑 Student Access & 6-Digit Rolling Code Flow
+
+```
+[ Teacher Dashboard ] ──► Displays 6-Digit Code (e.g. 849201) [Auto-refreshes every 5 mins]
+                                   │
+                                   ▼
+[ Student Portal / App ] ──► Enters Admission Number + DOB -> Logged in
+                                   │
+                                   ▼
+[ Take Live Exam ] ────────► Inputs 6-Digit Passcode ──► Validated via POST /api/exams/student-access
+                                   │
+                                   ▼
+[ Live Test View ] ────────► Unlocks Exam Paper & Starts Timer
+```
+
+---
+
 ## 📄 DOCX (OMML/MathML) Conversion Engine
 
-Standard plain-text extractors lose equations in Microsoft Word `.docx` documents because formulas are saved in Office Math Markup Language (`<m:oMath>`).
+Standard text extractors lose mathematical equations in Microsoft Word `.docx` files because formulas are stored inside XML trees (`<m:oMath>`).
 
-Our pipeline preserves formulas with zero loss:
+Our pipeline converts formulas with zero loss:
 
 ```
 [ .docx File ]
@@ -218,10 +246,10 @@ Our pipeline preserves formulas with zero loss:
 [ OMML XML Tree ]
       │
       ▼ (ommlToLatex.js converts <m:f>, <m:rad>, <m:sSup>, <m:nary>)
-[ Clean LaTeX Strings ]
+[ Clean LaTeX & MathML Strings ]
       │
-      ▼ (latexToVisualBlocks.js)
-[ Rendered KaTeX & Visual Blocks ]
+      ▼ (mathSanitizerService.js idempotent pass)
+[ Rendered KaTeX & Visual Math Blocks ]
 ```
 
 ---
@@ -230,70 +258,35 @@ Our pipeline preserves formulas with zero loss:
 
 ```
 Question Schema
-├── "type": "mcq" ──────────────────► Exact match on selected option index
-├── "type": "short_answer_numeric" ──► Evaluated via range: min <= response <= max
+├── "type": "mcq" ──────────────────► Exact match on selected option index (0 to 3)
+├── "type": "short_answer_numeric" ──► Evaluated via tolerance bracket: min <= answer <= max
 └── "type": "short_answer_text" ────► Flagged for manual Teacher Review (needsReview: true)
 ```
-
-### Numeric Tolerance Range Example
-For a question with calculated answer `10.5` and tolerance $\pm 0.1$, the engine sets `acceptedRange: [10.4, 10.6]`. Any student answer within this bracket receives 100% credit automatically.
 
 ---
 
 ## 🔌 API Endpoint Reference
 
-### 🌐 Public Endpoints
+### 🌐 Public & Auth Endpoints
 
-#### `GET /api/health`
-Checks backend status and active AI provider keys.
-<details>
-<summary><b>🔍 View Response Example</b></summary>
+* **`GET /api/health`**: Checks server status and active AI providers.
+* **`POST /api/auth/teacher-login`**: Authenticates teacher email/password credentials.
+* **`POST /api/student-auth/login`**: Authenticates student via Admission Number + DOB.
+* **`POST /api/student-auth/signup`**: Registers a new student profile with teacher passcode.
 
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-08-01T07:44:56.000Z",
-  "hasApiKey": true,
-  "providers": {
-    "gemini": "active",
-    "anthropic": "inactive"
-  },
-  "geminiModel": "gemini-3.5-flash-lite"
-}
-```
-</details>
+### 📚 Student Access & Exam Endpoints
 
----
-
-#### `POST /api/verify-password`
-Verifies Teacher passcode against `APP_PASSWORD`.
-* **Body**: `{ "password": "teacher123" }`
-
-#### `POST /api/verify-student-password`
-Verifies Student passcode against `STUDENT_PASSWORD`.
-* **Body**: `{ "password": "student123" }`
-
----
-
-### 📚 Exam & Submission Endpoints
-
-* **`GET /api/exams`**: Fetch published exam catalogue.
-* **`POST /api/exams`**: Publish or update an exam.
-* **`GET /api/submissions`**: Fetch student attempt records.
-* **`POST /api/submissions`**: Submit completed student test paper.
-
----
+* **`POST /api/exams/student-access`**: Validates student name & 6-digit rolling code to return exam paper questions.
+* **`GET /api/exams/:id`**: Fetches exam snapshot (requires `x-rolling-code` header or `?code=` query param).
+* **`POST /api/exams/publish`**: Publishes a new exam paper snapshot.
+* **`POST /api/submissions`**: Submits completed student test paper for auto-grading.
+* **`GET /api/submissions`**: Retrieves student submission history.
 
 ### 🔐 Protected AI Parsing Routes (Requires `x-app-password` Header)
 
-#### `POST /api/parse-text`
-Parses raw unformatted math text into structured JSON.
-
-#### `POST /api/parse-image`
-Processes base64 photo of physical exam paper using vision AI.
-
-#### `POST /api/parse-docx`
-Extracts and converts `.docx` Word math formulas into structured question arrays.
+* **`POST /api/parse-text`**: Parses raw unformatted text into structured questions.
+* **`POST /api/parse-image`**: Transcribes base64 photos/PDFs with parallel vision AI.
+* **`POST /api/parse-docx`**: Unpacks `.docx` Word OMML XML equations into structured question arrays.
 
 ---
 
@@ -304,62 +297,35 @@ This repository includes a pre-configured `vercel.json` and a serverless entry p
 
 1. Push your repository to GitHub.
 2. Import the project in [Vercel](https://vercel.com/).
-3. Add Environment Variables (`APP_PASSWORD`, `STUDENT_PASSWORD`, `GEMINI_API_KEY`).
+3. Set Environment Variables (`APP_PASSWORD`, `STUDENT_PASSWORD`, `JWT_SECRET`, `GEMINI_API_KEY`).
 4. Click **Deploy**. Vercel will handle frontend static bundling and serverless API routing automatically.
-
-### 2️⃣ Deploying to Standard VPS / Docker / Custom Node Server
-1. Build client bundle: `npm run build`
-2. Set `NODE_ENV=production`
-3. Launch server: `npm run start`
 
 ---
 
 ## 📂 Project Directory Structure
 
 ```
-math-input-pipeline/
+dlp-testing/
 ├── api/                   # Vercel serverless function entrypoint (api/index.js)
-├── client/                # React 18 + Vite SPA frontend
+├── client/                # React 18 + Vite 6.2 SPA frontend
 │   ├── src/
-│   │   ├── components/    # Authoring, Student, Dashboard & Visual Editor UI
-│   │   ├── services/      # API gateway, DOCX parsing, OMML, & grading services
-│   │   ├── App.jsx        # Root application & view router
-│   │   └── main.jsx       # Client entry point
+│   │   ├── components/    # Student Portal, Catalogue, Teacher Dashboard & Math Editors
+│   │   ├── services/      # API gateway, OMML parsing, & Math Sanitizer
+│   │   ├── App.jsx        # Root application & view state machine
+│   │   └── main.jsx       # React entry point
 │   ├── package.json
 │   └── vite.config.js
 ├── server/                # Node.js + Express backend server
-│   ├── routes/            # Exams, Submissions, and Parse routes
-│   ├── index.js           # Server entry point & auth middleware
+│   ├── routes/            # Exams, Submissions, StudentAuth, & AI Parse routes
+│   ├── services/          # Diagram cropping, layout extraction, & Math Sanitizer
+│   ├── tests/             # Vitest automated test suite (40 unit tests)
+│   ├── index.js           # Express server entry point & middleware
 │   └── .env.example       # Sample environment configuration file
 ├── CODE_OF_CONDUCT.md     # Community Contributor Covenant
 ├── LICENSE                # GNU Affero General Public License v3.0 (AGPL-3.0)
 ├── vercel.json            # Vercel deployment & route configuration
 └── README.md              # Project documentation
 ```
-
----
-
-## ❓ Troubleshooting & FAQ
-
-<details>
-<summary><b>Q1: Port 5000 is already in use (EADDRINUSE)?</b></summary>
-
-Change `PORT=5001` in `server/.env`, or free port 5000:
-* **Windows (PowerShell)**: `npx kill-port 5000`
-* **Linux/macOS**: `lsof -i :5000 | awk 'NR>1 {print $2}' | xargs kill -9`
-</details>
-
-<details>
-<summary><b>Q2: Math formulas display as raw code?</b></summary>
-
-Ensure math expressions in questions are wrapped in `<math>...</math>` tags (e.g. `<math>E = mc^2</math>`). The renderer automatically typesets `<math>` blocks using KaTeX.
-</details>
-
-<details>
-<summary><b>Q3: Do I need a paid Gemini API Key?</b></summary>
-
-No! Leaving `GEMINI_API_KEY` blank activates **Smart Demo Fallback Mode**, generating realistic math test data for free testing.
-</details>
 
 ---
 
