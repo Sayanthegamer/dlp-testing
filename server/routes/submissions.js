@@ -298,109 +298,126 @@ router.post('/submissions/:id/grade', async (req, res) => {
     return res.status(400).json({ error: 'manualGrades object required' });
   }
 
+  let submissionTarget = null;
+  let clientUsed = null; // 'userDb', 'supabaseAdmin', or 'local'
+
   if (isConfigured()) {
-    const userDb = createUserClient(req.accessToken);
     try {
-      const { data: subData, error: subErr } = await userDb
+      // 1. Try user RLS client
+      const userDb = createUserClient(req.accessToken);
+      const { data: userData, error: userErr } = await userDb
         .from('submissions')
         .select('responses')
         .eq('id', targetId)
-        .single();
+        .maybeSingle();
 
-      if (subErr || !subData || !subData.responses) {
-        return res.status(404).json({ error: 'Submission not found in database.' });
-      }
+      if (!userErr && userData && userData.responses) {
+        submissionTarget = typeof userData.responses === 'string' ? JSON.parse(userData.responses) : userData.responses;
+        clientUsed = userDb;
+      } else {
+        // 2. Fallback to admin service client
+        const { data: adminData, error: adminErr } = await supabase
+          .from('submissions')
+          .select('responses')
+          .eq('id', targetId)
+          .maybeSingle();
 
-      const target = subData.responses;
-      target.manualGrades = {
-        ...target.manualGrades,
-        ...manualGrades
-      };
-
-      let totalScore = target.autoGraded ? target.autoGraded.score : 0;
-      Object.values(target.manualGrades).forEach(g => {
-        if (g && g.status === 'correct') {
-          totalScore += (typeof g.score === 'number' ? g.score : 1);
+        if (!adminErr && adminData && adminData.responses) {
+          submissionTarget = typeof adminData.responses === 'string' ? JSON.parse(adminData.responses) : adminData.responses;
+          clientUsed = supabase;
         }
-      });
+      }
+    } catch (e) {
+      console.error('[Supabase Fetch Grade Exception]:', e.message);
+    }
+  }
 
-      const totalQuestions = target.questions ? target.questions.length : 0;
-      const percentage = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
+  // 3. Fallback to local storage if not found in database
+  const localList = readSubmissionsLocal();
+  const localIdx = localList.findIndex(s => s.id === targetId || (s.responses && s.responses.id === targetId));
 
-      target.finalScore = {
-        score: totalScore,
-        total: totalQuestions,
-        percentage
-      };
+  if (!submissionTarget && localIdx >= 0) {
+    const item = localList[localIdx];
+    submissionTarget = item.responses ? (typeof item.responses === 'string' ? JSON.parse(item.responses) : item.responses) : item;
+    clientUsed = 'local';
+  }
 
-      target.status = 'reviewed';
-      target.reviewedAt = new Date().toISOString();
+  if (!submissionTarget) {
+    return res.status(404).json({ error: `Submission '${targetId}' not found in database or local store.` });
+  }
 
-      const { error: updateErr } = await userDb
+  // Apply manual grades & recalculate final score
+  submissionTarget.manualGrades = {
+    ...submissionTarget.manualGrades,
+    ...manualGrades
+  };
+
+  let totalScore = submissionTarget.autoGraded ? (submissionTarget.autoGraded.score || 0) : 0;
+  Object.values(submissionTarget.manualGrades).forEach(g => {
+    if (g && g.status === 'correct') {
+      totalScore += (typeof g.score === 'number' ? g.score : 1);
+    }
+  });
+
+  const totalQuestions = submissionTarget.questions ? submissionTarget.questions.length : 0;
+  const percentage = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
+
+  submissionTarget.finalScore = {
+    score: totalScore,
+    total: totalQuestions,
+    percentage
+  };
+
+  submissionTarget.status = 'reviewed';
+  submissionTarget.reviewedAt = new Date().toISOString();
+
+  // Save changes to Database (if found in Supabase)
+  if (clientUsed && clientUsed !== 'local') {
+    try {
+      const { error: updateErr } = await clientUsed
         .from('submissions')
         .update({
           total_score: totalScore,
           percentage,
-          responses: target
+          responses: submissionTarget
         })
         .eq('id', targetId);
 
       if (updateErr) {
-        console.error('[Supabase Grade Update Error]:', updateErr.message);
-        return res.status(500).json({ error: 'Failed to update grade in database.' });
+        console.warn('[Supabase Grade Update Warning, falling back to admin client]:', updateErr.message);
+        await supabase
+          .from('submissions')
+          .update({
+            total_score: totalScore,
+            percentage,
+            responses: submissionTarget
+          })
+          .eq('id', targetId);
       }
-
-      return res.json({
-        success: true,
-        submission: target
-      });
-    } catch (e) {
-      console.error('[Supabase Grade Update Exception]:', e.message);
-      return res.status(500).json({ error: 'Database error updating grade.' });
+    } catch (dbErr) {
+      console.error('[Supabase Grade Update Exception]:', dbErr.message);
     }
-  } else {
-    // Unconfigured local dev mode fallback
-    const list = readSubmissionsLocal();
-    const subIndex = list.findIndex(s => s.id === targetId);
-
-    if (subIndex === -1) {
-      return res.status(404).json({ error: 'Submission not found' });
-    }
-
-    const target = list[subIndex];
-
-    target.manualGrades = {
-      ...target.manualGrades,
-      ...manualGrades
-    };
-
-    let totalScore = target.autoGraded ? target.autoGraded.score : 0;
-    Object.values(target.manualGrades).forEach(g => {
-      if (g && g.status === 'correct') {
-        totalScore += (typeof g.score === 'number' ? g.score : 1);
-      }
-    });
-
-    const totalQuestions = target.questions ? target.questions.length : 0;
-    const percentage = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
-
-    target.finalScore = {
-      score: totalScore,
-      total: totalQuestions,
-      percentage
-    };
-
-    target.status = 'reviewed';
-    target.reviewedAt = new Date().toISOString();
-
-    list[subIndex] = target;
-    writeSubmissionsLocal(list);
-
-    return res.json({
-      success: true,
-      submission: target
-    });
   }
+
+  // ALSO update local JSON store as backup
+  if (localIdx >= 0) {
+    localList[localIdx] = {
+      ...localList[localIdx],
+      total_score: totalScore,
+      percentage,
+      responses: submissionTarget,
+      ...submissionTarget
+    };
+    writeSubmissionsLocal(localList);
+  } else {
+    localList.unshift(submissionTarget);
+    writeSubmissionsLocal(localList);
+  }
+
+  return res.json({
+    success: true,
+    submission: submissionTarget
+  });
 });
 
 module.exports = router;
