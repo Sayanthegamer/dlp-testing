@@ -298,19 +298,22 @@ async function teacherCreateStudent({ teacherId, admissionNumber, fullName, dob 
 }
 
 /**
- * Get all students enrolled under a teacher profile
+ * Get all students enrolled under a specific teacher profile
+ * STRICT PRIVACY ENFORCEMENT: Self-registered students (teacher_id = 'teacher_general' or null)
+ * WILL NOT show up on a teacher's roster UNLESS they explicitly link via Teacher's code
+ * or the teacher claims them via the Student's 5-minute passcode.
  */
 async function getTeacherRoster(teacherId) {
+  const effectiveTeacherId = teacherId || 'teacher_general';
   let supabaseStudents = [];
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      let query = supabase.from('students').select('*').order('created_at', { ascending: false });
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(teacherId));
-      if (isUuid) {
-        query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null`);
-      }
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('teacher_id', effectiveTeacherId)
+        .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
         supabaseStudents = data;
@@ -319,10 +322,11 @@ async function getTeacherRoster(teacherId) {
   }
 
   const localList = readLocalStudents();
+  const filteredLocal = localList.filter(s => s.teacher_id === effectiveTeacherId);
 
-  // Merge Supabase & Local rosters seamlessly
+  // Merge Supabase & Local rosters for THIS teacher ONLY
   const map = new Map();
-  for (const s of [...supabaseStudents, ...localList]) {
+  for (const s of [...supabaseStudents, ...filteredLocal]) {
     const key = (s.admission_number || s.id).toUpperCase();
     if (!map.has(key)) {
       map.set(key, s);
