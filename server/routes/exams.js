@@ -617,9 +617,14 @@ router.post('/exams/student-access', async (req, res) => {
         });
       }
 
+      let snapshot = data.snapshot_data;
+      if (typeof snapshot === 'string') {
+        try { snapshot = JSON.parse(snapshot); } catch (e) {}
+      }
+
       return res.json({
         success: true,
-        exam: data.snapshot_data,
+        exam: snapshot,
         studentName: studentName.trim(),
         rollingCodeUsed: cleanCode
       });

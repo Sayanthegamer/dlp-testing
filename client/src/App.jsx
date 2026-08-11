@@ -8,6 +8,7 @@ import LoadingSpinner from './components/Common/LoadingSpinner';
 import AccessGateModal from './components/Common/AccessGateModal';
 import StudentAuthModal from './components/Student/StudentAuthModal';
 import StudentPortal from './components/Student/StudentPortal';
+import StudentErrorBoundary from './components/Student/StudentErrorBoundary';
 import TestIntroScreen from './components/Student/TestIntroScreen';
 import TestQuestionView from './components/Student/TestQuestionView';
 import TestReviewScreen from './components/Student/TestReviewScreen';
@@ -354,10 +355,18 @@ export default function App() {
         throw new Error(data.error || 'Invalid or expired 6-Digit Rolling Passcode.');
       }
 
-      if (data.exam) {
-        if (data.exam.testTitle) setTestTitle(data.exam.testTitle);
-        if (Array.isArray(data.exam.questions)) setQuestions(data.exam.questions);
-        if (data.exam.id) setTargetTestId(data.exam.id);
+      let examObj = data.exam;
+      if (typeof examObj === 'string') {
+        try { examObj = JSON.parse(examObj); } catch (e) {}
+      }
+
+      if (examObj) {
+        if (examObj.testTitle) setTestTitle(examObj.testTitle);
+        const qList = Array.isArray(examObj.questions) ? examObj.questions : (examObj.snapshot_data?.questions || []);
+        if (Array.isArray(qList) && qList.length > 0) {
+          setQuestions(qList);
+        }
+        if (examObj.id) setTargetTestId(examObj.id);
       }
       setStudentStep('intro');
     } catch (err) {
@@ -413,31 +422,33 @@ export default function App() {
 
     if (studentStep === 'test') {
       return (
-        <div className="relative min-h-screen">
-          <ProctoringSecurityGuard
-            isActive={isExamActive}
-            onDisqualifyCheating={handleDisqualifyCheating}
-            studentName={currentStudentName}
-          />
-          <TestQuestionView
-            questions={questions}
-            currentIndex={currentQuestionIndex}
-            answers={studentAnswers}
-            questionStatuses={questionStatuses}
-            onAnswerChange={handleStudentAnswerChange}
-            onUpdateQuestionStatus={handleUpdateQuestionStatus}
-            onSelectQuestion={(idx) => setCurrentQuestionIndex(idx)}
-            onNext={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
-            onPrevious={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
-            onReview={() => setStudentStep('review')}
-            onSubmitExam={() => setStudentStep('review')}
-            onDisqualifyCheating={handleDisqualifyCheating}
-            cheatingFlagged={cheatingFlagged}
-            studentName={currentStudentName}
-            examId={targetTestId || publishedExamInfo?.examId}
-            rollingCode={rollingCodeUsed}
-          />
-        </div>
+        <StudentErrorBoundary>
+          <div className="relative min-h-screen">
+            <ProctoringSecurityGuard
+              isActive={isExamActive}
+              onDisqualifyCheating={handleDisqualifyCheating}
+              studentName={currentStudentName}
+            />
+            <TestQuestionView
+              questions={questions}
+              currentIndex={currentQuestionIndex}
+              answers={studentAnswers}
+              questionStatuses={questionStatuses}
+              onAnswerChange={handleStudentAnswerChange}
+              onUpdateQuestionStatus={handleUpdateQuestionStatus}
+              onSelectQuestion={(idx) => setCurrentQuestionIndex(idx)}
+              onNext={() => setCurrentQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+              onPrevious={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
+              onReview={() => setStudentStep('review')}
+              onSubmitExam={() => setStudentStep('review')}
+              onDisqualifyCheating={handleDisqualifyCheating}
+              cheatingFlagged={cheatingFlagged}
+              studentName={currentStudentName}
+              examId={targetTestId || publishedExamInfo?.examId}
+              rollingCode={rollingCodeUsed}
+            />
+          </div>
+        </StudentErrorBoundary>
       );
     }
 

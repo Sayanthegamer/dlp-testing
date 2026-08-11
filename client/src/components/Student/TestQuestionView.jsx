@@ -115,7 +115,26 @@ export default function TestQuestionView({
   };
 
   const question = questions[currentIndex];
-  if (!question) return null;
+  if (!question) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center p-6 text-center font-sans">
+        <div className="bg-white border border-[#e2d8ca] rounded-3xl p-8 max-w-md w-full shadow-lg space-y-4">
+          <AlertTriangle className="w-12 h-12 text-amber-600 mx-auto" />
+          <h2 className="text-xl font-serif font-bold text-[#1c1b18]">No Questions Available</h2>
+          <p className="text-xs text-[#736c62] leading-relaxed">
+            This exam paper contains no active questions. Please ask your teacher to verify the published exam content.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="w-full py-3 rounded-xl bg-[#8c4a17] text-white font-bold text-xs shadow-sm hover:bg-[#733c12] transition-all cursor-pointer"
+          >
+            Return to Student Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const { id, questionText, type, options } = question;
   const currentAnswer = answers[id];
