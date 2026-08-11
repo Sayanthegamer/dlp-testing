@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Award, PlayCircle, History, Clock, FileText, CheckCircle, XCircle, ChevronRight, RefreshCw, Eye, QrCode } from 'lucide-react';
+import { LogOut, Award, PlayCircle, History, Clock, FileText, CheckCircle, XCircle, ChevronRight, RefreshCw, Eye, QrCode, KeyRound, Link2, CheckCircle2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { fetchStudentHistory, logoutStudent } from '../../services/apiService';
+import {
+  fetchStudentHistory,
+  logoutStudent,
+  fetchStudentRollingRefCode,
+  regenerateStudentRollingRefCode,
+  studentLinkToTeacher
+} from '../../services/apiService';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 
 export default function StudentPortal({ student, onJoinExam, onLogout }) {
@@ -12,12 +18,57 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const [joinError, setJoinError] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
 
+  // Student 5-Min Rolling Code State
+  const [studentRefCode, setStudentRefCode] = useState('');
+  const [stuCodeTimer, setStuCodeTimer] = useState(300);
+
+  // Link to Teacher Modal State
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [teacherInputCode, setTeacherInputCode] = useState('');
+  const [linkError, setLinkError] = useState('');
+  const [linkSuccess, setLinkSuccess] = useState('');
+  const [linking, setLinking] = useState(false);
+
   const admNum = student.admission_number || student.admissionNumber || '';
   const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/?adm=${encodeURIComponent(admNum)}&dob=${encodeURIComponent(student.dob || '')}` : '';
 
   useEffect(() => {
     loadTestHistory();
+    loadStudentCode();
   }, [student]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setStuCodeTimer((prev) => {
+        if (prev <= 1) {
+          loadStudentCode();
+          return 300;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const loadStudentCode = async () => {
+    try {
+      const res = await fetchStudentRollingRefCode();
+      if (res && res.refCode) {
+        setStudentRefCode(res.refCode);
+        if (res.expiresInSeconds) setStuCodeTimer(res.expiresInSeconds);
+      }
+    } catch (e) {}
+  };
+
+  const handleRegenerateStudentCode = async () => {
+    try {
+      const res = await regenerateStudentRollingRefCode();
+      if (res && res.refCode) {
+        setStudentRefCode(res.refCode);
+        if (res.expiresInSeconds) setStuCodeTimer(res.expiresInSeconds);
+      }
+    } catch (e) {}
+  };
 
   const loadTestHistory = async () => {
     setLoadingHistory(true);
@@ -39,6 +90,35 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
     }
     setJoinError('');
     onJoinExam(rollingCode.trim());
+  };
+
+  const handleLinkTeacherSubmit = async (e) => {
+    e.preventDefault();
+    if (!teacherInputCode.trim()) {
+      setLinkError('Please enter your teacher\'s reference code.');
+      return;
+    }
+    setLinkError('');
+    setLinkSuccess('');
+    setLinking(true);
+
+    try {
+      const res = await studentLinkToTeacher(teacherInputCode.trim());
+      if (res && res.success) {
+        setLinkSuccess('Successfully linked your profile to your teacher!');
+        setTeacherInputCode('');
+      }
+    } catch (err) {
+      setLinkError(err.message || 'Failed to link teacher. Code may be invalid or expired.');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const formatSec = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const totalTests = history.length;
@@ -70,7 +150,44 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Student 5-Min Rolling Code Card */}
+            <div className="bg-[#f7f3ed] border border-[#e2d8ca] rounded-2xl p-2.5 sm:px-4 sm:py-2 flex items-center gap-3 shadow-2xs">
+              <div>
+                <div className="flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-[#8c4a17]">
+                  <KeyRound className="w-3 h-3" />
+                  <span>REF CODE (5-MIN)</span>
+                </div>
+                <div className="font-mono font-bold text-sm sm:text-base text-[#1c1b18] tracking-wider">
+                  {studentRefCode || 'STU-LOADING'}
+                </div>
+              </div>
+              <div className="text-right border-l border-[#dcd5c4] pl-3">
+                <span className="text-xs font-mono font-bold text-amber-900 flex items-center justify-end gap-1">
+                  <Clock className="w-3 h-3" />
+                  {formatSec(stuCodeTimer)}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRegenerateStudentCode}
+                  className="text-[10px] font-bold text-[#8c4a17] hover:underline block"
+                >
+                  Regenerate
+                </button>
+              </div>
+            </div>
+
+            {/* Link to Teacher Button */}
+            <button
+              type="button"
+              onClick={() => setShowLinkModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-all cursor-pointer border border-amber-300"
+              title="Link your student profile to your teacher using their 5-minute passcode"
+            >
+              <Link2 className="w-4 h-4 text-amber-800" />
+              <span className="hidden sm:inline">Link Teacher</span>
+            </button>
+
             {/* Digital Candidate QR Ticket */}
             <div
               onClick={() => setShowQrModal(true)}
@@ -126,6 +243,64 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
               >
                 Close Ticket
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Link to Teacher Modal Popup */}
+        {showLinkModal && (
+          <div className="fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 font-sans animate-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-900">
+                  <Link2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-serif font-bold text-[#2c2825]">
+                    Link to Teacher Roster
+                  </h3>
+                  <p className="text-[11px] text-[#736c62]">
+                    Enter your teacher's 5-minute passcode to assign your profile to their class.
+                  </p>
+                </div>
+              </div>
+
+              {linkError && <p className="text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">{linkError}</p>}
+              {linkSuccess && <p className="text-xs text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{linkSuccess}</p>}
+
+              <form onSubmit={handleLinkTeacherSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold text-[#4a4237] mb-1">Teacher Reference Code (5-Min Passcode) *</label>
+                  <input
+                    type="text"
+                    value={teacherInputCode}
+                    onChange={(e) => setTeacherInputCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. TCH-8K9P2M"
+                    className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-widest text-sm text-[#8c4a17]"
+                    required
+                  />
+                  <p className="text-[10px] text-[#736c62] mt-1">
+                    Ask your teacher for their current 5-minute passcode displayed on their teacher dashboard.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkModal(false)}
+                    className="px-4 py-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] font-bold"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={linking}
+                    className="px-5 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#733b11] text-white font-bold"
+                  >
+                    {linking ? 'Linking...' : 'Link My Profile'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

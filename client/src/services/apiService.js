@@ -447,6 +447,83 @@ export async function fetchTeacherRoster(teacherId) {
   return data.data || [];
 }
 
+export async function fetchTeacherRollingRefCode() {
+  const response = await authenticatedFetch('/api/teacher/rolling-ref-code', {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) return { success: false, refCode: 'TCH-EXPIRED' };
+  return await response.json();
+}
+
+export async function regenerateTeacherRollingRefCode() {
+  const response = await authenticatedFetch('/api/teacher/rolling-ref-code/regenerate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) return { success: false, refCode: 'TCH-EXPIRED' };
+  return await response.json();
+}
+
+export async function teacherAddExistingStudent(admissionNumber, studentRefCode) {
+  const response = await authenticatedFetch('/api/teacher/add-existing-student', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ admissionNumber, studentRefCode })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to add existing student to roster.');
+  }
+  return await response.json();
+}
+
+export async function fetchStudentRollingRefCode() {
+  const token = localStorage.getItem('student_auth_token');
+  if (!token) return { success: false, refCode: 'STU-EXPIRED' };
+  const response = await fetch('/api/student/rolling-ref-code', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!response.ok) return { success: false, refCode: 'STU-EXPIRED' };
+  return await response.json();
+}
+
+export async function regenerateStudentRollingRefCode() {
+  const token = localStorage.getItem('student_auth_token');
+  if (!token) return { success: false, refCode: 'STU-EXPIRED' };
+  const response = await fetch('/api/student/rolling-ref-code/regenerate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!response.ok) return { success: false, refCode: 'STU-EXPIRED' };
+  return await response.json();
+}
+
+export async function studentLinkToTeacher(teacherRefCode) {
+  const token = localStorage.getItem('student_auth_token');
+  if (!token) throw new Error('Student authentication token missing. Please log in.');
+  const response = await fetch('/api/student/link-teacher', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ teacherRefCode })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to link teacher');
+  }
+  return await response.json();
+}
+
 async function handleApiResponse(response) {
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));

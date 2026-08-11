@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Printer, Search, RefreshCw, Contact, Calendar, CheckCircle } from 'lucide-react';
-import { fetchTeacherRoster, teacherCreateStudent, generateAdmissionNumber } from '../../services/apiService';
+import { Users, UserPlus, Printer, Search, RefreshCw, Contact, Calendar, CheckCircle, KeyRound, UserCheck, Clock } from 'lucide-react';
+import {
+  fetchTeacherRoster,
+  teacherCreateStudent,
+  generateAdmissionNumber,
+  fetchTeacherRollingRefCode,
+  regenerateTeacherRollingRefCode,
+  teacherAddExistingStudent
+} from '../../services/apiService';
 import StudentCredentialCardsModal from './StudentCredentialCardsModal';
 
 export default function StudentRosterTab() {
@@ -8,8 +15,13 @@ export default function StudentRosterTab() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [selectedPrintRoster, setSelectedPrintRoster] = useState([]);
+
+  // Teacher Rolling Code State
+  const [teacherRefCode, setTeacherRefCode] = useState('');
+  const [codeTimer, setCodeTimer] = useState(300);
 
   // Add Student Form State
   const [admNum, setAdmNum] = useState('');
@@ -19,9 +31,50 @@ export default function StudentRosterTab() {
   const [addSuccess, setAddSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Claim Existing Student State
+  const [claimAdmNum, setClaimAdmNum] = useState('');
+  const [claimStudentRefCode, setClaimStudentRefCode] = useState('');
+  const [claimError, setClaimError] = useState('');
+  const [claimSuccess, setClaimSuccess] = useState('');
+  const [claiming, setClaiming] = useState(false);
+
   useEffect(() => {
     loadRoster();
+    loadTeacherCode();
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCodeTimer((prev) => {
+        if (prev <= 1) {
+          loadTeacherCode();
+          return 300;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const loadTeacherCode = async () => {
+    try {
+      const res = await fetchTeacherRollingRefCode();
+      if (res && res.refCode) {
+        setTeacherRefCode(res.refCode);
+        if (res.expiresInSeconds) setCodeTimer(res.expiresInSeconds);
+      }
+    } catch (e) {}
+  };
+
+  const handleRegenerateCode = async () => {
+    try {
+      const res = await regenerateTeacherRollingRefCode();
+      if (res && res.refCode) {
+        setTeacherRefCode(res.refCode);
+        if (res.expiresInSeconds) setCodeTimer(res.expiresInSeconds);
+      }
+    } catch (e) {}
+  };
 
   const loadRoster = async () => {
     setLoading(true);
@@ -61,6 +114,37 @@ export default function StudentRosterTab() {
     }
   };
 
+  const handleClaimStudent = async (e) => {
+    e.preventDefault();
+    if (!claimAdmNum.trim() || !claimStudentRefCode.trim()) {
+      setClaimError('Please enter Admission Number and Student Reference Code.');
+      return;
+    }
+    setClaimError('');
+    setClaimSuccess('');
+    setClaiming(true);
+
+    try {
+      const res = await teacherAddExistingStudent(claimAdmNum.trim(), claimStudentRefCode.trim());
+      if (res && res.success) {
+        setClaimSuccess(`Added student ${res.student.full_name || res.student.admission_number} to your roster successfully!`);
+        setClaimAdmNum('');
+        setClaimStudentRefCode('');
+        loadRoster();
+      }
+    } catch (err) {
+      setClaimError(err.message || 'Invalid Admission Number or Student Reference Code.');
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  const formatSec = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   const filteredRoster = roster.filter(s => {
     const query = searchQuery.toLowerCase();
     return (
@@ -71,19 +155,55 @@ export default function StudentRosterTab() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header & Actions Bar */}
+      {/* 5-Minute Teacher Rolling Reference Code & Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm print:hidden">
-        <div>
+        <div className="space-y-1">
           <div className="flex items-center gap-2 font-serif font-bold text-xl sm:text-2xl text-[#2c2825]">
             <Users className="w-6 h-6 text-[#8c4a17]" />
             <h2>Student Batch Roster & Admit Cards</h2>
           </div>
-          <p className="text-xs text-[#736c62] font-sans mt-1">
-            Manage student candidates enrolled in your institute and print physical DLP Admit Cards
+          <p className="text-xs text-[#736c62] font-sans">
+            Manage student candidates enrolled in your institute and link self-registered students via 5-minute rolling codes.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Teacher Rolling Ref Code Card */}
+        <div className="bg-[#f7f3ed] border border-[#e2d8ca] rounded-2xl p-3 sm:px-5 sm:py-3 flex items-center gap-4 shadow-2xs">
+          <div>
+            <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-[#8c4a17]">
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>TEACHER LINK CODE (5-MIN TOTP)</span>
+            </div>
+            <div className="font-mono font-bold text-lg sm:text-xl text-[#1c1b18] tracking-widest">
+              {teacherRefCode || 'TCH-LOADING'}
+            </div>
+          </div>
+          <div className="text-right border-l border-[#dcd5c4] pl-4">
+            <span className="text-[10px] font-mono text-[#736c62] block">Auto-Refreshes</span>
+            <span className="text-xs font-mono font-bold text-amber-900 flex items-center justify-end gap-1">
+              <Clock className="w-3 h-3" />
+              {formatSec(codeTimer)}
+            </span>
+            <button
+              type="button"
+              onClick={handleRegenerateCode}
+              className="text-[10px] font-bold text-[#8c4a17] hover:underline block mt-0.5"
+            >
+              Regenerate
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowClaimModal(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-amber-100 border border-amber-300 hover:bg-amber-200 text-amber-950 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <UserCheck className="w-4 h-4 text-amber-800" />
+            <span>Add Existing Student</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -106,7 +226,7 @@ export default function StudentRosterTab() {
             className="px-4 py-2.5 rounded-xl bg-[#2c2825] hover:bg-black text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
             <Printer className="w-4 h-4" />
-            <span>Print All Admit Cards ({roster.length})</span>
+            <span>Print Admit Cards ({roster.length})</span>
           </button>
         </div>
       </div>
@@ -269,6 +389,76 @@ export default function StudentRosterTab() {
                   className="px-5 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#733b11] text-white font-bold"
                 >
                   {submitting ? 'Enrolling...' : 'Save Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Existing Student via Student 5-Min Ref Code Modal */}
+      {showClaimModal && (
+        <div className="fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 font-sans animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-100 text-amber-900">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-serif font-bold text-[#2c2825]">
+                  Add Existing Self-Registered Student
+                </h3>
+                <p className="text-[11px] text-[#736c62]">
+                  Link a student who registered via App Password to your teacher roster using their 5-minute passcode.
+                </p>
+              </div>
+            </div>
+
+            {claimError && <p className="text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">{claimError}</p>}
+            {claimSuccess && <p className="text-xs text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{claimSuccess}</p>}
+
+            <form onSubmit={handleClaimStudent} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-[#4a4237] mb-1">Student Admission Number *</label>
+                <input
+                  type="text"
+                  value={claimAdmNum}
+                  onChange={(e) => setClaimAdmNum(e.target.value.toUpperCase())}
+                  placeholder="e.g. DLP-26-8K9P2"
+                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#4a4237] mb-1">Student 5-Minute Ref Code *</label>
+                <input
+                  type="text"
+                  value={claimStudentRefCode}
+                  onChange={(e) => setClaimStudentRefCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. STU-7X4W9N"
+                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-widest text-sm text-[#8c4a17]"
+                  required
+                />
+                <p className="text-[10px] text-[#736c62] mt-1">
+                  The student can view their 5-minute rolling code on their Student Portal dashboard.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowClaimModal(false)}
+                  className="px-4 py-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] font-bold"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={claiming}
+                  className="px-5 py-2 rounded-xl bg-amber-800 hover:bg-amber-900 text-white font-bold"
+                >
+                  {claiming ? 'Linking...' : 'Add to My Roster'}
                 </button>
               </div>
             </form>

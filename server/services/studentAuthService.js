@@ -332,6 +332,168 @@ async function getTeacherRoster(teacherId) {
   return Array.from(map.values());
 }
 
+// In-memory salts for manual code regeneration requests
+const entitySalts = new Map();
+
+function getEntitySalt(entityId) {
+  if (!entitySalts.has(entityId)) {
+    entitySalts.set(entityId, 'salt_v1');
+  }
+  return entitySalts.get(entityId);
+}
+
+function regenerateEntitySalt(entityId) {
+  const newSalt = `salt_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  entitySalts.set(entityId, newSalt);
+  return newSalt;
+}
+
+/**
+ * 5-Minute Alphanumeric Rolling Reference Code Generator
+ * Hashed via HMAC-SHA256 with 5-minute TOTP window + salt.
+ * Pattern: TCH-8K9P2M / STU-7X4W9N (Undecodable, un-bruteforcible)
+ */
+function get5MinRollingRefCode(entityId, prefix = 'REF', offsetWindows = 0) {
+  const windowMs = 5 * 60 * 1000;
+  const currentWindowIndex = Math.floor(Date.now() / windowMs) + offsetWindows;
+  const salt = getEntitySalt(entityId);
+  const secret = getJwtSecret();
+
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(`${entityId}:${salt}:${currentWindowIndex}`);
+  const hashHex = hmac.digest('hex');
+
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    const sub = hashHex.substring(i * 4, i * 4 + 4);
+    const num = parseInt(sub, 16);
+    code += chars.charAt(num % chars.length);
+  }
+
+  return `${prefix.toUpperCase()}-${code}`;
+}
+
+function getRefCodeSecondsLeft() {
+  const windowMs = 5 * 60 * 1000;
+  const elapsedMs = Date.now() % windowMs;
+  return Math.max(1, Math.ceil((windowMs - elapsedMs) / 1000));
+}
+
+/**
+ * Student links to a Teacher using the Teacher's 5-Min Rolling Code
+ */
+async function studentLinkToTeacher({ studentId, teacherRefCode }) {
+  if (!studentId || !teacherRefCode) {
+    throw new Error('Student ID and Teacher Reference Code are required.');
+  }
+
+  const cleanCode = String(teacherRefCode).trim().toUpperCase();
+  let matchedTeacherId = null;
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: teachers } = await supabase.from('teachers').select('id, email');
+      if (Array.isArray(teachers)) {
+        for (const t of teachers) {
+          const code0 = get5MinRollingRefCode(t.id, 'TCH', 0);
+          const codePrev = get5MinRollingRefCode(t.id, 'TCH', -1);
+          if (cleanCode === code0 || cleanCode === codePrev) {
+            matchedTeacherId = t.id;
+            break;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!matchedTeacherId) {
+    const defaultTeachers = ['teacher_general', 'default_teacher', 'admin'];
+    for (const tId of defaultTeachers) {
+      const code0 = get5MinRollingRefCode(tId, 'TCH', 0);
+      const codePrev = get5MinRollingRefCode(tId, 'TCH', -1);
+      if (cleanCode === code0 || cleanCode === codePrev) {
+        matchedTeacherId = tId;
+        break;
+      }
+    }
+  }
+
+  if (!matchedTeacherId) {
+    throw new Error('Invalid or expired Teacher Reference Code. Passcodes auto-refresh every 5 minutes.');
+  }
+
+  if (supabase) {
+    try {
+      await supabase.from('students').update({ teacher_id: matchedTeacherId }).eq('id', studentId);
+    } catch (e) {}
+  }
+
+  const localList = readLocalStudents();
+  const found = localList.find(s => s.id === studentId || s.admission_number === studentId);
+  if (found) {
+    found.teacher_id = matchedTeacherId;
+    writeLocalStudents(localList);
+  }
+
+  return { success: true, teacherId: matchedTeacherId };
+}
+
+/**
+ * Teacher claims an existing student using Student's Admission Number + 5-Min Student Ref Code
+ */
+async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode }) {
+  if (!admissionNumber || !studentRefCode) {
+    throw new Error('Admission Number and Student Reference Code are required.');
+  }
+
+  const cleanAdm = String(admissionNumber).trim().toUpperCase();
+  const cleanCode = String(studentRefCode).trim().toUpperCase();
+
+  let targetStudent = null;
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data } = await supabase.from('students').select('*').eq('admission_number', cleanAdm).maybeSingle();
+      if (data) targetStudent = data;
+    } catch (e) {}
+  }
+
+  if (!targetStudent) {
+    const localList = readLocalStudents();
+    targetStudent = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
+  }
+
+  if (!targetStudent) {
+    throw new Error(`No student found with Admission Number "${cleanAdm}".`);
+  }
+
+  const code0 = get5MinRollingRefCode(targetStudent.id, 'STU', 0);
+  const codePrev = get5MinRollingRefCode(targetStudent.id, 'STU', -1);
+
+  if (cleanCode !== code0 && cleanCode !== codePrev) {
+    throw new Error('Invalid or expired Student Reference Code. Passcodes auto-refresh every 5 minutes.');
+  }
+
+  const effectiveTeacherId = teacherId || 'teacher_general';
+  if (supabase) {
+    try {
+      await supabase.from('students').update({ teacher_id: effectiveTeacherId }).eq('id', targetStudent.id);
+    } catch (e) {}
+  }
+
+  const localList = readLocalStudents();
+  const foundLocal = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
+  if (foundLocal) {
+    foundLocal.teacher_id = effectiveTeacherId;
+    writeLocalStudents(localList);
+  }
+
+  targetStudent.teacher_id = effectiveTeacherId;
+  return { success: true, student: targetStudent };
+}
+
 module.exports = {
   studentLogin,
   studentSignup,
@@ -339,5 +501,10 @@ module.exports = {
   teacherCreateStudent,
   getTeacherRoster,
   formatDob,
-  generateAdmissionNumber
+  generateAdmissionNumber,
+  get5MinRollingRefCode,
+  getRefCodeSecondsLeft,
+  regenerateEntitySalt,
+  studentLinkToTeacher,
+  teacherAddExistingStudent
 };
