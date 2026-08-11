@@ -482,25 +482,54 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
     throw new Error('Admission Number and Student Reference Code are required.');
   }
 
-  const cleanAdm = String(admissionNumber).trim().toUpperCase();
+  const rawAdm = String(admissionNumber).trim();
+  const cleanAdm = rawAdm.toUpperCase();
+  const strippedAdm = rawAdm.replace(/[^A-Z0-9]/gi, '').toUpperCase();
   const cleanCode = String(studentRefCode).trim().toUpperCase();
 
   let targetStudent = null;
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const { data } = await supabase.from('students').select('*').eq('admission_number', cleanAdm).maybeSingle();
-      if (data) targetStudent = data;
+      // 1. Try ILIKE case-insensitive match on admission_number
+      const { data } = await supabase
+        .from('students')
+        .select('*')
+        .ilike('admission_number', cleanAdm)
+        .maybeSingle();
+
+      if (data) {
+        targetStudent = data;
+      } else {
+        // 2. Try match on id or exact admission_number
+        const { data: idData } = await supabase
+          .from('students')
+          .select('*')
+          .or(`id.eq.${rawAdm},admission_number.eq.${rawAdm}`)
+          .maybeSingle();
+        if (idData) targetStudent = idData;
+      }
     } catch (e) {}
   }
 
+  // Fallback to local store search (case-insensitive & hyphen-agnostic)
   if (!targetStudent) {
     const localList = readLocalStudents();
-    targetStudent = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
+    targetStudent = localList.find(s => {
+      const sAdm = (s.admission_number || s.admissionNumber || '').toUpperCase();
+      const sId = (s.id || '').toUpperCase();
+      const sStripped = sAdm.replace(/[^A-Z0-9]/gi, '');
+      return (
+        sAdm === cleanAdm ||
+        sId === cleanAdm ||
+        (strippedAdm && sStripped === strippedAdm) ||
+        sAdm.includes(cleanAdm)
+      );
+    });
   }
 
   if (!targetStudent) {
-    throw new Error(`No student found with Admission Number "${cleanAdm}".`);
+    throw new Error(`No student found with Admission Number "${cleanAdm}". Please verify candidate registration.`);
   }
 
   const code0 = get5MinRollingRefCode(targetStudent.id, 'STU', 0);
@@ -516,12 +545,15 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
       await supabase
         .from('students')
         .update({ teacher_id: effectiveTeacherId })
-        .or(`id.eq.${targetStudent.id},admission_number.eq.${cleanAdm}`);
+        .or(`id.eq.${targetStudent.id},admission_number.eq.${targetStudent.admission_number}`);
     } catch (e) {}
   }
 
   const localList = readLocalStudents();
-  const foundLocal = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
+  const foundLocal = localList.find(s => 
+    s.id === targetStudent.id || 
+    (s.admission_number && s.admission_number.toUpperCase() === cleanAdm)
+  );
   if (foundLocal) {
     foundLocal.teacher_id = effectiveTeacherId;
     writeLocalStudents(localList);
