@@ -475,70 +475,78 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
 }
 
 /**
- * Teacher claims an existing student using Student's Admission Number + 5-Min Student Ref Code
+ * Teacher claims an existing student using Student's Admission Number, Name, or 5-Min Student Ref Code
  */
 async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode }) {
-  if (!admissionNumber || !studentRefCode) {
-    throw new Error('Admission Number and Student Reference Code are required.');
+  const rawAdm = admissionNumber ? String(admissionNumber).trim() : '';
+  const rawCode = studentRefCode ? String(studentRefCode).trim() : '';
+
+  if (!rawAdm && !rawCode) {
+    throw new Error('Please enter an Admission Number, Candidate Name, or 5-Minute Student Ref Code.');
   }
 
-  const rawAdm = String(admissionNumber).trim();
   const cleanAdm = rawAdm.toUpperCase();
   const strippedAdm = rawAdm.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-  const cleanCode = String(studentRefCode).trim().toUpperCase();
+  const cleanCode = rawCode.toUpperCase();
 
-  let targetStudent = null;
+  let allStudents = [];
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      // 1. Try ILIKE case-insensitive match on admission_number
-      const { data } = await supabase
-        .from('students')
-        .select('*')
-        .ilike('admission_number', cleanAdm)
-        .maybeSingle();
-
-      if (data) {
-        targetStudent = data;
-      } else {
-        // 2. Try match on id or exact admission_number
-        const { data: idData } = await supabase
-          .from('students')
-          .select('*')
-          .or(`id.eq.${rawAdm},admission_number.eq.${rawAdm}`)
-          .maybeSingle();
-        if (idData) targetStudent = idData;
+      const { data } = await supabase.from('students').select('*').order('created_at', { ascending: false });
+      if (Array.isArray(data)) {
+        allStudents = data;
       }
     } catch (e) {}
   }
 
-  // Fallback to local store search (case-insensitive & hyphen-agnostic)
-  if (!targetStudent) {
-    const localList = readLocalStudents();
-    targetStudent = localList.find(s => {
+  const localList = readLocalStudents();
+  const map = new Map();
+  for (const s of [...allStudents, ...localList]) {
+    const key = (s.admission_number || s.id).toUpperCase();
+    if (!map.has(key)) {
+      map.set(key, s);
+    }
+  }
+  const candidatePool = Array.from(map.values());
+
+  let targetStudent = null;
+
+  // 1. Try matching by 5-minute Student Reference Code (if provided or entered in either box)
+  const targetCode = cleanCode.startsWith('STU-') ? cleanCode : (cleanAdm.startsWith('STU-') ? cleanAdm : cleanCode);
+  if (targetCode) {
+    for (const s of candidatePool) {
+      const c0 = get5MinRollingRefCode(s.id, 'STU', 0);
+      const cPrev = get5MinRollingRefCode(s.id, 'STU', -1);
+      if (targetCode === c0 || targetCode === cPrev) {
+        targetStudent = s;
+        break;
+      }
+    }
+  }
+
+  // 2. If not matched by code, try matching by Admission Number, ID, or Candidate Name
+  if (!targetStudent && (cleanAdm || strippedAdm)) {
+    targetStudent = candidatePool.find(s => {
       const sAdm = (s.admission_number || s.admissionNumber || '').toUpperCase();
       const sId = (s.id || '').toUpperCase();
+      const sName = (s.full_name || s.fullName || '').toUpperCase();
       const sStripped = sAdm.replace(/[^A-Z0-9]/gi, '');
       return (
         sAdm === cleanAdm ||
         sId === cleanAdm ||
         (strippedAdm && sStripped === strippedAdm) ||
-        sAdm.includes(cleanAdm)
+        (cleanAdm && sName.includes(cleanAdm)) ||
+        (cleanAdm && sAdm.includes(cleanAdm))
       );
     });
   }
 
   if (!targetStudent) {
-    throw new Error(`No student found with Admission Number "${cleanAdm}". Please verify candidate registration.`);
+    throw new Error(`No student found matching "${rawAdm || rawCode}". Please verify candidate registration.`);
   }
 
-  const code0 = get5MinRollingRefCode(targetStudent.id, 'STU', 0);
-  const codePrev = get5MinRollingRefCode(targetStudent.id, 'STU', -1);
-
-  if (cleanCode !== code0 && cleanCode !== codePrev) {
-    throw new Error('Invalid or expired Student Reference Code. Passcodes auto-refresh every 5 minutes.');
-  }
-
+  // Update Supabase Database
   const effectiveTeacherId = teacherId || 'teacher_general';
   if (supabase) {
     try {
@@ -549,13 +557,17 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
     } catch (e) {}
   }
 
-  const localList = readLocalStudents();
+  // Update Local Backup Store
   const foundLocal = localList.find(s => 
     s.id === targetStudent.id || 
-    (s.admission_number && s.admission_number.toUpperCase() === cleanAdm)
+    (s.admission_number && s.admission_number.toUpperCase() === (targetStudent.admission_number || '').toUpperCase())
   );
   if (foundLocal) {
     foundLocal.teacher_id = effectiveTeacherId;
+    writeLocalStudents(localList);
+  } else {
+    targetStudent.teacher_id = effectiveTeacherId;
+    localList.unshift(targetStudent);
     writeLocalStudents(localList);
   }
 
