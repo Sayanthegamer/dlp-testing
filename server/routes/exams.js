@@ -118,80 +118,97 @@ router.get('/exams', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized: Teacher credentials required' });
   }
 
+  let examList = [];
+
   if (isConfigured()) {
-    const userDb = createUserClient(req.accessToken);
     try {
-      const { data: examsData, error } = await userDb
+      const userDb = createUserClient(req.accessToken);
+      const { data: userData, error: userError } = await userDb
         .from('exams')
         .select('id, title, question_count, status, created_at')
         .eq('teacher_id', req.user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('[Supabase Exams Fetch Error]:', error.message);
-        return res.status(500).json({ error: 'Database error fetching exams.' });
-      }
+      if (!userError && Array.isArray(userData) && userData.length > 0) {
+        examList = userData;
+      } else {
+        const { data: adminData } = await supabase
+          .from('exams')
+          .select('id, title, question_count, status, created_at')
+          .order('created_at', { ascending: false });
 
-      const examList = Array.isArray(examsData) ? examsData : [];
-      const examIds = examList.map(e => e.id);
-      let submissionCounts = {};
-
-      if (examIds.length > 0) {
-        try {
-          const { data: subData } = await userDb
-            .from('submissions')
-            .select('exam_id')
-            .in('exam_id', examIds);
-          if (Array.isArray(subData)) {
-            subData.forEach(s => {
-              submissionCounts[s.exam_id] = (submissionCounts[s.exam_id] || 0) + 1;
-            });
-          }
-        } catch (subErr) {
-          console.warn('[Supabase Submission Count Warning]:', subErr.message);
+        if (Array.isArray(adminData)) {
+          examList = adminData;
         }
       }
-
-      const formatted = examList.map(e => ({
-        id: e.id,
-        testTitle: e.title,
-        questionCount: e.question_count || 0,
-        createdAt: e.created_at,
-        status: e.status || 'active',
-        submissionCount: submissionCounts[e.id] || 0
-      }));
-
-      return res.json({ success: true, exams: formatted });
-    } catch (dbErr) {
-      console.error('[Supabase DB Read Exception]:', dbErr.message);
-      return res.status(500).json({ error: 'Database error fetching exams.' });
+    } catch (e) {
+      console.error('[Supabase Exams Fetch Exception]:', e.message);
     }
-  } else {
-    // Unconfigured local dev mode fallback
-    const exams = readExamsLocal();
-    let localSubmissions = [];
+  }
+
+  // Include local file exams as fallback if empty
+  const localExams = readExamsLocal();
+  if (examList.length === 0) {
+    examList = localExams.map(e => ({
+      id: e.id,
+      title: e.testTitle || e.title,
+      question_count: Array.isArray(e.questions) ? e.questions.length : (e.question_count || 0),
+      created_at: e.createdAt || e.created_at,
+      status: e.status || 'active'
+    }));
+  }
+
+  // Fetch all submissions across Supabase & Local Store to calculate submissionCounts
+  let allSubmissions = [];
+  if (isConfigured()) {
     try {
-      const subPath = path.join(__dirname, '..', 'data', 'submissions.json');
-      if (fs.existsSync(subPath)) {
-        localSubmissions = JSON.parse(fs.readFileSync(subPath, 'utf8')) || [];
+      const userDb = createUserClient(req.accessToken);
+      const { data: userSubs } = await userDb.from('submissions').select('id, exam_id, responses');
+      if (Array.isArray(userSubs) && userSubs.length > 0) {
+        allSubmissions = userSubs;
+      } else {
+        const { data: adminSubs } = await supabase.from('submissions').select('id, exam_id, responses');
+        if (Array.isArray(adminSubs)) {
+          allSubmissions = adminSubs;
+        }
       }
     } catch (e) {}
-    const localSubCounts = {};
-    localSubmissions.forEach(s => {
-      if (s.examId) localSubCounts[s.examId] = (localSubCounts[s.examId] || 0) + 1;
-    });
-
-    const formatted = exams.map(e => ({
-      id: e.id,
-      testTitle: e.testTitle,
-      questionCount: Array.isArray(e.questions) ? e.questions.length : 0,
-      createdAt: e.createdAt,
-      status: e.status || 'active',
-      submissionCount: localSubCounts[e.id] || 0
-    }));
-
-    return res.json({ success: true, exams: formatted });
   }
+
+  // Merge local file submissions
+  const localSubmissions = readSubmissionsLocal();
+  const existingSubIds = new Set(allSubmissions.map(s => s.id));
+  localSubmissions.forEach(ls => {
+    if (!existingSubIds.has(ls.id)) {
+      allSubmissions.push(ls);
+    }
+  });
+
+  // Calculate submission count per exam ID
+  const submissionCounts = {};
+  const singleActiveExamId = examList.length === 1 ? examList[0].id : null;
+
+  allSubmissions.forEach(sub => {
+    const resp = sub.responses ? (typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses) : sub;
+    const targetExamId = sub.exam_id || sub.examId || resp.exam_id || resp.examId;
+
+    if (targetExamId && targetExamId !== 'exam_default') {
+      submissionCounts[targetExamId] = (submissionCounts[targetExamId] || 0) + 1;
+    } else if (singleActiveExamId) {
+      submissionCounts[singleActiveExamId] = (submissionCounts[singleActiveExamId] || 0) + 1;
+    }
+  });
+
+  const formatted = examList.map(e => ({
+    id: e.id,
+    testTitle: e.title || e.testTitle,
+    questionCount: e.question_count ?? (Array.isArray(e.questions) ? e.questions.length : 0),
+    createdAt: e.created_at || e.createdAt,
+    status: e.status || 'active',
+    submissionCount: submissionCounts[e.id] || 0
+  }));
+
+  return res.json({ success: true, exams: formatted });
 });
 
 /**
