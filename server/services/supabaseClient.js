@@ -25,6 +25,9 @@ const supabaseServiceRoleKey = getValidKey();
 const supabaseAnonKey = getAnonKey();
 
 function checkConfigured() {
+  if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+    return false;
+  }
   return Boolean(
     supabaseUrl &&
     supabaseUrl.startsWith('http') &&
