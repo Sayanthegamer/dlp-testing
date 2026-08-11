@@ -315,7 +315,7 @@ async function getTeacherRoster(teacherId) {
       const { data, error } = await supabase
         .from('students')
         .select('*')
-        .eq('teacher_id', effectiveTeacherId)
+        .or(`teacher_id.eq.${effectiveTeacherId},teacher_id.eq.local-dev-user,teacher_id.eq.teacher_general`)
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
@@ -325,9 +325,13 @@ async function getTeacherRoster(teacherId) {
   }
 
   const localList = readLocalStudents();
-  const filteredLocal = localList.filter(s => s.teacher_id === effectiveTeacherId);
+  const filteredLocal = localList.filter(s => 
+    s.teacher_id === effectiveTeacherId || 
+    s.teacher_id === 'local-dev-user' || 
+    (s.teacher_id && s.teacher_id === 'teacher_general')
+  );
 
-  // Merge Supabase & Local rosters for THIS teacher ONLY
+  // Merge Supabase & Local rosters for THIS teacher
   const map = new Map();
   for (const s of [...supabaseStudents, ...filteredLocal]) {
     const key = (s.admission_number || s.id).toUpperCase();
@@ -341,6 +345,8 @@ async function getTeacherRoster(teacherId) {
 
 // In-memory salts for manual code regeneration requests
 const entitySalts = new Map();
+// Active code registry mapping TCH-XXXXXX -> teacherId
+const activeCodeToTeacherMap = new Map();
 
 function getEntitySalt(entityId) {
   if (!entitySalts.has(entityId)) {
@@ -378,7 +384,12 @@ function get5MinRollingRefCode(entityId, prefix = 'REF', offsetWindows = 0) {
     code += chars.charAt(num % chars.length);
   }
 
-  return `${prefix.toUpperCase()}-${code}`;
+  const formattedCode = `${prefix.toUpperCase()}-${code}`;
+  if (prefix.toUpperCase() === 'TCH') {
+    activeCodeToTeacherMap.set(formattedCode, entityId);
+  }
+
+  return formattedCode;
 }
 
 function getRefCodeSecondsLeft() {
@@ -398,8 +409,14 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   const cleanCode = String(teacherRefCode).trim().toUpperCase();
   let matchedTeacherId = null;
 
+  // 1. Check in-memory active code registry
+  if (activeCodeToTeacherMap.has(cleanCode)) {
+    matchedTeacherId = activeCodeToTeacherMap.get(cleanCode);
+  }
+
+  // 2. Check Supabase teachers table
   const supabase = getSupabaseClient();
-  if (supabase) {
+  if (!matchedTeacherId && supabase) {
     try {
       const { data: teachers } = await supabase.from('teachers').select('id, email');
       if (Array.isArray(teachers)) {
@@ -415,8 +432,9 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
     } catch (e) {}
   }
 
+  // 3. Check fallback teacher IDs
   if (!matchedTeacherId) {
-    const defaultTeachers = ['teacher_general', 'default_teacher', 'admin'];
+    const defaultTeachers = ['teacher_general', 'local-dev-user', 'default_teacher', 'admin'];
     for (const tId of defaultTeachers) {
       const code0 = get5MinRollingRefCode(tId, 'TCH', 0);
       const codePrev = get5MinRollingRefCode(tId, 'TCH', -1);
@@ -431,14 +449,23 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
     throw new Error('Invalid or expired Teacher Reference Code. Passcodes auto-refresh every 5 minutes.');
   }
 
+  // Update Supabase Database
   if (supabase) {
     try {
-      await supabase.from('students').update({ teacher_id: matchedTeacherId }).eq('id', studentId);
+      await supabase
+        .from('students')
+        .update({ teacher_id: matchedTeacherId })
+        .or(`id.eq.${studentId},admission_number.eq.${studentId}`);
     } catch (e) {}
   }
 
+  // Update Local Store Backup
   const localList = readLocalStudents();
-  const found = localList.find(s => s.id === studentId || s.admission_number === studentId);
+  const cleanId = String(studentId).trim().toUpperCase();
+  const found = localList.find(s => 
+    s.id === studentId || 
+    (s.admission_number && s.admission_number.toUpperCase() === cleanId)
+  );
   if (found) {
     found.teacher_id = matchedTeacherId;
     writeLocalStudents(localList);
@@ -486,7 +513,10 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
   const effectiveTeacherId = teacherId || 'teacher_general';
   if (supabase) {
     try {
-      await supabase.from('students').update({ teacher_id: effectiveTeacherId }).eq('id', targetStudent.id);
+      await supabase
+        .from('students')
+        .update({ teacher_id: effectiveTeacherId })
+        .or(`id.eq.${targetStudent.id},admission_number.eq.${cleanAdm}`);
     } catch (e) {}
   }
 
