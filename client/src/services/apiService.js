@@ -254,10 +254,15 @@ export async function publishExam(payload) {
 }
 
 
-export async function fetchExamSnapshot(examId) {
-  const response = await fetch(`/api/exams/${examId}`, {
+export async function fetchExamSnapshot(examId, rollingCode = '') {
+  const headers = { 'Content-Type': 'application/json' };
+  if (rollingCode) {
+    headers['x-rolling-code'] = rollingCode;
+  }
+  const url = `/api/exams/${examId}${rollingCode ? `?code=${encodeURIComponent(rollingCode)}` : ''}`;
+  const response = await fetch(url, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
+    headers
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));

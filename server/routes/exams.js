@@ -528,12 +528,7 @@ router.post('/exams/student-access', async (req, res) => {
         }
 
         const { data, error } = await query;
-        if (error) {
-          console.error('[Supabase Session Lookup Error]:', error.message);
-          return res.status(500).json({ error: `Database error checking session passcode: ${error.message}` });
-        }
-
-        if (Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data) && data.length > 0) {
           const matchedItem = data.find(session => {
             const currentCode = get5MinRollingCode(session.exam_id, 0);
             const previousCode = get5MinRollingCode(session.exam_id, -1);
@@ -547,7 +542,32 @@ router.post('/exams/student-access', async (req, res) => {
         }
       } catch (dbErr) {
         console.error('[Supabase Session Check Exception]:', dbErr.message);
-        return res.status(500).json({ error: `Database error checking session passcode: ${dbErr.message}` });
+      }
+    }
+
+    // Direct TOTP check against all active published exams in database
+    if (!matchedSession) {
+      try {
+        const { data: activeExams } = await supabase
+          .from('exams')
+          .select('id, status')
+          .neq('status', 'closed');
+
+        if (Array.isArray(activeExams)) {
+          const foundExam = activeExams.find(e => {
+            if (examId && e.id !== examId) return false;
+            const currentCode = get5MinRollingCode(e.id, 0);
+            const previousCode = get5MinRollingCode(e.id, -1);
+            return cleanCode === currentCode || cleanCode === previousCode;
+          });
+
+          if (foundExam) {
+            matchedSession = { exam_id: foundExam.id, rolling_code: cleanCode };
+            targetExamId = foundExam.id;
+          }
+        }
+      } catch (dbErr) {
+        console.error('[Supabase Active Exams Check Exception]:', dbErr.message);
       }
     }
 
@@ -623,6 +643,22 @@ router.post('/exams/student-access', async (req, res) => {
           targetExamId = sessionExamId;
           break;
         }
+      }
+    }
+
+    if (!matchedSession) {
+      const list = readExamsLocal();
+      const matchedLocal = list.find(e => {
+        if (e.status === 'closed') return false;
+        if (examId && e.id !== examId) return false;
+        const currentCode = get5MinRollingCode(e.id, 0);
+        const previousCode = get5MinRollingCode(e.id, -1);
+        return cleanCode === currentCode || cleanCode === previousCode || (e.rollingCode && cleanCode === e.rollingCode);
+      });
+
+      if (matchedLocal) {
+        matchedSession = { exam_id: matchedLocal.id, rolling_code: cleanCode };
+        targetExamId = matchedLocal.id;
       }
     }
 

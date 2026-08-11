@@ -338,12 +338,26 @@ export default function App() {
     setIsLoading(true);
     setLoadingMessage('Validating exam rolling code...');
     try {
-      if (targetTestId) {
-        const snap = await fetchExamSnapshot(targetTestId);
-        if (snap && snap.snapshot_data) {
-          if (snap.snapshot_data.testTitle) setTestTitle(snap.snapshot_data.testTitle);
-          if (Array.isArray(snap.snapshot_data.questions)) setQuestions(snap.snapshot_data.questions);
-        }
+      const studentName = studentUser?.full_name || studentUser?.fullName || 'Student Candidate';
+      const response = await fetch('/api/exams/student-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName,
+          rollingCode: code,
+          examId: targetTestId || undefined
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Invalid or expired 6-Digit Rolling Passcode.');
+      }
+
+      if (data.exam) {
+        if (data.exam.testTitle) setTestTitle(data.exam.testTitle);
+        if (Array.isArray(data.exam.questions)) setQuestions(data.exam.questions);
+        if (data.exam.id) setTargetTestId(data.exam.id);
       }
       setStudentStep('intro');
     } catch (err) {
