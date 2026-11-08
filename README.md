@@ -47,6 +47,11 @@ Convert informal math text, photos of printed examination papers, multi-page PDF
    JWT_SECRET=antigravity_dlp_secret_key_2026
    GEMINI_API_KEY=your_gemini_api_key_here
    GEMINI_MODEL=gemini-3.5-flash-lite
+
+   # Supabase Database & Storage (Modern API Keys):
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+   SUPABASE_SECRET_KEY=your_supabase_secret_key
    ```
    *Note: If `GEMINI_API_KEY` and `ANTHROPIC_API_KEY` are omitted, the backend automatically runs in **Smart Demo Fallback Mode** so you can test text/photo/Word parsing, publishing, 6-digit rolling codes, and grading offline.*
 

@@ -3,36 +3,109 @@ require('dotenv').config();
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 
-// Retrieve the anon key (used for user-scoped clients where RLS applies)
-function getAnonKey() {
-  const anonKey = process.env.SUPABASE_ANON_KEY || '';
-  if (anonKey && !anonKey.includes('your_supabase') && !anonKey.includes('your-supabase')) {
-    return anonKey;
+/**
+ * Helper to check whether a key string is non-empty and not a dummy/placeholder.
+ */
+function isValidKeyString(val) {
+  if (!val || typeof val !== 'string') return false;
+  const lower = val.toLowerCase().trim();
+  if (!lower) return false;
+  if (
+    lower.includes('your_supabase') ||
+    lower.includes('your-supabase') ||
+    lower.includes('your_secret') ||
+    lower.includes('your_publishable') ||
+    lower.includes('your_anon') ||
+    lower.includes('your_service_role')
+  ) {
+    return false;
   }
+  return true;
+}
+
+/**
+ * Classifies the type of Supabase key:
+ * - 'publishable' (modern sb_publishable_... or sbp_...)
+ * - 'secret' (modern sb_secret_... or sbs_...)
+ * - 'legacy_jwt' (legacy anon / service_role JWT starting with eyJ...)
+ * - 'unknown'
+ */
+function getKeyType(key) {
+  if (!key || typeof key !== 'string') return 'unknown';
+  const trimmed = key.trim();
+  if (trimmed.startsWith('sb_publishable_') || trimmed.startsWith('sbp_')) {
+    return 'publishable';
+  }
+  if (trimmed.startsWith('sb_secret_') || trimmed.startsWith('sbs_')) {
+    return 'secret';
+  }
+  if (trimmed.startsWith('eyJ')) {
+    return 'legacy_jwt';
+  }
+  return 'unknown';
+}
+
+/**
+ * Resolves the Publishable Key (used for client/browser RLS scoped requests).
+ * Safe to expose publicly in client browsers.
+ *
+ * Priority:
+ * 1. SUPABASE_PUBLISHABLE_KEY (modern standard)
+ * 2. VITE_SUPABASE_PUBLISHABLE_KEY (modern frontend standard)
+ * 3. SUPABASE_ANON_KEY (legacy JWT format)
+ */
+function getPublishableKey() {
+  const modernKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (isValidKeyString(modernKey)) return modernKey.trim();
+
+  const viteKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (isValidKeyString(viteKey)) return viteKey.trim();
+
+  const legacyKey = process.env.SUPABASE_ANON_KEY;
+  if (isValidKeyString(legacyKey)) return legacyKey.trim();
+
   return '';
 }
 
-// Retrieve the best available key for the global admin client (prefers service role)
-function getValidKey() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (serviceKey && !serviceKey.includes('your_supabase') && !serviceKey.includes('your-supabase')) {
-    return serviceKey;
-  }
-  return getAnonKey();
+/**
+ * Resolves the Secret Key (used for privileged server-side operations, bypasses RLS).
+ * Must remain confidential on the server.
+ *
+ * Priority:
+ * 1. SUPABASE_SECRET_KEY (modern standard)
+ * 2. SUPABASE_SERVICE_ROLE_KEY (legacy JWT format)
+ * 3. Falls back to Publishable Key if no secret key is provided (restricted client mode)
+ */
+function getSecretKey() {
+  const modernSecret = process.env.SUPABASE_SECRET_KEY;
+  if (isValidKeyString(modernSecret)) return modernSecret.trim();
+
+  const legacyService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (isValidKeyString(legacyService)) return legacyService.trim();
+
+  return getPublishableKey();
 }
 
-const supabaseServiceRoleKey = getValidKey();
-const supabaseAnonKey = getAnonKey();
+// Backward-compatibility aliases
+const getAnonKey = getPublishableKey;
+const getValidKey = getSecretKey;
+
+const supabasePublishableKey = getPublishableKey();
+const supabaseSecretKey = getSecretKey();
+const supabaseServiceRoleKey = supabaseSecretKey;
+const supabaseAnonKey = supabasePublishableKey;
 
 function checkConfigured() {
   if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
     return false;
   }
+  const url = process.env.SUPABASE_URL || supabaseUrl;
+  const secretKey = getSecretKey();
   return Boolean(
-    supabaseUrl &&
-    supabaseUrl.startsWith('http') &&
-    !supabaseUrl.includes('your-supabase-project') &&
-    supabaseServiceRoleKey
+    url &&
+    url.startsWith('http') &&
+    !url.includes('your-supabase-project') &&
+    secretKey
   );
 }
 
@@ -40,13 +113,14 @@ let supabase = null;
 
 if (checkConfigured()) {
   try {
-    supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    supabase = createClient(supabaseUrl, supabaseSecretKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
     });
-    console.log('[Supabase Client] Successfully initialized connection to Supabase.');
+    const keyType = getKeyType(supabaseSecretKey);
+    console.log(`[Supabase Client] Successfully initialized connection to Supabase (${keyType} key mode).`);
   } catch (err) {
     console.warn('[Supabase Client Initialization Warning]:', err.message);
     supabase = null;
@@ -57,18 +131,19 @@ if (checkConfigured()) {
 
 /**
  * Creates a per-request Supabase client scoped to the authenticated user's JWT.
- * This client uses the anon key + the user's access token, so auth.uid()
+ * This client uses the publishable key + the user's access token, so auth.uid()
  * resolves correctly in RLS policies.
  *
  * Falls back to the global admin client if inputs are missing.
  */
 function createUserClient(accessToken) {
-  if (!checkConfigured() || !accessToken || !supabaseAnonKey) {
+  const pubKey = getPublishableKey() || supabasePublishableKey;
+  if (!checkConfigured() || !accessToken || !pubKey) {
     return supabase;
   }
 
   try {
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    const userClient = createClient(supabaseUrl, pubKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -92,7 +167,6 @@ async function uploadDiagramToStorage(pngBuffer, fileName) {
   if (!checkConfigured() || !supabase) {
     return base64Url;
   }
-
 
   try {
     const filePath = `crops/${fileName}`;
@@ -124,6 +198,11 @@ module.exports = {
   isConfigured: () => Boolean(supabase),
   createUserClient,
   uploadDiagramToStorage,
+  getPublishableKey,
+  getSecretKey,
+  getKeyType,
+  checkConfigured,
+  // Legacy backward-compatibility exports
+  getAnonKey,
+  getValidKey,
 };
-
-
