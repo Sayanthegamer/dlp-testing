@@ -11,6 +11,7 @@ const examsRoutes = require('./routes/exams');
 const authRoutes = require('./routes/auth');
 const studentAuthRoutes = require('./routes/studentAuth');
 const { verifyTeacherAuth } = require('./services/authService');
+const { isConfigured, getKeyType, getSecretKey } = require('./services/supabaseClient');
 
 const authMiddleware = async (req, res, next) => {
   const isAuthorized = await verifyTeacherAuth(req);
@@ -92,6 +93,7 @@ app.use('/api/parse-docx', parseLimiter);
 app.get('/api/health', (req, res) => {
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
   const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
+  const dbConnected = isConfigured();
 
   res.json({
     status: 'ok',
@@ -100,6 +102,10 @@ app.get('/api/health', (req, res) => {
     providers: {
       gemini: hasGemini ? 'active' : 'inactive',
       anthropic: hasAnthropic ? 'active' : 'inactive'
+    },
+    database: {
+      supabase: dbConnected ? 'connected' : 'unconfigured_local_fallback',
+      keyMode: dbConnected ? getKeyType(getSecretKey()) : 'none'
     },
     geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
   });
@@ -140,6 +146,7 @@ if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
 
     console.log(`=================================`);
     console.log(`Math Pipeline Server running on http://localhost:${PORT}`);
+    console.log(`Supabase DB: ${isConfigured() ? `ACTIVE (${getKeyType(getSecretKey())} key mode)` : 'OFF (local file fallback)'}`);
     console.log(`Gemini API (${process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'}): ${hasGemini ? 'ACTIVE' : 'OFF'}`);
     console.log(`Anthropic API: ${hasAnthropic ? 'ACTIVE' : 'OFF'}`);
     console.log(`Mode: ${hasGemini || hasAnthropic ? 'Live API (with failover)' : 'Smart Demo Fallback Mode'}`);

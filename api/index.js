@@ -38,8 +38,10 @@ const authMiddleware = async (req, res, next) => {
 
 // 1. Register Lightweight Zero-Dependency Routes FIRST (guaranteed to never 500 on cold start)
 app.get('/api/health', (req, res) => {
+  const { isConfigured, getKeyType, getSecretKey } = require('../server/services/supabaseClient');
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
   const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
+  const dbConnected = isConfigured();
 
   return res.json({
     status: 'ok',
@@ -48,6 +50,10 @@ app.get('/api/health', (req, res) => {
     providers: {
       gemini: hasGemini ? 'active' : 'inactive',
       anthropic: hasAnthropic ? 'active' : 'inactive'
+    },
+    database: {
+      supabase: dbConnected ? 'connected' : 'unconfigured_local_fallback',
+      keyMode: dbConnected ? getKeyType(getSecretKey()) : 'none'
     },
     geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
   });

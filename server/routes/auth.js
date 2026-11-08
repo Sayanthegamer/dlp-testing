@@ -39,11 +39,18 @@ router.post('/signup', async (req, res) => {
     if (error) throw error;
 
     if (data.user) {
-      await supabase.from('teachers').upsert({
-        id: data.user.id,
-        email: data.user.email,
-        full_name: fullName || data.user.email.split('@')[0],
-      });
+      try {
+        const { error: upsertErr } = await supabase.from('teachers').upsert({
+          id: data.user.id,
+          email: data.user.email,
+          full_name: fullName || data.user.email.split('@')[0],
+        });
+        if (upsertErr) {
+          console.warn('[Teacher Profile Upsert Warning]:', upsertErr.message);
+        }
+      } catch (upsertCatch) {
+        console.warn('[Teacher Profile Upsert Exception]:', upsertCatch.message);
+      }
     }
 
     const requiresConfirmation = !data.session;

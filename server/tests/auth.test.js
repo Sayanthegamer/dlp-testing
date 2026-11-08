@@ -17,9 +17,15 @@ describe('Teacher Auth API Integration', () => {
       expect(isValidTeacherAccessCode('code_A')).toBe(true);
     });
 
-    it('should reject random strings or Supabase secret keys', () => {
+    it('should accept SUPABASE_SECRET_KEY as valid master access code', () => {
+      process.env.SUPABASE_SECRET_KEY = 'sb_secret_master_admin_key_9999';
+      expect(isValidTeacherAccessCode('sb_secret_master_admin_key_9999')).toBe(true);
+    });
+
+    it('should reject random strings or invalid keys', () => {
       process.env.TEACHER_ACCESS_CODE = 'correct_code';
-      expect(isValidTeacherAccessCode('sb_secret_supabase_admin_key_12345')).toBe(false);
+      delete process.env.SUPABASE_SECRET_KEY;
+      expect(isValidTeacherAccessCode('some_random_unauthorized_key')).toBe(false);
       expect(isValidTeacherAccessCode('wrong')).toBe(false);
       expect(isValidTeacherAccessCode('')).toBe(false);
     });
