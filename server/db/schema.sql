@@ -2,7 +2,7 @@
 -- Supabase PostgreSQL Schema for Tuition Test Platform
 -- =======================================================
 
--- Enable UUID extension if needed
+-- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. Teachers / Profiles Table
@@ -99,6 +99,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_exam_id ON questions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_exam_rolling ON exam_sessions(exam_id, rolling_code) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_submissions_exam_id ON submissions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_students_admission_number ON students(admission_number);
+CREATE INDEX IF NOT EXISTS idx_students_teacher_id ON students(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON submissions(student_id);
 
 -- Enable Row Level Security (RLS)
@@ -109,60 +110,98 @@ ALTER TABLE exam_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (Teacher Isolation & Public Student Access to Sessions)
+-- =======================================================
+-- RLS Policies (Idempotent: drops prior policy before re-creating)
+-- =======================================================
+
 -- 1. Teachers Policies
+DROP POLICY IF EXISTS "Teachers can view and update own profile" ON teachers;
 CREATE POLICY "Teachers can view and update own profile" 
     ON teachers FOR ALL USING (auth.uid() = id);
 
 -- 2. Exams Policies
+DROP POLICY IF EXISTS "Teachers can manage own exams" ON exams;
 CREATE POLICY "Teachers can manage own exams" 
     ON exams FOR ALL USING (auth.uid() = teacher_id OR teacher_id IS NULL);
 
 -- 3. Questions Policies
+DROP POLICY IF EXISTS "Teachers can manage own exam questions" ON questions;
 CREATE POLICY "Teachers can manage own exam questions" 
     ON questions FOR ALL USING (
         EXISTS (SELECT 1 FROM exams WHERE exams.id = questions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
 -- 4. Active Sessions Policies
+DROP POLICY IF EXISTS "Public student access for active sessions" ON exam_sessions;
 CREATE POLICY "Public student access for active sessions" 
     ON exam_sessions FOR SELECT USING (is_active = TRUE);
 
+DROP POLICY IF EXISTS "Teachers can manage exam sessions" ON exam_sessions;
 CREATE POLICY "Teachers can manage exam sessions" 
     ON exam_sessions FOR ALL USING (
         auth.role() = 'authenticated' OR EXISTS (SELECT 1 FROM exams WHERE exams.id = exam_sessions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
--- 5. Submissions Policy
+-- 5. Submissions Policies
+DROP POLICY IF EXISTS "Public student submissions insert" ON submissions;
 CREATE POLICY "Public student submissions insert" 
     ON submissions FOR INSERT WITH CHECK (TRUE);
 
+DROP POLICY IF EXISTS "Teachers view submissions for own exams" ON submissions;
 CREATE POLICY "Teachers view submissions for own exams" 
     ON submissions FOR SELECT USING (
         EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
+DROP POLICY IF EXISTS "Teachers update submissions for own exams" ON submissions;
 CREATE POLICY "Teachers update submissions for own exams" 
     ON submissions FOR UPDATE USING (
         EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
+DROP POLICY IF EXISTS "Students can view own submissions" ON submissions;
+CREATE POLICY "Students can view own submissions" 
+    ON submissions FOR SELECT USING (TRUE);
+
+-- 6. Students Policies
+DROP POLICY IF EXISTS "Public student read for login" ON students;
+CREATE POLICY "Public student read for login" 
+    ON students FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "Public student registration insert" ON students;
+CREATE POLICY "Public student registration insert" 
+    ON students FOR INSERT WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Teachers can update enrolled students" ON students;
+CREATE POLICY "Teachers can update enrolled students" 
+    ON students FOR UPDATE USING (
+        auth.uid() = teacher_id OR teacher_id IS NULL
+    );
+
+DROP POLICY IF EXISTS "Teachers can delete enrolled students" ON students;
+CREATE POLICY "Teachers can delete enrolled students" 
+    ON students FOR DELETE USING (
+        auth.uid() = teacher_id OR teacher_id IS NULL
+    );
+
 -- =======================================================
--- 6. Storage Bucket Setup for Cropped Diagram Images
+-- 7. Storage Bucket Setup for Cropped Diagram Images
 -- =======================================================
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('diagram-media', 'diagram-media', true)
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Public Read Diagram Media" ON storage.objects;
 CREATE POLICY "Public Read Diagram Media"
     ON storage.objects FOR SELECT
     USING (bucket_id = 'diagram-media');
 
+DROP POLICY IF EXISTS "Public Upload Diagram Media" ON storage.objects;
 CREATE POLICY "Public Upload Diagram Media"
     ON storage.objects FOR INSERT
     WITH CHECK (bucket_id = 'diagram-media');
 
+DROP POLICY IF EXISTS "Public Update Diagram Media" ON storage.objects;
 CREATE POLICY "Public Update Diagram Media"
     ON storage.objects FOR UPDATE
     USING (bucket_id = 'diagram-media');
-
