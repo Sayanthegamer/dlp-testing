@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import { gradeAttempt } from '../../services/gradingService';
@@ -19,168 +20,151 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
     window.print();
   };
 
-  return (
-    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-black/50 overflow-y-auto print:p-0 print:bg-white print:static print:block">
-      <div className="print-modal-container bg-[#fbf9f5] border-0 sm:border border-[#dcd2c4] rounded-none sm:rounded-2xl max-w-4xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible relative">
-        
-        {/* Sticky Modal Header Bar (Hidden on Print) */}
-        <div className="sticky top-0 z-20 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-[#e2d8ca] bg-[#f5efe4] print:hidden gap-2 shadow-2xs">
+  const modalContent = (
+    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-[#161513]/60 overflow-y-auto print:p-0 print:bg-white print:static print:block">
+      <div className="print-modal-container bg-[#fdfbf7] border-0 sm:border border-[#dcd5c4] rounded-none sm:rounded-2xl max-w-4xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-xl overflow-hidden font-sans print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible relative">
+        {/* Header Bar */}
+        <div className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 h-14 border-b border-[#dcd5c4] bg-[#efe9df] print:hidden gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[#8c4a17] text-white flex items-center justify-center shrink-0 shadow-2xs">
-              <Printer className="w-4 h-4" />
-            </div>
-            <h3 className="font-serif font-bold text-xs sm:text-base text-[#1c1b18] truncate">
-              Result Report
+            <Printer className="w-4 h-4 text-[#5e554a] shrink-0" strokeWidth={1.5} />
+            <h3 className="font-serif font-medium text-base text-[#1f1b16] truncate">
+              Printable scorecard report
             </h3>
           </div>
 
-          {/* Style Selector Buttons */}
-          <div className="flex items-center gap-1 font-sans text-xs shrink-0">
+          <div className="flex items-center gap-1 bg-[#fdfbf7] p-1 rounded-lg border border-[#dcd5c4] text-xs shrink-0">
             <button
               type="button"
               onClick={() => setPrintStyle('short')}
-              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl font-semibold transition-all text-xs ${
+              className={`flex items-center gap-1.5 px-2.5 h-7 rounded-md font-medium transition-calm ${
                 printStyle === 'short'
-                  ? 'bg-[#2c2825] text-white shadow-xs'
-                  : 'bg-[#e5dcd0] text-[#4a443b] hover:bg-[#d8ccbc]'
+                  ? 'bg-[#1f1b16] text-[#fdfbf7]'
+                  : 'text-[#5e554a] hover:text-[#1f1b16]'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Short Style</span>
-              <span className="sm:hidden">Short</span>
+              <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>Summary table</span>
             </button>
             <button
               type="button"
               onClick={() => setPrintStyle('long')}
-              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl font-semibold transition-all text-xs ${
+              className={`flex items-center gap-1.5 px-2.5 h-7 rounded-md font-medium transition-calm ${
                 printStyle === 'long'
-                  ? 'bg-[#2c2825] text-[#FAF7F0] shadow-xs'
-                  : 'bg-[#e5dcd0] text-[#4a443b] hover:bg-[#d8ccbc]'
+                  ? 'bg-[#1f1b16] text-[#fdfbf7]'
+                  : 'text-[#5e554a] hover:text-[#1f1b16]'
               }`}
             >
-              <AlignLeft className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Long Style</span>
-              <span className="sm:hidden">Long</span>
+              <AlignLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>Itemized script</span>
             </button>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
             <button
               type="button"
               onClick={handlePrint}
-              className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
-              title="Print / Save PDF"
+              className="flex items-center gap-1.5 px-3.5 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm"
             >
-              <Printer className="w-3.5 h-3.5 text-white" />
-              <span className="hidden sm:inline">Print / Save PDF</span>
-              <span className="sm:hidden">Print</span>
+              <Printer className="w-4 h-4" strokeWidth={1.5} />
+              <span>Print report</span>
             </button>
 
-            {/* Prominent High-Contrast Mobile Close X Button */}
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-xl bg-[#1c1b18] text-white hover:bg-black active:scale-95 transition-all shadow-xs shrink-0 flex items-center justify-center min-w-[36px] min-h-[36px]"
-              title="Close Report"
+              className="p-2 h-9 w-9 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] text-[#5e554a] hover:text-[#1f1b16] flex items-center justify-center"
               aria-label="Close"
             >
-              <X className="w-5 h-5 text-white" />
+              <X className="w-4 h-4" strokeWidth={1.5} />
             </button>
           </div>
         </div>
 
-        {/* Printable Result Document Content */}
-        <div id="printable-result-paper" className="p-8 sm:p-12 overflow-y-auto font-serif text-[#1c1b18] bg-white space-y-6 print:p-0 print:overflow-visible">
-          
-          {/* Paper Header */}
-          <div className="border-b-2 border-[#1c1b18] pb-4 space-y-2">
-            <div className="flex justify-between items-baseline font-sans text-xs text-[#5c5346]">
-              <span>Official Student Examination Report</span>
-              <span>Date: {formattedDate}</span>
+        {/* Printable Content */}
+        <div id="printable-result-paper" className="p-8 sm:p-12 overflow-y-auto font-serif text-[#1f1b16] bg-white space-y-6 print:p-0 print:overflow-visible">
+          <div className="exam-rule-double pb-4 space-y-2">
+            <div className="flex justify-between items-baseline font-sans text-xs text-[#5e554a]">
+              <span>Student examination report</span>
+              <span className="font-mono tabular-nums">{formattedDate}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1c1b18]">
+            <h1 className="text-2xl sm:text-3xl font-medium tracking-tight text-[#1f1b16]">
               {testTitle || 'Mathematics Examination Paper'}
             </h1>
 
-            {/* Candidate & Score Summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 text-xs font-sans border-t border-[#e2dacd] mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 text-xs font-sans border-t border-[#dcd5c4] mt-3">
               <div>
-                <span className="text-gray-500 block">Candidate Name</span>
-                <strong className="text-[#1c1b18] text-sm">{studentName || 'Student'}</strong>
+                <span className="text-[#7b7266] block">Candidate</span>
+                <strong className="text-[#1f1b16] text-sm font-medium">{studentName || 'Candidate'}</strong>
               </div>
               <div>
-                <span className="text-gray-500 block">Total Questions</span>
-                <strong className="text-[#1c1b18] text-sm">{questions.length}</strong>
+                <span className="text-[#7b7266] block">Questions</span>
+                <strong className="text-[#1f1b16] text-sm font-mono tabular-nums font-medium">{questions.length}</strong>
               </div>
               <div>
-                <span className="text-gray-500 block">Auto-Graded Score</span>
-                <strong className="text-[#1c1b18] text-sm">
-                  {autoGraded.total > 0 ? `${autoGraded.score} / ${autoGraded.total} (${autoGraded.percentage}%)` : 'N/A'}
+                <span className="text-[#7b7266] block">Score</span>
+                <strong className="text-[#1f1b16] text-sm font-mono tabular-nums font-medium">
+                  {autoGraded.total > 0 ? `${autoGraded.score} / ${autoGraded.total} (${autoGraded.percentage}%)` : 'Pending'}
                 </strong>
               </div>
               <div>
-                <span className="text-gray-500 block">Pending Review</span>
-                <strong className="text-[#1c1b18] text-sm">{pendingReview.length} Questions</strong>
+                <span className="text-[#7b7266] block">Pending review</span>
+                <strong className="text-[#1f1b16] text-sm font-mono tabular-nums font-medium">{pendingReview.length}</strong>
               </div>
             </div>
           </div>
 
-          {/* SHORT STYLE (Compact Scorecard Table) */}
           {printStyle === 'short' && (
-            <div className="space-y-4 pt-2">
-              <h2 className="font-sans font-bold text-xs uppercase tracking-wider text-[#5c5346]">
-                Response Summary Scorecard
+            <div className="space-y-3 pt-2">
+              <h2 className="font-sans font-medium text-xs text-[#5e554a]">
+                Response summary scorecard
               </h2>
               <table className="w-full text-left font-sans text-xs border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-gray-800 bg-[#f7f4ee]">
-                    <th className="py-2.5 px-3 font-bold text-gray-800">Q#</th>
-                    <th className="py-2.5 px-3 font-bold text-gray-800">Type</th>
-                    <th className="py-2.5 px-3 font-bold text-gray-800">Student Response</th>
-                    <th className="py-2.5 px-3 font-bold text-gray-800">Correct Answer Key</th>
-                    <th className="py-2.5 px-3 font-bold text-gray-800 text-right">Result</th>
+                  <tr className="border-b border-[#1f1b16] bg-[#f7f4ee]">
+                    <th className="py-2.5 px-3 font-medium text-[#1f1b16]">Item</th>
+                    <th className="py-2.5 px-3 font-medium text-[#1f1b16]">Type</th>
+                    <th className="py-2.5 px-3 font-medium text-[#1f1b16]">Candidate response</th>
+                    <th className="py-2.5 px-3 font-medium text-[#1f1b16]">Answer key</th>
+                    <th className="py-2.5 px-3 font-medium text-[#1f1b16] text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-[#dcd5c4] font-mono tabular-nums">
                   {questions.map((q, idx) => {
                     const item = perQuestion[idx] || {};
                     const studentAns = studentAnswers[q.id];
 
-                    let formattedStudentAns = '-';
+                    let formattedStudentAns = '—';
                     if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
-                      if (q.type === 'mcq' && typeof studentAns === 'number') {
+                      if ((q.type === 'mcq' || q.type === 'match_following') && typeof studentAns === 'number') {
                         formattedStudentAns = `Option ${optionLetters[studentAns] || studentAns}`;
                       } else {
                         formattedStudentAns = `${studentAns}`;
                       }
                     }
 
-                    let revealedCorrectAns = '-';
-                    if (q.type === 'mcq' && typeof q.correctAnswer === 'number') {
+                    let revealedCorrectAns = '—';
+                    if ((q.type === 'mcq' || q.type === 'match_following') && typeof q.correctAnswer === 'number') {
                       revealedCorrectAns = `Option ${optionLetters[q.correctAnswer] || q.correctAnswer}`;
                     } else if (q.type === 'short_answer_numeric') {
                       if (Array.isArray(q.acceptedRange)) {
-                        revealedCorrectAns = `${q.correctAnswer} [Range: ${q.acceptedRange[0]}–${q.acceptedRange[1]}]`;
+                        revealedCorrectAns = `${q.correctAnswer} [${q.acceptedRange[0]}–${q.acceptedRange[1]}]`;
                       } else if (q.correctAnswer !== null && q.correctAnswer !== undefined) {
                         revealedCorrectAns = `${q.correctAnswer}`;
                       }
-                    } else if (q.correctAnswer !== null && q.correctAnswer !== undefined && q.correctAnswer !== '') {
-                      revealedCorrectAns = `${q.correctAnswer}`;
                     }
 
                     return (
                       <tr key={q.id || idx} className="page-break-inside-avoid">
-                        <td className="py-2 px-3 font-serif font-bold">#{idx + 1}</td>
-                        <td className="py-2 px-3 text-gray-600">
-                          {q.type === 'mcq' ? 'MCQ' : q.type === 'short_answer_numeric' ? 'Numeric' : 'Text'}
+                        <td className="py-2 px-3 font-serif font-medium">Q{idx + 1}.</td>
+                        <td className="py-2 px-3 font-sans text-[#5e554a]">
+                          {q.type === 'mcq' ? 'MCQ' : q.type === 'short_answer_numeric' ? 'Numerical' : 'Match'}
                         </td>
-                        <td className="py-2 px-3 font-medium text-gray-900">{formattedStudentAns}</td>
-                        <td className="py-2 px-3 text-gray-700">{item.status !== 'pending_review' ? revealedCorrectAns : 'Teacher Evaluation'}</td>
-                        <td className="py-2 px-3 text-right font-bold">
-                          {item.status === 'correct' && <span className="text-emerald-700">Correct (+1)</span>}
-                          {item.status === 'incorrect' && <span className="text-red-700">Incorrect (0)</span>}
-                          {item.status === 'pending_review' && <span className="text-amber-800">Pending Review</span>}
+                        <td className="py-2 px-3 text-[#1f1b16]">{formattedStudentAns}</td>
+                        <td className="py-2 px-3 text-[#5e554a]">{item.status !== 'pending_review' ? revealedCorrectAns : 'Instructor review'}</td>
+                        <td className="py-2 px-3 text-right font-medium">
+                          {item.status === 'correct' && <span className="text-[#3f6b4a]">+1</span>}
+                          {item.status === 'incorrect' && <span className="text-[#dc2626]">0</span>}
+                          {item.status === 'pending_review' && <span className="text-[#b8622e]">Pending</span>}
                         </td>
                       </tr>
                     );
@@ -190,125 +174,44 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
             </div>
           )}
 
-          {/* LONG STYLE (Detailed Itemized Report with Stems) */}
           {printStyle === 'long' && (
             <div className="space-y-4 pt-2">
-              <h2 className="font-sans font-bold text-xs uppercase tracking-wider text-[#5c5346]">
-                Itemized Question & Evaluation Report
+              <h2 className="font-sans font-medium text-xs text-[#5e554a]">
+                Itemized evaluation script
               </h2>
-              <div className="space-y-4 print:space-y-3">
+              <div className="space-y-4">
                 {questions.map((q, idx) => {
                   const item = perQuestion[idx] || {};
                   const studentAns = studentAnswers[q.id];
 
                   let formattedStudentAns = 'No response provided';
                   if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
-                    if (q.type === 'mcq' && typeof studentAns === 'number') {
+                    if ((q.type === 'mcq' || q.type === 'match_following') && typeof studentAns === 'number') {
                       formattedStudentAns = `Option ${optionLetters[studentAns] || studentAns}`;
                     } else {
-                      formattedStudentAns = `"${studentAns}"`;
+                      formattedStudentAns = `${studentAns}`;
                     }
-                  }
-
-                  let revealedCorrectAns = null;
-                  if (q.type === 'mcq' && typeof q.correctAnswer === 'number') {
-                    revealedCorrectAns = `Option ${optionLetters[q.correctAnswer] || q.correctAnswer}`;
-                  } else if (q.type === 'short_answer_numeric') {
-                    if (Array.isArray(q.acceptedRange)) {
-                      revealedCorrectAns = `Center: ${q.correctAnswer} (Accepted Range: ${q.acceptedRange[0]} to ${q.acceptedRange[1]})`;
-                    } else if (q.correctAnswer !== null && q.correctAnswer !== undefined) {
-                      revealedCorrectAns = `${q.correctAnswer}`;
-                    }
-                  } else if (q.correctAnswer !== null && q.correctAnswer !== undefined && q.correctAnswer !== '') {
-                    revealedCorrectAns = `"${q.correctAnswer}"`;
                   }
 
                   return (
-                    <div key={q.id || idx} className="border border-gray-300 rounded-xl p-3.5 sm:p-4 space-y-2.5 page-break-inside-avoid">
-                      <div className="flex items-center justify-between font-sans text-xs border-b border-gray-200 pb-2">
-                        <span className="font-bold text-gray-900">Question #{idx + 1}</span>
-                        <span className="font-bold">
-                          {item.status === 'correct' && <span className="text-emerald-700">Correct (+1)</span>}
-                          {item.status === 'incorrect' && <span className="text-red-700">Incorrect (0)</span>}
-                          {item.status === 'pending_review' && <span className="text-amber-800">Pending Review</span>}
+                    <div key={q.id || idx} className="border border-[#dcd5c4] rounded-lg p-4 space-y-2.5 page-break-inside-avoid">
+                      <div className="flex items-center justify-between font-sans text-xs border-b border-[#efe9df] pb-2">
+                        <span className="font-serif font-medium text-sm text-[#1f1b16] tabular-nums">Q{idx + 1}.</span>
+                        <span className="font-mono tabular-nums font-medium">
+                          {item.status === 'correct' && <span className="text-[#3f6b4a]">Correct (+1)</span>}
+                          {item.status === 'incorrect' && <span className="text-[#dc2626]">Incorrect (0)</span>}
+                          {item.status === 'pending_review' && <span className="text-[#b8622e]">Pending review</span>}
                         </span>
                       </div>
 
-                      {/* Stem */}
-                      <div className="font-serif text-base text-[#1c1b18]">
+                      <div className="font-serif text-base text-[#1f1b16]">
                         <MathRenderer text={q.questionText} readOnly={true} />
                         <DiagramBlock diagrams={q.diagrams} diagramImages={q.diagramImages} />
                       </div>
 
-                      {/* MCQ Options with Full Content & Math */}
-                      {q.type === 'mcq' && q.options && q.options.length > 0 && (
-                        <div className="space-y-1.5 pl-2 pt-1 font-serif text-sm">
-                          <span className="text-[11px] font-sans font-semibold text-gray-500 uppercase tracking-wider block">
-                            Options:
-                          </span>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {q.options.map((opt, optIdx) => {
-                              const letter = optionLetters[optIdx] || optIdx + 1;
-                              const isCandidateChoice = studentAns === optIdx;
-                              const isCorrectKey = q.correctAnswer === optIdx;
-
-                              let badgeText = null;
-                              let badgeStyle = '';
-
-                              if (isCandidateChoice && isCorrectKey) {
-                                badgeText = 'Student Choice • Correct Key';
-                                badgeStyle = 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold';
-                              } else if (isCandidateChoice) {
-                                badgeText = 'Student Choice';
-                                badgeStyle = 'bg-red-100 border-red-300 text-red-800 font-bold';
-                              } else if (isCorrectKey && item.status !== 'pending_review') {
-                                badgeText = 'Correct Key';
-                                badgeStyle = 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold';
-                              }
-
-                              return (
-                                <div
-                                  key={optIdx}
-                                  className={`flex items-start justify-between gap-3 p-2 rounded-lg border text-xs font-sans ${
-                                    isCandidateChoice
-                                      ? isCorrectKey
-                                        ? 'bg-emerald-50/70 border-emerald-300'
-                                        : 'bg-red-50/70 border-red-200'
-                                      : isCorrectKey && item.status !== 'pending_review'
-                                      ? 'bg-[#f4f9f4] border-[#a5d6a7]'
-                                      : 'bg-white border-gray-200'
-                                  }`}
-                                >
-                                  <div className="flex items-start gap-2 font-serif text-sm text-[#1c1b18]">
-                                    <span className="font-bold font-sans text-xs text-gray-700 shrink-0 mt-0.5">
-                                      ({letter})
-                                    </span>
-                                    <div>
-                                      <MathRenderer text={opt} readOnly={true} />
-                                    </div>
-                                  </div>
-
-                                  {badgeText && (
-                                    <span className={`px-2 py-0.5 rounded text-[11px] shrink-0 border ${badgeStyle}`}>
-                                      {badgeText}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Details Summary Box (For numerical & short answer questions without option badges) */}
-                      {q.type !== 'mcq' && (
-                        <div className="bg-[#FAF7F0] p-3 rounded-lg font-sans text-xs space-y-1">
-                          <div><span className="text-gray-500">Student Response: </span><strong className="text-gray-900">{formattedStudentAns}</strong></div>
-                          {revealedCorrectAns && item.status !== 'pending_review' && (
-                            <div><span className="text-[#3f6b4a]">Correct Key: </span><strong className="text-gray-900">{revealedCorrectAns}</strong></div>
-                          )}
-                        </div>
-                      )}
+                      <div className="bg-[#f7f4ee] p-2.5 rounded font-mono tabular-nums text-xs text-[#5e554a]">
+                        Candidate response: <strong className="text-[#1f1b16]">{formattedStudentAns}</strong>
+                      </div>
                     </div>
                   );
                 })}
@@ -316,14 +219,14 @@ export default function ResultPrintModal({ testTitle, studentName, questions, st
             </div>
           )}
 
-          {/* Paper Footer */}
-          <div className="pt-6 border-t border-gray-300 text-center font-sans text-xs text-gray-500">
-            *** End of Student Result Report ***
+          <div className="pt-6 border-t border-[#dcd5c4] text-center font-sans text-xs text-[#7b7266]">
+            End of student evaluation report
           </div>
-
         </div>
-
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modalContent, document.body);
 }

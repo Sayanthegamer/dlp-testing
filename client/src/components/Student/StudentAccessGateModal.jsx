@@ -27,7 +27,7 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Invalid or expired Rolling Passcode.');
+        throw new Error(data.error || 'Invalid or expired rolling passcode.');
       }
 
       localStorage.setItem('student_name', data.studentName);
@@ -37,30 +37,29 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
         onAuthenticated(data);
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Access denied. Please check your Rolling Code.');
+      setErrorMsg(err.message || 'Access denied. Please check your 6-digit rolling passcode.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1c1b18]/85 flex items-center justify-center p-4">
-      <div className="bg-[#FAF7F0] border border-[#DCD5C4] rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
-        
+    <div className="fixed inset-0 z-50 bg-[#1f1b16]/75 flex items-center justify-center p-4">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-7 max-w-md w-full shadow-lg space-y-6">
         {/* Header */}
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-[#232323] text-[#FAF7F0] flex items-center justify-center mx-auto shadow-md">
-            <GraduationCap className="w-7 h-7" />
+        <div className="text-center space-y-2.5 exam-rule-double pb-4">
+          <div className="w-11 h-11 rounded-lg bg-[#1f1b16] text-[#fdfbf7] flex items-center justify-center mx-auto">
+            <GraduationCap className="w-5 h-5" />
           </div>
-          <h2 className="font-serif font-bold text-2xl text-[#232323]">Student Exam Entrance</h2>
-          <p className="text-xs text-[#5c5346] max-w-xs mx-auto">
-            Please enter your full name and the 6-digit Rolling Passcode provided by your teacher.
+          <h2 className="font-serif font-semibold text-xl text-[#1f1b16]">Candidate exam entrance</h2>
+          <p className="text-xs text-[#5e554a] max-w-xs mx-auto leading-relaxed">
+            Enter your full name and the 6-digit rolling passcode displayed on the classroom screen.
           </p>
         </div>
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 font-sans font-medium">
+          <div className="p-3 rounded-lg bg-[#a63a2b]/10 border border-[#a63a2b]/30 text-[#a63a2b] text-xs flex items-center gap-2 font-sans">
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -69,8 +68,8 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
         {/* Access Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">
-              Student Full Name
+            <label className="block text-xs font-medium text-[#5e554a] mb-1.5">
+              Candidate full name
             </label>
             <div className="relative">
               <input
@@ -80,15 +79,15 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
                 placeholder="e.g. Alex Johnson"
                 required
                 autoFocus
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#DCD5C4] bg-white font-sans text-sm text-[#232323] focus:outline-none focus:ring-2 focus:ring-[#232323] shadow-inner"
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-lg border border-[#dcd5c4] bg-white font-sans text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
               />
-              <User className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+              <User className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">
-              6-Digit Rolling Passcode <span className="text-[#8c4a17] font-semibold">(Required)</span>
+            <label className="block text-xs font-medium text-[#5e554a] mb-1.5">
+              6-digit rolling passcode <span className="text-[#8c4a17]">(Required)</span>
             </label>
             <div className="relative">
               <input
@@ -98,29 +97,26 @@ export default function StudentAccessGateModal({ examId, onAuthenticated }) {
                 onChange={(e) => setRollingCode(e.target.value)}
                 placeholder="e.g. 849201"
                 required
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#DCD5C4] bg-white font-mono font-bold text-base tracking-widest text-[#8c4a17] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-lg border border-[#dcd5c4] bg-white font-mono font-semibold text-base tracking-[0.2em] text-[#8c4a17] focus:outline-none focus:border-[#8c4a17] tabular-nums"
               />
-              <KeyRound className="w-5 h-5 text-[#8c8275] absolute left-3 top-3.5" />
+              <KeyRound className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" />
             </div>
           </div>
-
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3.5 px-4 rounded-xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-sm shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-2.5 px-4 rounded-lg bg-[#8c4a17] hover:bg-[#733c12] text-white font-sans font-medium text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
-            <span>{isSubmitting ? 'Verifying Session...' : 'Enter Exam Session'}</span>
+            <span>{isSubmitting ? 'Verifying session...' : 'Enter exam session'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        <p className="text-[11px] text-center text-[#8c8275] font-sans">
-          Protected Session Gate • Rolling codes refresh per teacher session
+        <p className="text-[11px] text-center text-[#7b7266] font-sans">
+          Protected session gate • Rolling codes refresh every 5 minutes
         </p>
-
       </div>
     </div>
   );
 }
-

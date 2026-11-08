@@ -8,8 +8,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        serif: ['Newsreader', 'Source Serif 4', 'Lora', 'serif'],
+        sans: ['Inter', 'Geist Variable', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Geist Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
         background: 'var(--background)',
@@ -46,25 +47,31 @@ export default {
         input: 'var(--input)',
         ring: 'var(--ring)',
         paper: {
-          50: '#fcfbfa',
-          100: '#fbf9f5',
-          200: '#f7f3ec',
-          300: '#eee6da',
-          400: '#d5c7b3',
+          50: '#fdfbf7',
+          100: '#faf7f0',
+          200: '#f7f4ee',
+          300: '#efe9df',
+          400: '#dcd5c4',
         },
         exam: {
-          border: '#dcd6cd',
-          card: '#fffdfa',
-          ink: '#1c1b18',
-          subtle: '#666158',
-          accent: '#c97a2b',
-          accentBg: '#fef8ef',
+          border: '#dcd5c4',
+          card: '#fdfbf7',
+          ink: '#1f1b16',
+          secondary: '#5e554a',
+          muted: '#7b7266',
+          accent: '#8c4a17',
+          warn: '#b8622e',
+          positive: '#3f6b4a',
+          negative: '#dc2626',
         }
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        lg: '12px',
+        md: '8px',
+        sm: '6px',
+      },
+      transitionTimingFunction: {
+        'unslop': 'cubic-bezier(0.22, 1, 0.36, 1)',
       }
     },
   },

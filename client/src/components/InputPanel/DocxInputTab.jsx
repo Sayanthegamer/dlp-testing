@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { FileCode, UploadCloud, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react';
+import { FileCode, ArrowRight, AlertTriangle } from 'lucide-react';
 import { parseDocxFile } from '../../services/docxParserService';
 
 export default function DocxInputTab({ onSubmitDocx, isLoading }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [docxStatus, setDocxStatus] = useState(null);
   const [isProcessingLocal, setIsProcessingLocal] = useState(false);
+  const [localError, setLocalError] = useState('');
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       await processDocx(file);
     }
@@ -17,12 +18,13 @@ export default function DocxInputTab({ onSubmitDocx, isLoading }) {
   const processDocx = async (file) => {
     setSelectedFile(file);
     setIsProcessingLocal(true);
+    setLocalError('');
     try {
       const parsedData = await parseDocxFile(file);
       setDocxStatus(parsedData);
     } catch (err) {
-      console.error(err);
-      alert('Could not parse .docx file. Make sure it is a valid Microsoft Word document.');
+      setLocalError('Could not read .docx file. Verify that it is a valid Microsoft Word document.');
+      setSelectedFile(null);
     } finally {
       setIsProcessingLocal(false);
     }
@@ -35,8 +37,15 @@ export default function DocxInputTab({ onSubmitDocx, isLoading }) {
 
   return (
     <div className="space-y-4">
+      {localError && (
+        <div className="p-3 rounded-lg bg-[#f7f4ee] border border-[#b8622e] text-xs text-[#1f1b16] flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-[#b8622e] shrink-0" strokeWidth={1.5} />
+          <span>{localError}</span>
+        </div>
+      )}
+
       {!selectedFile ? (
-        <div className="border-2 border-dashed border-[#dcd2c4] hover:border-[#2b6cb0] bg-[#ffffff] hover:bg-[#f4f8fc] rounded-xl p-8 text-center transition-all cursor-pointer group">
+        <div className="border border-dashed border-[#dcd5c4] hover:border-[#8c4a17] bg-[#f7f4ee] rounded-lg p-8 text-center transition-calm cursor-pointer">
           <input
             type="file"
             accept=".docx"
@@ -44,36 +53,36 @@ export default function DocxInputTab({ onSubmitDocx, isLoading }) {
             className="hidden"
             id="docx-upload-input"
           />
-          <label htmlFor="docx-upload-input" className="cursor-pointer block">
-            <div className="w-12 h-12 rounded-full bg-[#ebf8ff] text-[#2b6cb0] flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
-              <FileCode className="w-6 h-6" />
+          <label htmlFor="docx-upload-input" className="cursor-pointer block space-y-2">
+            <div className="w-10 h-10 rounded-lg bg-[#efe9df] text-[#5e554a] flex items-center justify-center mx-auto">
+              <FileCode className="w-5 h-5" strokeWidth={1.5} />
             </div>
-            <p className="font-serif font-semibold text-[#2c2825] text-base mb-1">
-              Upload Word (.docx) File
+            <p className="font-serif font-medium text-[#1f1b16] text-base">
+              Upload Microsoft Word (.docx) document
             </p>
-            <p className="text-xs text-[#736c62] max-w-xs mx-auto">
-              Direct XML parsing for Microsoft Word OMML native equations. Exact, 100% loss-free equation extraction.
+            <p className="text-xs text-[#7b7266] max-w-xs mx-auto">
+              Direct XML extraction of Office Math Markup Language (OMML) equations
             </p>
           </label>
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="bg-[#f0f7ff] border border-[#bee3f8] rounded-xl p-4 flex items-center justify-between">
+          <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg p-3.5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FileCode className="w-6 h-6 text-[#2b6cb0]" />
+              <FileCode className="w-5 h-5 text-[#5e554a]" strokeWidth={1.5} />
               <div>
-                <p className="font-medium text-xs text-[#2b6cb0]">{selectedFile.name}</p>
-                <p className="text-[11px] text-[#4a5568]">
-                  Extracted {docxStatus?.mathSpans?.length || 0} OMML Math equations directly from XML
+                <p className="font-medium text-xs text-[#1f1b16]">{selectedFile.name}</p>
+                <p className="text-[11px] text-[#7b7266] font-mono tabular-nums">
+                  {docxStatus?.questions?.length || 1} {docxStatus?.questions?.length === 1 ? 'question' : 'questions'} extracted
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => { setSelectedFile(null); setDocxStatus(null); }}
-              className="text-xs text-[#718096] hover:text-[#2d3748] underline"
+              className="text-xs text-[#5e554a] hover:text-[#1f1b16] underline"
             >
-              Change
+              Change file
             </button>
           </div>
 
@@ -81,10 +90,10 @@ export default function DocxInputTab({ onSubmitDocx, isLoading }) {
             type="button"
             onClick={handleSubmit}
             disabled={isLoading || isProcessingLocal}
-            className="w-full py-3 px-4 rounded-xl bg-[#2c2825] hover:bg-[#1a1816] text-[#fbf9f5] font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50"
+            className="w-full h-10 px-4 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium text-xs flex items-center justify-center gap-2 transition-calm active:scale-[0.98] disabled:opacity-50"
           >
-            <Sparkles className="w-4 h-4 text-[#e6cca6]" />
-            <span>Typeset .docx Exam Question</span>
+            <span>Typeset Word document</span>
+            <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
       )}

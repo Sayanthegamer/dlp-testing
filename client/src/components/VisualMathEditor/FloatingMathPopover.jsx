@@ -4,7 +4,7 @@ import { latexToVisualText, visualTextToLatex } from '../../services/latexToVisu
 import MathRenderer from '../PreviewPanel/MathRenderer';
 import { Check, X, Edit3 } from 'lucide-react';
 
-export default function FloatingMathPopover({ activeMath, targetElement, onSave, onClose }) {
+export default function FloatingMathPopover({ activeMath, onSave, onClose }) {
   const [visualText, setVisualText] = useState('');
   const [previewLatex, setPreviewLatex] = useState('');
 
@@ -23,15 +23,13 @@ export default function FloatingMathPopover({ activeMath, targetElement, onSave,
   const handleVisualChange = (e) => {
     const val = e.target.value;
     setVisualText(val);
-    const generatedLatex = visualTextToLatex(val);
-    setPreviewLatex(generatedLatex);
+    setPreviewLatex(visualTextToLatex(val));
   };
 
   const handleInsertSymbol = (symbolText) => {
-    const updated = visualText + ' ' + symbolText;
+    const updated = (visualText ? visualText + ' ' : '') + symbolText;
     setVisualText(updated);
-    const generatedLatex = visualTextToLatex(updated);
-    setPreviewLatex(generatedLatex);
+    setPreviewLatex(visualTextToLatex(updated));
   };
 
   const handleSaveClick = () => {
@@ -42,79 +40,75 @@ export default function FloatingMathPopover({ activeMath, targetElement, onSave,
   const cleanPreview = (previewLatex || '').replace(/<\/?math>/gi, '').trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-in fade-in duration-200">
-      <div className="bg-[#fcfbfa] border border-[#dcd2c4] rounded-2xl p-5 sm:p-6 shadow-2xl max-w-lg w-full space-y-4 relative animate-in zoom-in-95 duration-200">
-        
-        {/* Popover Header */}
-        <div className="flex items-center justify-between border-b border-[#ece4d8] pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#a86e2d] text-white flex items-center justify-center shadow-xs">
-              <Edit3 className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#161513]/60">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-lg w-full space-y-4 relative shadow-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#dcd5c4] pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#efe9df] text-[#1f1b16] flex items-center justify-center">
+              <Edit3 className="w-4 h-4" strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-base text-[#1c1b18]">Visual Math Equation Toolbar</h3>
-              <p className="text-xs text-[#736c62]">Edit equation visually in place (Zero code required)</p>
+              <h3 className="font-serif font-medium text-base text-[#1f1b16]">Visual equation builder</h3>
+              <p className="text-xs text-[#5e554a]">Click symbols or type visual expressions</p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full text-[#8c8275] hover:bg-[#efe8dc] transition-colors"
+            className="p-1.5 rounded-lg text-[#7b7266] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
 
-        {/* Visual Symbol Palette */}
         <SymbolPalette onInsert={handleInsertSymbol} />
 
-        {/* Visual Input Field */}
         <div>
-          <label className="block text-xs font-semibold text-[#5c5346] mb-1.5">
-            Visual Formula Typing:
+          <label className="block text-xs font-medium text-[#5e554a] mb-1.5">
+            Visual expression
           </label>
           <input
             type="text"
             value={visualText}
             onChange={handleVisualChange}
-            placeholder="e.g. (a / b) + x^2 = 10"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-[#c9bea9] bg-white font-serif text-base text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#a86e2d] focus:border-transparent shadow-inner"
+            placeholder="(a / b) + x^2 = 10"
+            className="w-full px-3.5 h-10 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-serif text-base text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
             autoFocus
           />
-          <p className="text-[11px] text-[#8c8275] mt-1.5">
-            Simple visual syntax: <code className="bg-[#f0e6d8] px-1.5 py-0.5 rounded text-[#5c5346]">(a / b)</code> fraction, <code className="bg-[#f0e6d8] px-1.5 py-0.5 rounded text-[#5c5346]">x^2</code> power, <code className="bg-[#f0e6d8] px-1.5 py-0.5 rounded text-[#5c5346]">√(x)</code> root.
+          <p className="text-xs text-[#7b7266] mt-1.5">
+            Examples: <code className="bg-[#efe9df] px-1.5 py-0.5 rounded text-[#1f1b16] font-mono text-[11px]">(a / b)</code> fraction, <code className="bg-[#efe9df] px-1.5 py-0.5 rounded text-[#1f1b16] font-mono text-[11px]">x^2</code> power, <code className="bg-[#efe9df] px-1.5 py-0.5 rounded text-[#1f1b16] font-mono text-[11px]">√(x)</code> root
           </p>
         </div>
 
-        {/* Real-time Typeset KaTeX Preview */}
-        <div className="bg-[#f7f2ea] border border-[#e2d8ca] rounded-xl p-3 sm:p-4">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#736c62] block mb-1.5">
-            Live Exam Typeset Preview
+        {/* Live Typeset Preview */}
+        <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg p-3.5">
+          <span className="text-xs font-medium text-[#5e554a] block mb-1.5">
+            Typeset preview
           </span>
-          <div className="text-lg sm:text-xl font-serif text-[#1c1b18] min-h-[44px] flex items-center justify-center bg-white rounded-lg border border-[#eae0d2] p-3 shadow-xs overflow-x-auto max-w-full">
-            <MathRenderer text={`<math>${cleanPreview}</math>`} />
+          <div className="text-xl font-serif text-[#1f1b16] min-h-[48px] flex items-center justify-center bg-[#fdfbf7] rounded-md border border-[#dcd5c4] p-3 overflow-x-auto">
+            <MathRenderer text={`<math>${cleanPreview}</math>`} readOnly={true} />
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2.5 pt-2">
+        <div className="flex items-center justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-[#dcd2c4] text-xs font-medium text-[#5c5346] hover:bg-[#ede5d8] transition-colors"
+            className="px-4 h-9 rounded-lg border border-[#dcd5c4] text-xs font-medium text-[#5e554a] hover:bg-[#efe9df] transition-calm"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSaveClick}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[#a86e2d] hover:bg-[#8c5a24] text-white text-xs font-semibold shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm active:scale-[0.98]"
           >
-            <Check className="w-4 h-4" /> Save Formula
+            <Check className="w-4 h-4" strokeWidth={1.5} />
+            <span>Save formula</span>
           </button>
         </div>
-
       </div>
     </div>
   );

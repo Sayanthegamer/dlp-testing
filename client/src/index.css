@@ -3,134 +3,110 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    background-color: #f6f3ed;
-    color: #22201c;
-    @apply bg-background text-foreground;
-  }
-  .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
-  }
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --background: #f7f4ee;
+    --foreground: #1f1b16;
+    --card: #fdfbf7;
+    --card-foreground: #1f1b16;
+    --popover: #fdfbf7;
+    --popover-foreground: #1f1b16;
+    --primary: #1f1b16;
+    --primary-foreground: #fdfbf7;
+    --secondary: #efe9df;
+    --secondary-foreground: #1f1b16;
+    --muted: #efe9df;
+    --muted-foreground: #7b7266;
+    --accent: #8c4a17;
+    --accent-foreground: #fdfbf7;
+    --destructive: #dc2626;
+    --border: #dcd5c4;
+    --input: #dcd5c4;
+    --ring: #8c4a17;
+    --radius: 0.75rem;
   }
-  .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+
+  body {
+    background-color: #f7f4ee;
+    color: #1f1b16;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+
   * {
-    @apply border-border;
+    border-color: #dcd5c4;
   }
+
   html {
     @apply font-sans;
   }
 }
 
-/* Custom exam card styling */
+/* Authentic Exam Paper Sheet & Rule Lines */
 .exam-paper {
-  background-color: #fbf9f5;
-  border: 1px solid #e2dacd;
-  box-shadow: 0 4px 20px -2px rgba(45, 35, 20, 0.05), 0 2px 6px -1px rgba(45, 35, 20, 0.03);
+  background-color: #fdfbf7;
+  border: 1px solid #dcd5c4;
+  box-shadow: 0 1px 2px rgba(31, 27, 22, 0.04);
+}
+
+/* Signature detail: hand-ruled exam paper double header bar */
+.exam-rule-double {
+  border-bottom: 3px double #dcd5c4;
 }
 
 /* KaTeX inline overrides for calm reading */
 .katex {
-  font-size: 1.05em !important;
+  font-size: 1.04em !important;
+  color: inherit;
 }
 
+/* Tabular figures for all numbers, timers, passcodes, and scores */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Review highlight on math formulas */
 .math-review-highlight {
-  background-color: rgba(235, 180, 75, 0.2);
-  border-bottom: 2px dashed #d9822b;
+  background-color: rgba(184, 98, 46, 0.12);
+  border-bottom: 1.5px dashed #b8622e;
   padding: 0 4px;
-  border-radius: 2px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .math-review-highlight:hover {
-  background-color: rgba(235, 180, 75, 0.35);
+  background-color: rgba(184, 98, 46, 0.22);
 }
 
-/* Smooth custom scrollbars */
+/* Unified easing transition utility */
+.transition-calm {
+  transition-property: color, background-color, border-color, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Subtle custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f0eae1;
+  background: #f7f4ee;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4c8b8;
+  background: #dcd5c4;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #bfae9b;
+  background: #c4bba6;
+}
+
+/* Balanced Headlines */
+h1, h2, h3, h4 {
+  text-wrap: balance;
 }
 
 /* Print Stylesheet Rules */
 @media print {
-  /* Hide main app UI (#root) and background elements when print portal modal is active */
   #root,
   main,
   nav,
@@ -140,10 +116,9 @@
     display: none !important;
   }
 
-  /* Reset body and page backgrounds */
   html, body {
     background: #ffffff !important;
-    color: #1c1b18 !important;
+    color: #1f1b16 !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
@@ -151,7 +126,6 @@
     overflow: visible !important;
   }
 
-  /* Target Portal Admit Cards Modal */
   .credential-cards-portal {
     position: absolute !important;
     top: 0 !important;
@@ -185,13 +159,12 @@
   .admit-card-item {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    border: 2px solid #1c1b18 !important;
-    border-radius: 12px !important;
+    border: 1.5px solid #1f1b16 !important;
+    border-radius: 8px !important;
     background: #ffffff !important;
     padding: 12px !important;
   }
 
-  /* Ensure modal container becomes normal document flow without fixed overlay */
   .print-modal-overlay {
     position: static !important;
     display: block !important;
@@ -228,40 +201,8 @@
     overflow: visible !important;
   }
 
-  /* Enforce clean page breaks */
   .page-break-inside-avoid {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
-}
-
-/* Modern Web Guidance: Balanced Headlines */
-h1, h2, h3, h4 {
-  text-wrap: balance;
-}
-
-/* Magic UI / Aceternity UI Shimmer Sheen Button (No Glassmorphism) */
-.btn-shimmer {
-  position: relative;
-  overflow: hidden;
-}
-.btn-shimmer::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    60deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.15) 50%,
-    transparent 70%
-  );
-  transform: rotate(30deg);
-  transition: transform 0.6s ease;
-  pointer-events: none;
-}
-.btn-shimmer:hover::after {
-  transform: rotate(30deg) translate(50%, 50%);
 }

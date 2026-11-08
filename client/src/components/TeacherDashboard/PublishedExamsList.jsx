@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { fetchExamsList, toggleExamStatus, startRollingSession } from '../../services/apiService';
-import { Copy, Check, Power, RefreshCw, FileText, Search, ExternalLink, AlertCircle, KeyRound } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  Power,
+  RefreshCw,
+  FileText,
+  Search,
+  AlertCircle,
+  KeyRound,
+  Calendar,
+  HelpCircle,
+  Users
+} from 'lucide-react';
 
 export default function PublishedExamsList() {
   const [exams, setExams] = useState([]);
@@ -22,7 +34,7 @@ export default function PublishedExamsList() {
         setExams(res.exams);
       }
     } catch (err) {
-      setError(err.message || 'Failed to load published exams.');
+      setError(err.message || 'Could not load published exams');
     } finally {
       setLoading(false);
     }
@@ -48,24 +60,24 @@ export default function PublishedExamsList() {
 
   const handleGenerateCode = async (examId) => {
     setGeneratingCodeId(examId);
+    setError(null);
     try {
       const data = await startRollingSession(examId);
       if (data.success && data.rollingCode) {
         setActiveCodes(prev => ({ ...prev, [examId]: data.rollingCode }));
       } else {
-        alert(data.error || 'Failed to generate rolling passcode.');
+        setError(data.error || 'Could not generate rolling passcode');
       }
     } catch (err) {
-      alert(`Error generating passcode: ${err.message}`);
+      setError(`Could not generate passcode: ${err.message}`);
     } finally {
       setGeneratingCodeId(null);
     }
   };
 
-
-
   const handleToggleStatus = async (examId, currentStatus) => {
     setTogglingId(examId);
+    setError(null);
     const nextStatus = currentStatus === 'closed' ? 'active' : 'closed';
     try {
       const res = await toggleExamStatus(examId, nextStatus);
@@ -73,80 +85,74 @@ export default function PublishedExamsList() {
         setExams(prev => prev.map(e => e.id === examId ? { ...e, status: res.status } : e));
       }
     } catch (err) {
-      alert(`Error toggling status: ${err.message}`);
+      setError(`Could not update exam status: ${err.message}`);
     } finally {
       setTogglingId(null);
     }
   };
 
-  const filteredExams = exams.filter(e => 
+  const filteredExams = exams.filter(e =>
     (e.testTitle || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (e.id || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto space-y-6 bg-[#faf7f2]">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto space-y-6 bg-[#f7f4ee]">
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#e2d8ca] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#dcd5c4] pb-4">
         <div>
-          <h4 className="font-serif font-bold text-xl text-[#1c1b18]">
-            Published Exam History
+          <h4 className="font-serif font-medium text-xl text-[#1f1b16]">
+            Published exams
           </h4>
-          <p className="text-xs text-[#786f63]">
-            Manage shareable test links, candidate counts, and active access status.
+          <p className="text-xs text-[#5e554a]">
+            Manage shareable links, 5-minute rolling passcodes, and session status
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          {/* Search Input */}
-          <div className="relative flex-1 sm:flex-initial w-full sm:w-auto">
-            <Search className="w-4 h-4 text-[#8c8275] absolute left-3 top-2.5" />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-initial w-full sm:w-56">
+            <Search className="w-4 h-4 text-[#7b7266] absolute left-3 top-2.5" strokeWidth={1.5} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search published exams..."
-              className="pl-9 pr-3 py-1.5 rounded-xl border border-[#dcd0be] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] w-full sm:w-56"
+              placeholder="Search exams"
+              className="pl-9 pr-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-xs text-[#1f1b16] focus:outline-none focus:border-[#8c4a17] w-full"
             />
           </div>
 
           <button
             type="button"
             onClick={loadExams}
-            className="p-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4d8c5] text-[#5c5346] transition-colors shrink-0"
+            className="p-2 h-9 w-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#5e554a] transition-calm shrink-0 flex items-center justify-center"
             title="Refresh list"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
           </button>
         </div>
       </div>
 
-      {/* Error state */}
       {error && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-[#fdfbf7] border border-[#dc2626] text-[#dc2626] text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" strokeWidth={1.5} />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Loading state */}
       {loading && exams.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-[#8c8275] space-y-2">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#8c4a17]" />
-          <span className="text-xs">Loading published exams...</span>
+        <div className="flex flex-col items-center justify-center py-16 text-[#7b7266] space-y-2">
+          <RefreshCw className="w-5 h-5 animate-spin text-[#8c4a17]" strokeWidth={1.5} />
+          <span className="text-xs">Loading published exams</span>
         </div>
       )}
 
-      {/* Empty State */}
       {!loading && filteredExams.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 bg-white rounded-3xl border border-[#e2d8ca] p-8">
-          <FileText className="w-10 h-10 text-[#c9bea9]" />
-          <div>
-            <h5 className="font-serif font-bold text-base text-[#1c1b18]">No Published Exams Found</h5>
-            <p className="text-xs text-[#786f63] max-w-sm mt-1">
-              Publish an exam from the question catalogue editor to generate frozen snapshot links for your students.
-            </p>
-          </div>
+        <div className="flex flex-col items-center justify-center py-14 text-center space-y-2 bg-[#fdfbf7] rounded-xl border border-[#dcd5c4] p-8">
+          <FileText className="w-8 h-8 text-[#7b7266]" strokeWidth={1.5} />
+          <h5 className="font-serif font-medium text-base text-[#1f1b16]">No published exams yet</h5>
+          <p className="text-xs text-[#5e554a] max-w-sm">
+            Publish an exam from the question paper editor to generate snapshot links for students
+          </p>
         </div>
       )}
 
@@ -158,66 +164,69 @@ export default function PublishedExamsList() {
           const isToggling = togglingId === exam.id;
 
           const formattedDate = exam.createdAt
-            ? new Date(exam.createdAt).toLocaleDateString(undefined, {
-                year: 'numeric',
+            ? new Date(exam.createdAt).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
+                year: 'numeric'
               })
-            : 'Unknown date';
+            : 'Recent';
 
           return (
             <div
               key={exam.id}
-              className={`bg-white border rounded-2xl p-5 shadow-xs transition-all space-y-4 flex flex-col justify-between ${
-                isClosed ? 'border-amber-300 bg-amber-50/20' : 'border-[#e2d8ca] hover:border-[#c5b8a5]'
-              }`}
+              className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-5 space-y-4 flex flex-col justify-between"
             >
-              <div className="space-y-2">
-                {/* Status & ID */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono text-[#8c8275] truncate max-w-[200px]">
-                    ID: {exam.id}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono text-[#7b7266] truncate max-w-[200px]">
+                    {exam.id}
                   </span>
                   <span
-                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                    className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-md border ${
                       isClosed
-                        ? 'bg-amber-100 border border-amber-300 text-amber-900'
-                        : 'bg-emerald-100 border border-emerald-300 text-emerald-900'
+                        ? 'bg-[#efe9df] border-[#dcd5c4] text-[#5e554a]'
+                        : 'bg-[#f4f8f5] border-[#3f6b4a] text-[#3f6b4a]'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-amber-600' : 'bg-emerald-600'}`} />
-                    {isClosed ? 'Closed (Inactive)' : 'Active (Accepting Submissions)'}
+                    <span className={`w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-[#7b7266]' : 'bg-[#3f6b4a]'}`} />
+                    <span>{isClosed ? 'Closed' : 'Active'}</span>
                   </span>
                 </div>
 
-                {/* Title */}
-                <h5 className="font-serif font-bold text-lg text-[#1c1b18] leading-snug">
+                <h5 className="font-serif font-medium text-lg text-[#1f1b16] leading-snug">
                   {exam.testTitle}
                 </h5>
 
-                {/* Details Pills */}
-                <div className="flex flex-wrap items-center gap-3 text-xs text-[#786f63] font-sans pt-1">
-                  <span>📅 Published: <strong className="text-[#3c3730]">{formattedDate}</strong></span>
-                  <span>❓ Questions: <strong className="text-[#3c3730]">{exam.questionCount}</strong></span>
-                  <span>📝 Submissions: <strong className="text-[#8c4a17]">{exam.submissionCount}</strong></span>
+                {/* Meta Row with Lucide Icons instead of Emojis */}
+                <div className="flex flex-wrap items-center gap-4 text-xs text-[#5e554a] font-mono tabular-nums pt-0.5">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+                    <span>{formattedDate}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+                    <span>{exam.questionCount} questions</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+                    <span>{exam.submissionCount} submissions</span>
+                  </span>
                 </div>
 
-                {/* Active Rolling Passcode Section */}
-                <div className="mt-2 p-3 bg-[#f8f3eb] rounded-xl border border-[#e2d8ca] flex items-center justify-between gap-2">
+                {/* Rolling Passcode Box */}
+                <div className="p-3 bg-[#f7f4ee] rounded-lg border border-[#dcd5c4] flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <KeyRound className="w-4 h-4 text-[#8c4a17] shrink-0" />
+                    <KeyRound className="w-4 h-4 text-[#8c4a17] shrink-0" strokeWidth={1.5} />
                     {activeCodes[exam.id] ? (
                       <div>
-                        <span className="text-[10px] font-bold uppercase text-[#736c62] block leading-none">Live Passcode</span>
-                        <span className="font-mono font-extrabold text-base tracking-widest text-[#8c4a17]">
+                        <span className="text-[11px] text-[#5e554a] block leading-none">5-minute code</span>
+                        <span className="font-mono tabular-nums font-medium text-base tracking-wider text-[#1f1b16]">
                           {activeCodes[exam.id]}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-xs text-[#736c62] font-medium">
-                        {isClosed ? 'Exam closed' : 'No passcode active'}
+                      <span className="text-xs text-[#5e554a]">
+                        {isClosed ? 'Session closed' : 'Generate 6-digit rolling code'}
                       </span>
                     )}
                   </div>
@@ -226,79 +235,55 @@ export default function PublishedExamsList() {
                     <button
                       type="button"
                       onClick={() => handleCopyCode(exam.id, activeCodes[exam.id])}
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
-                        copiedCodeId === exam.id ? 'bg-emerald-600 text-white' : 'bg-white text-[#8c4a17] border border-[#dcd2c4] hover:bg-[#FAF7F0]'
+                      className={`text-xs font-medium px-2.5 h-7 rounded-md transition-calm flex items-center gap-1 ${
+                        copiedCodeId === exam.id
+                          ? 'bg-[#3f6b4a] text-[#fdfbf7]'
+                          : 'bg-[#fdfbf7] text-[#1f1b16] border border-[#dcd5c4] hover:bg-[#efe9df]'
                       }`}
                     >
-                      {copiedCodeId === exam.id ? (
-                        <>
-                          <Check className="w-3 h-3" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>Copy Code</span>
-                        </>
-                      )}
+                      {copiedCodeId === exam.id ? <Check className="w-3 h-3" strokeWidth={1.5} /> : <Copy className="w-3 h-3" strokeWidth={1.5} />}
+                      <span>{copiedCodeId === exam.id ? 'Copied' : 'Copy'}</span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => handleGenerateCode(exam.id)}
                       disabled={isClosed || generatingCodeId === exam.id}
-                      className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#8c4a17] text-white hover:bg-[#733c11] transition-all disabled:opacity-40 flex items-center gap-1"
+                      className="text-xs font-medium px-3 h-7 rounded-md bg-[#1f1b16] text-[#fdfbf7] hover:bg-[#332d25] transition-calm disabled:opacity-40 flex items-center gap-1.5"
                     >
-                      <RefreshCw className={`w-3 h-3 ${generatingCodeId === exam.id ? 'animate-spin' : ''}`} />
-                      <span>Generate Code</span>
+                      <RefreshCw className={`w-3 h-3 ${generatingCodeId === exam.id ? 'animate-spin' : ''}`} strokeWidth={1.5} />
+                      <span>Show code</span>
                     </button>
                   )}
                 </div>
               </div>
 
-
-              {/* Actions Footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-[#f0e6d8] gap-2">
-                {/* Copy Shareable Link */}
+              {/* Footer Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-[#efe9df] gap-2">
                 <button
                   type="button"
                   onClick={() => handleCopyLink(exam.id)}
                   disabled={isClosed}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-medium transition-calm ${
                     isClosed
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      ? 'bg-[#efe9df] text-[#7b7266] cursor-not-allowed'
                       : isCopied
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-[#8c4a17] text-white hover:bg-[#733c11] shadow-xs'
+                      ? 'bg-[#3f6b4a] text-[#fdfbf7]'
+                      : 'bg-[#1f1b16] text-[#fdfbf7] hover:bg-[#332d25]'
                   }`}
-                  title={isClosed ? 'Re-activate exam to copy shareable link' : 'Copy student test link to clipboard'}
                 >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Student Link</span>
-                    </>
-                  )}
+                  {isCopied ? <Check className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Copy className="w-3.5 h-3.5" strokeWidth={1.5} />}
+                  <span>{isCopied ? 'Copied link' : 'Copy student link'}</span>
                 </button>
 
-                {/* Toggle Active/Closed */}
                 <button
                   type="button"
                   onClick={() => handleToggleStatus(exam.id, exam.status)}
                   disabled={isToggling}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                    isClosed
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                      : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                  }`}
+                  className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-medium border border-[#dcd5c4] bg-[#fdfbf7] hover:bg-[#efe9df] text-[#1f1b16] transition-calm"
                 >
-                  <Power className={`w-3.5 h-3.5 ${isToggling ? 'animate-spin' : ''}`} />
-                  <span>{isClosed ? 'Re-Open Test' : 'Close Test Access'}</span>
+                  <Power className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+                  <span>{isClosed ? 'Reopen exam' : 'Close exam'}</span>
                 </button>
               </div>
             </div>

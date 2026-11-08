@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import SamplePrompts from '../Common/SamplePrompts';
-import { Send, Sparkles } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
-export default function TextInputTab({ onSubmitText, isLoading, onLoadSampleText, onLoadDocxSample }) {
+export default function TextInputTab({ onSubmitText, isLoading, onLoadDocxSample }) {
   const [textInput, setTextInput] = useState('');
 
   const handleSubmit = (e) => {
@@ -18,36 +18,34 @@ export default function TextInputTab({ onSubmitText, isLoading, onLoadSampleText
 
   return (
     <div className="space-y-4">
-      {/* Sample Loader Buttons */}
       <SamplePrompts
         onLoadTextSample={handleSampleClick}
-        onLoadPhotoSample={() => {}}
         onLoadDocxSample={onLoadDocxSample}
       />
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 flex items-center justify-between">
-            <span>Type or Paste Informal Math Question</span>
-            <span className="text-[11px] text-[#8c8275] font-normal">Informal English allowed — No LaTeX code required!</span>
+          <label className="block text-xs font-medium text-[#5e554a] mb-1.5 flex items-center justify-between">
+            <span>Informal math text</span>
+            <span className="text-xs text-[#7b7266]">Plain English converted to typeset math</span>
           </label>
-          
+
           <textarea
-            rows={5}
+            rows={4}
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Type your question informally here... e.g. Solve for x: x squared plus 2x minus 3 = 0. Options: A) x = 1, -3 B) x = -1, 3 C) x = 2, -3 D) x = -2, 1"
-            className="w-full p-3.5 rounded-xl border border-[#dcd2c4] bg-[#ffffff] text-sm text-[#1c1b18] placeholder-[#9c9386] focus:outline-none focus:ring-2 focus:ring-[#a86e2d] focus:border-transparent transition-all shadow-inner leading-relaxed"
+            placeholder="Solve for x: x squared plus 2x minus 3 = 0. Options: A) x = 1, -3  B) x = -1, 3  C) x = 2, -3  D) x = -2, 1"
+            className="w-full p-3.5 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-sm text-[#1f1b16] placeholder-[#7b7266] focus:outline-none focus:border-[#8c4a17] transition-calm leading-relaxed"
           />
         </div>
 
         <button
           type="submit"
           disabled={!textInput.trim() || isLoading}
-          className="w-full py-3 px-4 rounded-xl bg-[#2c2825] hover:bg-[#1a1816] text-[#fbf9f5] font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full h-10 px-4 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium text-xs flex items-center justify-center gap-2 transition-calm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Sparkles className="w-4 h-4 text-[#e6cca6]" />
-          <span>Typeset Exam Question</span>
+          <span>Typeset question</span>
+          <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
         </button>
       </form>
     </div>

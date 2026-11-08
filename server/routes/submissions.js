@@ -1,80 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 const { supabase, isConfigured, createUserClient } = require('../services/supabaseClient');
 const { verifyTeacherAuth } = require('../services/authService');
-
-function getSubmissionsFilePath() {
-  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
-  if (isVercel) {
-    return path.join('/tmp', 'submissions.json');
-  }
-  return path.join(__dirname, '..', 'data', 'submissions.json');
-}
-
-function ensureDataFile() {
-  const filePath = getSubmissionsFilePath();
-  const dirPath = path.dirname(filePath);
-  try {
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify([]), 'utf8');
-    }
-    return filePath;
-  } catch (err) {
-    const tmpPath = path.join('/tmp', 'submissions.json');
-    try {
-      if (!fs.existsSync(tmpPath)) {
-        fs.writeFileSync(tmpPath, JSON.stringify([]), 'utf8');
-      }
-    } catch (tmpErr) {}
-    return tmpPath;
-  }
-}
-
-function readSubmissionsLocal() {
-  const filePath = ensureDataFile();
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(raw) || [];
-  } catch (err) {
-    try {
-      const rawTmp = fs.readFileSync('/tmp/submissions.json', 'utf8');
-      return JSON.parse(rawTmp) || [];
-    } catch (tmpErr) {
-      return [];
-    }
-  }
-}
-
-function writeSubmissionsLocal(data) {
-  const filePath = ensureDataFile();
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    try {
-      fs.writeFileSync('/tmp/submissions.json', JSON.stringify(data, null, 2), 'utf8');
-      return true;
-    } catch (tmpErr) {
-      return false;
-    }
-  }
-}
+const {
+  readSubmissionsLocal,
+  writeSubmissionsLocal
+} = require('../services/localStoreService');
 
 /**
  * PUBLIC Student Endpoint: POST /api/submissions
+ * Persists directly to Supabase when configured; uses local fallback only in test/unconfigured mode.
  */
 router.post('/submissions', async (req, res) => {
   const body = req.body || {};
-  
+
   const rawStudentName = typeof body.studentName === 'string' ? body.studentName.trim() : 'Anonymous Candidate';
   const rawTestTitle = typeof body.testTitle === 'string' ? body.testTitle.trim() : 'Mathematics Examination';
-  
+
   const studentName = rawStudentName.substring(0, 100);
   const testTitle = rawTestTitle.substring(0, 200);
 
@@ -105,7 +48,7 @@ router.post('/submissions', async (req, res) => {
         if (existing && existing.id) {
           targetExamId = existing.id;
         }
-      } catch (e) {}
+      } catch (_) {}
     }
 
     if (!targetExamId && rollingCodeUsed) {
@@ -114,7 +57,7 @@ router.post('/submissions', async (req, res) => {
         if (Array.isArray(activeExams) && activeExams.length > 0) {
           targetExamId = activeExams[0].id;
         }
-      } catch (e) {}
+      } catch (_) {}
     }
 
     const submissionObj = {
@@ -142,7 +85,6 @@ router.post('/submissions', async (req, res) => {
       }
     };
 
-    let savedToSupabase = false;
     try {
       const insertPayload = {
         id: serverGeneratedId,
@@ -163,21 +105,11 @@ router.post('/submissions', async (req, res) => {
       }
 
       const { error: insertError } = await supabase.from('submissions').insert(insertPayload);
-
-      if (!insertError) {
-        savedToSupabase = true;
-        console.log(`[Supabase Submissions] Successfully saved submission ${serverGeneratedId}`);
-      } else {
-        console.warn('[Supabase Submission Insert Error, writing local fallback]:', insertError.message);
+      if (insertError) {
+        return res.status(500).json({ error: `Failed to save submission to Supabase: ${insertError.message}` });
       }
     } catch (dbErr) {
-      console.error('[Supabase Submission Insert Exception]:', dbErr.message);
-    }
-
-    if (!savedToSupabase) {
-      const list = readSubmissionsLocal();
-      list.unshift(submissionObj);
-      writeSubmissionsLocal(list);
+      return res.status(500).json({ error: `Database error saving submission: ${dbErr.message}` });
     }
 
     return res.json({
@@ -186,10 +118,12 @@ router.post('/submissions', async (req, res) => {
       status: submissionObj.status
     });
   } else {
-    // Unconfigured local dev mode fallback
     const submissionObj = {
       id: serverGeneratedId,
       examId: rawExamId || 'exam_default',
+      studentId,
+      isDevDemo,
+      attemptNumber,
       testTitle,
       studentName,
       rollingCodeUsed,
@@ -239,7 +173,7 @@ router.get('/submissions', async (req, res) => {
         .select('id, student_name, percentage, total_score, responses, submitted_at')
         .order('submitted_at', { ascending: false });
 
-      if (!userError && Array.isArray(userData) && userData.length > 0) {
+      if (!userError && Array.isArray(userData)) {
         allSubmissions = userData;
       } else {
         const { data: adminData } = await supabase
@@ -251,19 +185,10 @@ router.get('/submissions', async (req, res) => {
           allSubmissions = adminData;
         }
       }
-    } catch (e) {
-      console.error('[Supabase Submissions Fetch Error]:', e.message);
-    }
+    } catch (_) {}
+  } else {
+    allSubmissions = readSubmissionsLocal();
   }
-
-  // Merge local file submissions as fallback
-  const localList = readSubmissionsLocal();
-  const existingIds = new Set(allSubmissions.map(s => s.id));
-  localList.forEach(item => {
-    if (!existingIds.has(item.id)) {
-      allSubmissions.push(item);
-    }
-  });
 
   const formatted = allSubmissions.map(item => {
     if (item.responses) {
@@ -299,11 +224,12 @@ router.post('/submissions/:id/grade', async (req, res) => {
   }
 
   let submissionTarget = null;
-  let clientUsed = null; // 'userDb', 'supabaseAdmin', or 'local'
+  let clientUsed = null;
+  let localList = [];
+  let localIdx = -1;
 
   if (isConfigured()) {
     try {
-      // 1. Try user RLS client
       const userDb = createUserClient(req.accessToken);
       const { data: userData, error: userErr } = await userDb
         .from('submissions')
@@ -315,7 +241,6 @@ router.post('/submissions/:id/grade', async (req, res) => {
         submissionTarget = typeof userData.responses === 'string' ? JSON.parse(userData.responses) : userData.responses;
         clientUsed = userDb;
       } else {
-        // 2. Fallback to admin service client
         const { data: adminData, error: adminErr } = await supabase
           .from('submissions')
           .select('responses')
@@ -327,26 +252,22 @@ router.post('/submissions/:id/grade', async (req, res) => {
           clientUsed = supabase;
         }
       }
-    } catch (e) {
-      console.error('[Supabase Fetch Grade Exception]:', e.message);
+    } catch (_) {}
+  } else {
+    localList = readSubmissionsLocal();
+    localIdx = localList.findIndex(s => s.id === targetId || (s.responses && s.responses.id === targetId));
+
+    if (localIdx >= 0) {
+      const item = localList[localIdx];
+      submissionTarget = item.responses ? (typeof item.responses === 'string' ? JSON.parse(item.responses) : item.responses) : item;
+      clientUsed = 'local';
     }
   }
 
-  // 3. Fallback to local storage if not found in database
-  const localList = readSubmissionsLocal();
-  const localIdx = localList.findIndex(s => s.id === targetId || (s.responses && s.responses.id === targetId));
-
-  if (!submissionTarget && localIdx >= 0) {
-    const item = localList[localIdx];
-    submissionTarget = item.responses ? (typeof item.responses === 'string' ? JSON.parse(item.responses) : item.responses) : item;
-    clientUsed = 'local';
-  }
-
   if (!submissionTarget) {
-    return res.status(404).json({ error: `Submission '${targetId}' not found in database or local store.` });
+    return res.status(404).json({ error: `Submission '${targetId}' not found.` });
   }
 
-  // Apply manual grades & recalculate final score
   submissionTarget.manualGrades = {
     ...submissionTarget.manualGrades,
     ...manualGrades
@@ -371,8 +292,7 @@ router.post('/submissions/:id/grade', async (req, res) => {
   submissionTarget.status = 'reviewed';
   submissionTarget.reviewedAt = new Date().toISOString();
 
-  // Save changes to Database (if found in Supabase)
-  if (clientUsed && clientUsed !== 'local') {
+  if (isConfigured() && clientUsed && clientUsed !== 'local') {
     try {
       const { error: updateErr } = await clientUsed
         .from('submissions')
@@ -384,7 +304,6 @@ router.post('/submissions/:id/grade', async (req, res) => {
         .eq('id', targetId);
 
       if (updateErr) {
-        console.warn('[Supabase Grade Update Warning, falling back to admin client]:', updateErr.message);
         await supabase
           .from('submissions')
           .update({
@@ -394,13 +313,8 @@ router.post('/submissions/:id/grade', async (req, res) => {
           })
           .eq('id', targetId);
       }
-    } catch (dbErr) {
-      console.error('[Supabase Grade Update Exception]:', dbErr.message);
-    }
-  }
-
-  // ALSO update local JSON store as backup
-  if (localIdx >= 0) {
+    } catch (_) {}
+  } else if (!isConfigured() && localIdx >= 0) {
     localList[localIdx] = {
       ...localList[localIdx],
       total_score: totalScore,
@@ -408,9 +322,6 @@ router.post('/submissions/:id/grade', async (req, res) => {
       responses: submissionTarget,
       ...submissionTarget
     };
-    writeSubmissionsLocal(localList);
-  } else {
-    localList.unshift(submissionTarget);
     writeSubmissionsLocal(localList);
   }
 

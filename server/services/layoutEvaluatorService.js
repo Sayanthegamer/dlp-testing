@@ -10,11 +10,11 @@ const sharp = require('sharp');
 
 /**
  * Renders a visual match diagnostic overlay showing Question -> Matched Figure associations.
- * Saves image to server/data/debug_match_{fileLabel}.png.
+ * Saves image to server/data/debug_match_{fileLabel}.png when DEBUG_DIAGRAMS=true.
  */
 async function generateMatchOverlay(sourceBuffer, questions, fileLabel) {
   if (!Array.isArray(questions) || questions.length === 0) return;
-  if (process.env.NODE_ENV === 'production') return;
+  if (process.env.NODE_ENV === 'production' || process.env.DEBUG_DIAGRAMS !== 'true') return;
 
   try {
     const meta = await sharp(sourceBuffer).metadata();
@@ -26,16 +26,15 @@ async function generateMatchOverlay(sourceBuffer, questions, fileLabel) {
     questions.forEach((q, qIdx) => {
       if (Array.isArray(q.diagrams) && q.diagrams.length > 0) {
         q.diagrams.forEach((d) => {
-          const [x, y, w, h] = d.bbox || [0.1, 0.1, 0.8, 0.8];
-          const left = Math.round(x * width);
-          const top = Math.round(y * height);
-          const rectW = Math.round(w * width);
-          const rectH = Math.round(h * height);
+          const [ymin, xmin, ymax, xmax] = d.bbox || [0.1, 0.1, 0.9, 0.9];
+          const left = Math.round(Math.min(xmin, xmax) * width);
+          const top = Math.round(Math.min(ymin, ymax) * height);
+          const rectW = Math.round(Math.abs(xmax - xmin) * width);
+          const rectH = Math.round(Math.abs(ymax - ymin) * height);
 
-          // Draw matched figure box
           svgElements += `
-            <rect x="${left}" y="${top}" width="${rectW}" height="${rectH}" fill="none" stroke="#3b82f6" stroke-width="4" stroke-dasharray="4,4"/>
-            <rect x="${left}" y="${Math.max(0, top - 26)}" width="${Math.min(360, rectW)}" height="26" fill="#3b82f6" opacity="0.95"/>
+            <rect x="${left}" y="${top}" width="${rectW}" height="${rectH}" fill="none" stroke="#8c4a17" stroke-width="4" stroke-dasharray="4,4"/>
+            <rect x="${left}" y="${Math.max(0, top - 26)}" width="${Math.min(360, rectW)}" height="26" fill="#8c4a17" opacity="0.95"/>
             <text x="${left + 6}" y="${Math.max(18, top - 8)}" font-family="sans-serif" font-size="12" font-weight="bold" fill="#ffffff">Question #${qIdx + 1} ➔ ${d.id || 'Matched Figure'}</text>
           `;
         });
@@ -54,7 +53,6 @@ async function generateMatchOverlay(sourceBuffer, questions, fileLabel) {
     if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
     const debugFilePath = path.join(debugDir, `debug_match_${fileLabel}.png`);
     fs.writeFileSync(debugFilePath, annotatedBuffer);
-    console.log(`[Matcher Diagnostic Overlay] Saved question-figure match overlay to: ${debugFilePath}`);
   } catch (err) {
     console.warn('[Matcher Diagnostic Overlay Warning] Could not render match overlay:', err.message);
   }

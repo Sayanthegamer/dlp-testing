@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Image, Upload, Trash2, CheckCircle2, X, Crop, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Image, Upload, Trash2, CheckCircle2, X, Crop, RotateCcw } from 'lucide-react';
 
 export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose }) {
   const diagrams = Array.isArray(question.diagrams) ? question.diagrams : [];
@@ -15,9 +15,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
   const [croppedDataUrl, setCroppedDataUrl] = useState(currentImage?.dataUrl || '');
   const [isUploading, setIsUploading] = useState(false);
 
-
-  // Normalized crop rectangle relative to rendered image (x, y, w, h from 0.0 to 1.0)
-  // Helper to parse bbox coordinates safely into normalized {x, y, w, h}
   const parseBboxToRect = (bbox) => {
     if (!Array.isArray(bbox) || bbox.length !== 4) {
       return { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
@@ -25,12 +22,10 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
 
     let [v1, v2, v3, v4] = bbox.map(v => parseFloat(v) || 0);
 
-    // If 0..1000 scale, normalize to 0..1
     if (bbox.some(v => v > 1.0 && v <= 1000)) {
       v1 /= 1000; v2 /= 1000; v3 /= 1000; v4 /= 1000;
     }
 
-    // Handles [ymin, xmin, ymax, xmax] (standard AI vision format)
     if (v3 > v1 && v4 > v2) {
       const ymin = Math.min(v1, v3);
       const ymax = Math.max(v1, v3);
@@ -44,7 +39,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       };
     }
 
-    // Fallback: [x, y, w, h] format
     return {
       x: Math.max(0, Math.min(0.9, v1)),
       y: Math.max(0, Math.min(0.9, v2)),
@@ -55,13 +49,9 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
 
   const initialBbox = parseBboxToRect(currentDiagram?.bbox);
   const [cropRect, setCropRect] = useState(initialBbox);
-
-  // Drag interaction state
   const [dragState, setDragState] = useState(null);
-
   const imgRef = useRef(null);
 
-  // Generate real-time high-res canvas preview of selected crop area
   const updateCropPreview = useCallback((rect) => {
     if (!sourceImageSrc || !imgRef.current) return;
 
@@ -86,9 +76,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       try {
         const previewUrl = canvas.toDataURL('image/png');
         setCroppedDataUrl(previewUrl);
-      } catch (err) {
-        console.warn('[Crop Preview Canvas Error]:', err);
-      }
+      } catch (_) {}
     };
   }, [sourceImageSrc]);
 
@@ -107,8 +95,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       if (dataUrl) {
         setSourceImageSrc(dataUrl);
         setCroppedDataUrl(dataUrl);
-        const newRect = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
-        setCropRect(newRect);
+        setCropRect({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
       }
       setIsUploading(false);
     };
@@ -126,7 +113,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
     return { clientX: e.clientX, clientY: e.clientY };
   };
 
-  // Start drag handler (Mouse & Touch)
   const startDrag = (e, mode) => {
     e.stopPropagation();
     if (!imgRef.current) return;
@@ -137,14 +123,13 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
     const mouseY = (clientY - imgRect.top) / imgRect.height;
 
     setDragState({
-      mode, // 'new', 'move', 'nw', 'ne', 'se', 'sw', 'n', 'e', 's', 'w'
+      mode,
       startX: mouseX,
       startY: mouseY,
       initialRect: { ...cropRect }
     });
   };
 
-  // Global window mousemove & touchmove listener during active dragging
   useEffect(() => {
     if (!dragState) return;
 
@@ -163,7 +148,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       let { x, y, w, h } = initialRect;
 
       if (mode === 'new') {
-        // Only reset rectangle if user actually drags by more than 2% distance
         const dragDist = Math.hypot(dx, dy);
         if (dragDist < 0.02) return;
 
@@ -175,7 +159,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
         x = Math.max(0, Math.min(1 - w, initialRect.x + dx));
         y = Math.max(0, Math.min(1 - h, initialRect.y + dy));
       } else {
-        // Resize handles
         if (mode.includes('n')) {
           const newY = Math.min(initialRect.y + initialRect.h - 0.02, initialRect.y + dy);
           h = initialRect.y + initialRect.h - newY;
@@ -194,8 +177,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
         }
       }
 
-      const nextRect = { x, y, w, h };
-      setCropRect(nextRect);
+      setCropRect({ x, y, w, h });
     };
 
     const handleWindowEnd = () => {
@@ -213,7 +195,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
       window.removeEventListener('touchend', handleWindowEnd);
     };
   }, [dragState]);
-
 
   const handleResetCrop = () => {
     setCropRect({ x: 0, y: 0, w: 1, h: 1 });
@@ -238,7 +219,7 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
         sourceFileIndex: currentDiagram?.sourceFileIndex || 0,
         pageIndex: currentDiagram?.pageIndex || 0,
         bbox: [cropRect.y, cropRect.x, cropRect.y + cropRect.h, cropRect.x + cropRect.w],
-        caption: caption.trim() || 'Question Figure / Diagram'
+        caption: caption.trim() || 'Figure'
       }
     ];
 
@@ -249,7 +230,6 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
         sourcePageImage: sourceImageSrc
       }
     ];
-
 
     onUpdateQuestion(question.id, {
       ...question,
@@ -271,63 +251,57 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1c1b18]/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-[#FAF7F0] border border-[#DCD5C4] rounded-2xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden my-auto">
-        
+    <div className="fixed inset-0 z-50 bg-[#161513]/75 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden my-auto">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#E2DACD] p-4 sm:p-6 shrink-0 bg-[#FAF7F0] z-10">
+        <div className="flex items-center justify-between border-b border-[#dcd5c4] px-5 py-4 shrink-0 bg-[#fdfbf7]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center shadow-md shrink-0">
-              <Crop className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-[#efe9df] text-[#1f1b16] flex items-center justify-center shrink-0">
+              <Crop className="w-4 h-4" strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-lg sm:text-xl text-[#232323]">Interactive Visual Diagram Cropper</h3>
-              <p className="text-xs text-[#736c62] font-sans hidden sm:block">
-                Drag the selection box or corner handles directly on the image to fine-adjust crop borders
+              <h3 className="font-serif font-medium text-lg text-[#1f1b16]">Crop figure</h3>
+              <p className="text-xs text-[#5e554a] font-sans hidden sm:block">
+                Drag the selection rectangle or corner handles to adjust the figure boundaries
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-[#736c62] hover:bg-[#EDE5D8] transition-colors shrink-0"
+            className="p-2 rounded-lg text-[#7b7266] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </div>
 
-        {/* Cropper Container - Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 font-sans">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 font-sans">
           {sourceImageSrc ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* Left 2 Cols: Main Interactive Image Display */}
               <div className="md:col-span-2 space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-[#5c5346] uppercase tracking-wider">
-                    Source Photo (Drag handles to adjust):
+                  <span className="font-medium text-[#5e554a]">
+                    Source page
                   </span>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={handleResetCrop}
-                      className="text-xs font-semibold text-[#8c4a17] hover:underline flex items-center gap-1"
+                      className="text-xs font-medium text-[#8c4a17] hover:underline flex items-center gap-1"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Full Image</span>
+                      <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      <span>Full image</span>
                     </button>
-                    <label className="cursor-pointer text-xs font-semibold text-[#736c62] hover:underline flex items-center gap-1">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Replace Photo</span>
+                    <label className="cursor-pointer text-xs font-medium text-[#5e554a] hover:text-[#1f1b16] hover:underline flex items-center gap-1">
+                      <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      <span>Replace image</span>
                       <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                     </label>
                   </div>
                 </div>
 
-                {/* Relative Image Canvas Container */}
-                <div className="relative border-2 border-[#DCD5C4] rounded-2xl bg-[#1c1b18] p-2 flex items-center justify-center overflow-hidden min-h-[260px] max-h-[360px] shadow-inner select-none">
-                  
-                  {/* Rendered Image Wrapper */}
+                <div className="relative border border-[#dcd5c4] rounded-xl bg-[#161513] p-2 flex items-center justify-center overflow-hidden min-h-[260px] max-h-[360px] select-none">
                   <div
                     className="relative inline-block"
                     onMouseDown={(e) => startDrag(e, 'new')}
@@ -337,12 +311,11 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                       ref={imgRef}
                       src={sourceImageSrc}
                       alt="Source for crop"
-                      className="max-h-[340px] max-w-full w-auto object-contain block mx-auto pointer-events-none rounded-lg"
+                      className="max-h-[340px] max-w-full w-auto object-contain block mx-auto pointer-events-none rounded-md"
                     />
 
-                    {/* Selection Overlay Box & Handles (Mapped 100% to Image Pixel Bounds) */}
                     <div
-                      className="absolute border-2 border-[#8c4a17] bg-[#8c4a17]/20 cursor-move shadow-xl"
+                      className="absolute border-2 border-[#8c4a17] bg-[#8c4a17]/15 cursor-move"
                       onMouseDown={(e) => startDrag(e, 'move')}
                       onTouchStart={(e) => startDrag(e, 'move')}
                       style={{
@@ -352,104 +325,73 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
                         height: `${cropRect.h * 100}%`
                       }}
                     >
-                      {/* Label Badge */}
-                      <div className="absolute -top-6 left-0 bg-[#8c4a17] text-white text-[10px] font-mono px-2 py-0.5 rounded-md shadow-md pointer-events-none whitespace-nowrap z-10">
-                        Diagram Selection ({Math.round(cropRect.w * 100)}% × {Math.round(cropRect.h * 100)}%)
+                      <div className="absolute -top-6 left-0 bg-[#1f1b16] text-[#fdfbf7] text-[10px] font-mono tabular-nums px-2 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
+                        {Math.round(cropRect.w * 100)}% × {Math.round(cropRect.h * 100)}%
                       </div>
 
-                      {/* 4 Corner Drag Handles */}
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -top-2 -left-2 rounded-full cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'nw')}
-                        onTouchStart={(e) => startDrag(e, 'nw')}
-                      />
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -top-2 -right-2 rounded-full cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'ne')}
-                        onTouchStart={(e) => startDrag(e, 'ne')}
-                      />
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -bottom-2 -left-2 rounded-full cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'sw')}
-                        onTouchStart={(e) => startDrag(e, 'sw')}
-                      />
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -bottom-2 -right-2 rounded-full cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'se')}
-                        onTouchStart={(e) => startDrag(e, 'se')}
-                      />
-
-                      {/* 4 Edge Drag Handles */}
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -top-2 left-1/2 -translate-x-1/2 rounded-full cursor-ns-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'n')}
-                        onTouchStart={(e) => startDrag(e, 'n')}
-                      />
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full cursor-ns-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 's')}
-                        onTouchStart={(e) => startDrag(e, 's')}
-                      />
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute top-1/2 -translate-y-1/2 -left-2 rounded-full cursor-ew-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'w')}
-                        onTouchStart={(e) => startDrag(e, 'w')}
-                      />
-                      <div
-                        className="w-4 h-4 bg-white border-2 border-[#8c4a17] absolute top-1/2 -translate-y-1/2 -right-2 rounded-full cursor-ew-resize shadow-md hover:scale-125 transition-transform"
-                        onMouseDown={(e) => startDrag(e, 'e')}
-                        onTouchStart={(e) => startDrag(e, 'e')}
-                      />
+                      {['nw', 'ne', 'sw', 'se'].map((dir) => {
+                        const pos = {
+                          nw: '-top-1.5 -left-1.5 cursor-nwse-resize',
+                          ne: '-top-1.5 -right-1.5 cursor-nesw-resize',
+                          sw: '-bottom-1.5 -left-1.5 cursor-nesw-resize',
+                          se: '-bottom-1.5 -right-1.5 cursor-nwse-resize'
+                        }[dir];
+                        return (
+                          <div
+                            key={dir}
+                            className={`w-3 h-3 bg-[#fdfbf7] border-2 border-[#8c4a17] absolute rounded-sm ${pos}`}
+                            onMouseDown={(e) => startDrag(e, dir)}
+                            onTouchStart={(e) => startDrag(e, dir)}
+                          />
+                        );
+                      })}
                     </div>
-
                   </div>
                 </div>
               </div>
 
-              {/* Right Col: Fixed-Height Live Result Preview & Caption (No layout shifts) */}
               <div className="space-y-4 flex flex-col justify-between">
                 <div>
-                  <label className="block text-xs font-semibold text-[#5c5346] uppercase tracking-wider mb-2">
-                    Live Extracted Crop Preview
+                  <label className="block text-xs font-medium text-[#5e554a] mb-2">
+                    Cropped preview
                   </label>
-                  <div className="h-44 w-full bg-[#1c1b18] rounded-2xl border border-[#DCD5C4] flex items-center justify-center overflow-hidden p-2 shadow-inner">
+                  <div className="h-44 w-full bg-[#161513] rounded-xl border border-[#dcd5c4] flex items-center justify-center overflow-hidden p-2">
                     {croppedDataUrl ? (
                       <img
                         src={croppedDataUrl}
-                        alt="Cropped Live Preview"
-                        className="max-h-full max-w-full rounded-lg object-contain block mx-auto shadow-sm"
+                        alt="Cropped preview"
+                        className="max-h-full max-w-full rounded-md object-contain block mx-auto"
                       />
                     ) : (
-                      <p className="text-xs text-[#736c62]">Select area to generate preview</p>
+                      <p className="text-xs text-[#8a847a]">Select region</p>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">
-                    Diagram Caption / Label
+                  <label className="block text-xs font-medium text-[#5e554a] mb-1.5">
+                    Figure caption
                   </label>
                   <input
                     type="text"
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    placeholder="e.g. Figure 1: Circuit Diagram"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCD5C4] bg-white font-sans text-xs text-[#232323] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                    placeholder="Figure 1: Resistor bridge"
+                    className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-sans text-xs text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                   />
                 </div>
               </div>
-
             </div>
           ) : (
-            <label className="border-2 border-dashed border-[#DCD5C4] hover:border-[#8c4a17] rounded-2xl p-8 sm:p-12 bg-white text-center cursor-pointer transition-all block group">
-              <div className="w-14 h-14 rounded-2xl bg-[#FAF7F0] text-[#8c4a17] flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform shadow-xs">
-                <Image className="w-7 h-7" />
+            <label className="border border-dashed border-[#dcd5c4] hover:border-[#8c4a17] rounded-xl p-10 bg-[#f7f4ee] text-center cursor-pointer transition-calm block">
+              <div className="w-10 h-10 rounded-lg bg-[#efe9df] text-[#5e554a] flex items-center justify-center mx-auto mb-3">
+                <Image className="w-5 h-5" strokeWidth={1.5} />
               </div>
-              <p className="text-base font-semibold text-[#232323]">
-                {isUploading ? 'Loading Image...' : 'Upload Question Photo / Page'}
+              <p className="text-base font-serif font-medium text-[#1f1b16]">
+                {isUploading ? 'Loading image' : 'Select figure image'}
               </p>
-              <p className="text-xs text-[#736c62] mt-1">
-                Select an image file to fine-crop your figure visually in real-time
+              <p className="text-xs text-[#7b7266] mt-1">
+                Upload a diagram or page scan to crop visually
               </p>
               <input
                 type="file"
@@ -461,24 +403,24 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
           )}
         </div>
 
-        {/* Modal Action Buttons (Fixed Footer - Always accessible on mobile) */}
-        <div className="flex items-center justify-between border-t border-[#E2DACD] p-4 sm:p-6 shrink-0 bg-[#FAF7F0] z-10">
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-[#dcd5c4] px-5 py-4 shrink-0 bg-[#fdfbf7]">
           {diagrams.length > 0 ? (
             <button
               type="button"
               onClick={handleRemoveDiagram}
-              className="text-xs font-semibold text-red-700 hover:text-red-800 flex items-center gap-1.5"
+              className="text-xs font-medium text-[#dc2626] hover:underline flex items-center gap-1.5"
             >
-              <Trash2 className="w-4 h-4" />
-              <span>Clear Diagram</span>
+              <Trash2 className="w-4 h-4" strokeWidth={1.5} />
+              <span>Remove figure</span>
             </button>
           ) : <div />}
 
-          <div className="flex items-center gap-2.5 ml-auto">
+          <div className="flex items-center gap-2 ml-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#736c62] hover:bg-[#EDE5D8] transition-colors"
+              className="px-4 h-9 rounded-lg text-xs font-medium text-[#5e554a] hover:bg-[#efe9df] transition-calm"
             >
               Cancel
             </button>
@@ -486,14 +428,13 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
               type="button"
               onClick={handleSave}
               disabled={!croppedDataUrl}
-              className="px-5 sm:px-6 py-2.5 rounded-xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-sans font-medium text-xs transition-calm flex items-center gap-1.5 disabled:opacity-50"
             >
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Apply Crop & Save</span>
+              <CheckCircle2 className="w-4 h-4" strokeWidth={1.5} />
+              <span>Save crop</span>
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );

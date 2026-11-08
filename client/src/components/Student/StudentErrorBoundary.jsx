@@ -18,30 +18,30 @@ export default class StudentErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#FAF7F0] flex items-center justify-center p-6 text-center font-sans">
-          <div className="bg-white border border-[#e2d8ca] rounded-3xl p-8 max-w-md w-full shadow-xl space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-inner">
-              <AlertTriangle className="w-7 h-7" />
+        <div className="min-h-screen bg-[#f7f4ee] flex items-center justify-center p-6 text-center font-sans">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-7 max-w-md w-full shadow-sm space-y-4">
+            <div className="w-11 h-11 rounded-lg bg-[#b8622e]/15 text-[#b8622e] flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-5 h-5" />
             </div>
-            <h2 className="font-serif font-bold text-xl text-[#2c2825]">Examination Display Notice</h2>
-            <p className="text-xs text-[#736c62] leading-relaxed">
-              {this.state.error?.message || 'An issue occurred while rendering this exam view.'}
+            <h2 className="font-serif font-semibold text-xl text-[#1f1b16]">Examination display notice</h2>
+            <p className="text-xs text-[#5e554a] leading-relaxed">
+              {this.state.error?.message || 'An unexpected issue occurred while rendering this examination view.'}
             </p>
             <div className="pt-2 flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => this.setState({ hasError: false })}
-                className="w-full py-3 rounded-xl bg-[#8c4a17] text-white font-bold text-xs shadow-sm hover:bg-[#733c12] transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-lg bg-[#8c4a17] text-white font-medium text-xs hover:bg-[#733c12] transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
-                <span>Retry Displaying Question</span>
+                <span>Retry displaying question</span>
               </button>
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className="w-full py-2.5 rounded-xl bg-[#f0e6d8] text-[#5c5346] font-bold text-xs hover:bg-[#e2d8ca] transition-all cursor-pointer"
+                className="w-full py-2.5 rounded-lg bg-[#efe9df] text-[#5e554a] font-medium text-xs hover:bg-[#dcd5c4] transition-colors cursor-pointer"
               >
-                Return to Portal
+                Return to portal
               </button>
             </div>
           </div>

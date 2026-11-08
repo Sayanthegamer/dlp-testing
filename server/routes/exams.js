@@ -1,17 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const { supabase, isConfigured, createUserClient } = require('../services/supabaseClient');
+const { verifyTeacherAuth } = require('../services/authService');
+const {
+  readExamsLocal,
+  writeExamsLocal,
+  readSubmissionsLocal
+} = require('../services/localStoreService');
 
-// In-memory active rolling sessions fallback if Supabase is unconfigured
+// In-memory active rolling sessions cache
 const activeRollingSessions = new Map();
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-/**
- * Evicts expired entries from the in-memory rolling sessions map.
- */
 function evictExpiredSessions() {
   const now = Date.now();
   for (const [code, session] of activeRollingSessions) {
@@ -20,75 +21,6 @@ function evictExpiredSessions() {
       activeRollingSessions.delete(code);
     }
   }
-}
-
-function getExamsFilePath() {
-  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
-  if (isVercel) {
-    return path.join('/tmp', 'exams.json');
-  }
-  return path.join(__dirname, '..', 'data', 'exams.json');
-}
-
-function ensureExamsDataFile() {
-  const filePath = getExamsFilePath();
-  const dirPath = path.dirname(filePath);
-  try {
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify([]), 'utf8');
-    }
-    return filePath;
-  } catch (err) {
-    const tmpPath = path.join('/tmp', 'exams.json');
-    try {
-      if (!fs.existsSync(tmpPath)) {
-        fs.writeFileSync(tmpPath, JSON.stringify([]), 'utf8');
-      }
-    } catch (tmpErr) {}
-    return tmpPath;
-  }
-}
-
-function readExamsLocal() {
-  const filePath = ensureExamsDataFile();
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(raw) || [];
-  } catch (err) {
-    try {
-      const rawTmp = fs.readFileSync('/tmp/exams.json', 'utf8');
-      return JSON.parse(rawTmp) || [];
-    } catch (tmpErr) {
-      return [];
-    }
-  }
-}
-
-function writeExamsLocal(data) {
-  const filePath = ensureExamsDataFile();
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    try {
-      fs.writeFileSync('/tmp/exams.json', JSON.stringify(data, null, 2), 'utf8');
-      return true;
-    } catch (tmpErr) {
-      return false;
-    }
-  }
-}
-
-const { verifyTeacherAuth } = require('../services/authService');
-
-/**
- * Generate 6-digit numeric rolling code using cryptographically secure random bytes
- */
-function generate6DigitCode() {
-  return crypto.randomInt(100000, 1000000).toString();
 }
 
 /**
@@ -112,6 +44,7 @@ function get5MinSecondsRemaining() {
 
 /**
  * PROTECTED Teacher Endpoint: GET /api/exams
+ * Uses Supabase exclusively when configured; falls back to local store only in test/unconfigured mode.
  */
 router.get('/exams', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -119,6 +52,7 @@ router.get('/exams', async (req, res) => {
   }
 
   let examList = [];
+  let allSubmissions = [];
 
   if (isConfigured()) {
     try {
@@ -129,7 +63,7 @@ router.get('/exams', async (req, res) => {
         .eq('teacher_id', req.user?.id)
         .order('created_at', { ascending: false });
 
-      if (!userError && Array.isArray(userData) && userData.length > 0) {
+      if (!userError && Array.isArray(userData)) {
         examList = userData;
       } else {
         const { data: adminData } = await supabase
@@ -144,11 +78,25 @@ router.get('/exams', async (req, res) => {
     } catch (e) {
       console.error('[Supabase Exams Fetch Exception]:', e.message);
     }
-  }
 
-  // Include local file exams as fallback if empty
-  const localExams = readExamsLocal();
-  if (examList.length === 0) {
+    try {
+      const userDb = createUserClient(req.accessToken);
+      const { data: userSubs, error: subErr } = await userDb
+        .from('submissions')
+        .select('id, exam_id, responses');
+      if (!subErr && Array.isArray(userSubs)) {
+        allSubmissions = userSubs;
+      } else {
+        const { data: adminSubs } = await supabase
+          .from('submissions')
+          .select('id, exam_id, responses');
+        if (Array.isArray(adminSubs)) {
+          allSubmissions = adminSubs;
+        }
+      }
+    } catch (_) {}
+  } else {
+    const localExams = readExamsLocal();
     examList = localExams.map(e => ({
       id: e.id,
       title: e.testTitle || e.title,
@@ -156,33 +104,8 @@ router.get('/exams', async (req, res) => {
       created_at: e.createdAt || e.created_at,
       status: e.status || 'active'
     }));
+    allSubmissions = readSubmissionsLocal();
   }
-
-  // Fetch all submissions across Supabase & Local Store to calculate submissionCounts
-  let allSubmissions = [];
-  if (isConfigured()) {
-    try {
-      const userDb = createUserClient(req.accessToken);
-      const { data: userSubs } = await userDb.from('submissions').select('id, exam_id, responses');
-      if (Array.isArray(userSubs) && userSubs.length > 0) {
-        allSubmissions = userSubs;
-      } else {
-        const { data: adminSubs } = await supabase.from('submissions').select('id, exam_id, responses');
-        if (Array.isArray(adminSubs)) {
-          allSubmissions = adminSubs;
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Merge local file submissions
-  const localSubmissions = readSubmissionsLocal();
-  const existingSubIds = new Set(allSubmissions.map(s => s.id));
-  localSubmissions.forEach(ls => {
-    if (!existingSubIds.has(ls.id)) {
-      allSubmissions.push(ls);
-    }
-  });
 
   // Calculate submission count per exam ID
   const submissionCounts = {};
@@ -239,16 +162,12 @@ router.post('/exams/publish', async (req, res) => {
   if (isConfigured()) {
     const userDb = createUserClient(req.accessToken);
     try {
-      // 1. Ensure teacher record exists in teachers table
       if (req.user?.id) {
-        const { error: tErr } = await userDb.from('teachers').upsert({
+        await userDb.from('teachers').upsert({
           id: req.user.id,
           email: req.user.email || 'teacher@local.dev',
           full_name: req.user.user_metadata?.full_name || req.user.email?.split('@')[0] || 'Teacher'
         }, { onConflict: 'id' });
-        if (tErr) {
-          console.warn('[Supabase Teacher Upsert Warning]:', tErr.message);
-        }
       }
 
       const { error: insertErr } = await userDb.from('exams').insert({
@@ -261,11 +180,9 @@ router.post('/exams/publish', async (req, res) => {
       }).select();
 
       if (insertErr) {
-        console.error('[Supabase Exam Insert Error]:', insertErr.message);
         return res.status(500).json({ error: `Failed to publish exam to database: ${insertErr.message}` });
       }
 
-      console.log(`[Supabase Exams] Successfully published exam ${serverGeneratedId} to database.`);
       return res.json({
         success: true,
         examId: serverGeneratedId,
@@ -274,11 +191,9 @@ router.post('/exams/publish', async (req, res) => {
         status: 'active'
       });
     } catch (dbErr) {
-      console.error('[Supabase Exam Insert Exception]:', dbErr.message);
       return res.status(500).json({ error: `Database error publishing exam: ${dbErr.message}` });
     }
   } else {
-    // Unconfigured local dev mode fallback
     const list = readExamsLocal();
     list.unshift(examSnapshot);
     writeExamsLocal(list);
@@ -295,7 +210,6 @@ router.post('/exams/publish', async (req, res) => {
 
 /**
  * PROTECTED Teacher Endpoint: POST /api/exams/session/start
- * Generates/fetches the current 5-minute rolling code for live student test access.
  */
 router.post('/exams/session/start', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -320,17 +234,14 @@ router.post('/exams/session/start', async (req, res) => {
     try {
       const { data: examData, error: examErr } = await userDb.from('exams').select('status').eq('id', examId).single();
       if (examErr) {
-        console.error('[Supabase Exam Status Lookup Error]:', examErr.message);
         return res.status(500).json({ error: `Database error verifying exam status: ${examErr.message}` });
       }
       if (examData && examData.status === 'closed') {
-        return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Please re-open the exam first.' });
+        return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Reopen the exam first.' });
       }
 
-      // Deactivate old active sessions for this exam
       await userDb.from('exam_sessions').update({ is_active: false }).eq('exam_id', examId);
 
-      // Insert new session
       const { error: sessionErr } = await userDb.from('exam_sessions').insert({
         exam_id: examId,
         teacher_id: req.user?.id,
@@ -339,7 +250,6 @@ router.post('/exams/session/start', async (req, res) => {
       });
 
       if (sessionErr) {
-        console.error('[Supabase Session Insert Error]:', sessionErr.message);
         return res.status(500).json({ error: `Failed to record active test session in database: ${sessionErr.message}` });
       }
 
@@ -367,18 +277,16 @@ router.post('/exams/session/start', async (req, res) => {
         durationMinutes: durationMins,
         extendedMinutes: 0,
         createdAt,
-        message: 'Active 5-minute rolling session code fetched successfully.'
+        message: 'Active 5-minute rolling session code fetched.'
       });
     } catch (dbErr) {
-      console.error('[Supabase Session Start Exception]:', dbErr.message);
       return res.status(500).json({ error: `Database error starting session: ${dbErr.message}` });
     }
   } else {
-    // Unconfigured local dev mode fallback
     const list = readExamsLocal();
     const localExam = list.find(e => e.id === examId);
     if (localExam && localExam.status === 'closed') {
-      return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Please re-open the exam first.' });
+      return res.status(403).json({ error: 'Cannot start rolling session for a closed exam. Reopen the exam first.' });
     }
 
     const durationMins = parseInt(req.body.durationMinutes, 10) || 180;
@@ -405,14 +313,13 @@ router.post('/exams/session/start', async (req, res) => {
       durationMinutes: durationMins,
       extendedMinutes: 0,
       createdAt,
-      message: 'Active 5-minute rolling session code fetched successfully.'
+      message: 'Active 5-minute rolling session code fetched.'
     });
   }
 });
 
 /**
  * PROTECTED Teacher Endpoint: POST /api/exams/session/extend
- * Allows teacher to extend the duration of an active exam mid-test (+5m, +10m, +15m, etc.).
  */
 router.post('/exams/session/extend', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -452,8 +359,6 @@ router.post('/exams/session/extend', async (req, res) => {
   session.extendedMinutes = (session.extendedMinutes || 0) + minutesToAdd;
   const totalDuration = (session.durationMinutes || 180) + session.extendedMinutes;
 
-  console.log(`[Exam Time Extended] Added +${minutesToAdd}m to exam ${session.examId}. New Total: ${totalDuration}m (Extended: +${session.extendedMinutes}m)`);
-
   return res.json({
     success: true,
     examId: session.examId,
@@ -461,13 +366,12 @@ router.post('/exams/session/extend', async (req, res) => {
     extendedMinutes: session.extendedMinutes,
     addedMinutes: minutesToAdd,
     totalDurationMinutes: totalDuration,
-    message: `Successfully extended exam duration by +${minutesToAdd} minutes.`
+    message: `Extended exam duration by +${minutesToAdd} minutes.`
   });
 });
 
 /**
  * PUBLIC Student Endpoint: GET /api/exams/session/status
- * Fetches real-time duration, startTime, and extendedMinutes for the active exam.
  */
 router.get('/exams/session/status', (req, res) => {
   const { examId, rollingCode } = req.query || {};
@@ -503,8 +407,6 @@ router.get('/exams/session/status', (req, res) => {
 
 /**
  * PUBLIC Student Endpoint: POST /api/exams/student-access
- * Validates Student Name + 6-Digit Rolling Code (Current 5-min window or 5-min grace window).
- * Rolling passcode is STRICTLY REQUIRED for all students (including direct links).
  */
 router.post('/exams/student-access', async (req, res) => {
   const { studentName, rollingCode, examId } = req.body || {};
@@ -515,13 +417,12 @@ router.post('/exams/student-access', async (req, res) => {
 
   const cleanCode = (rollingCode || '').trim();
   if (!cleanCode) {
-    return res.status(400).json({ error: 'A valid 6-Digit Rolling Passcode is required to enter this exam.' });
+    return res.status(400).json({ error: 'A valid 6-digit rolling passcode is required to enter this exam.' });
   }
 
   let matchedSession = null;
   let targetExamId = examId || null;
 
-  // 1. Check 5-minute TOTP auto-rolling codes (current window or 5-min grace window)
   if (examId) {
     const current5MinCode = get5MinRollingCode(examId, 0);
     const grace5MinCode = get5MinRollingCode(examId, -1);
@@ -557,12 +458,9 @@ router.post('/exams/student-access', async (req, res) => {
             targetExamId = matchedSession.exam_id;
           }
         }
-      } catch (dbErr) {
-        console.error('[Supabase Session Check Exception]:', dbErr.message);
-      }
+      } catch (_) {}
     }
 
-    // Direct TOTP check against all active published exams in database
     if (!matchedSession) {
       try {
         const { data: activeExams } = await supabase
@@ -583,9 +481,7 @@ router.post('/exams/student-access', async (req, res) => {
             targetExamId = foundExam.id;
           }
         }
-      } catch (dbErr) {
-        console.error('[Supabase Active Exams Check Exception]:', dbErr.message);
-      }
+      } catch (_) {}
     }
 
     if (!matchedSession) {
@@ -608,7 +504,7 @@ router.post('/exams/student-access', async (req, res) => {
     if (!matchedSession) {
       return res.status(403).json({
         success: false,
-        error: 'Invalid or expired 6-Digit Passcode. Rolling codes automatically refresh every 5 minutes. Please ask your instructor for the current passcode.'
+        error: 'Invalid or expired 6-digit passcode. Rolling codes refresh every 5 minutes.'
       });
     }
 
@@ -636,7 +532,7 @@ router.post('/exams/student-access', async (req, res) => {
 
       let snapshot = data.snapshot_data;
       if (typeof snapshot === 'string') {
-        try { snapshot = JSON.parse(snapshot); } catch (e) {}
+        try { snapshot = JSON.parse(snapshot); } catch (_) {}
       }
 
       return res.json({
@@ -646,11 +542,9 @@ router.post('/exams/student-access', async (req, res) => {
         rollingCodeUsed: cleanCode
       });
     } catch (dbErr) {
-      console.error('[Supabase Exam Snapshot Exception]:', dbErr.message);
       return res.status(500).json({ error: `Database error fetching exam paper: ${dbErr.message}` });
     }
   } else {
-    // Unconfigured local dev mode fallback
     if (!matchedSession) {
       evictExpiredSessions();
       for (const session of activeRollingSessions.values()) {
@@ -687,7 +581,7 @@ router.post('/exams/student-access', async (req, res) => {
     if (!matchedSession) {
       return res.status(403).json({
         success: false,
-        error: 'Invalid or expired 6-Digit Passcode. Rolling codes automatically refresh every 5 minutes. Please ask your instructor for the current passcode.'
+        error: 'Invalid or expired 6-digit passcode. Rolling codes refresh every 5 minutes.'
       });
     }
 
@@ -720,7 +614,6 @@ router.post('/exams/student-access', async (req, res) => {
 
 /**
  * PUBLIC Student Endpoint: GET /api/exams/:id
- * Strictly verifies 6-Digit Rolling Code via header (x-rolling-code) or query parameter (?code=123456)
  */
 router.get('/exams/:id', async (req, res) => {
   const targetId = req.params.id;
@@ -729,11 +622,10 @@ router.get('/exams/:id', async (req, res) => {
   if (!providedCode) {
     return res.status(403).json({
       success: false,
-      error: 'Access denied: Valid 6-digit Rolling Passcode is required to view this exam paper.'
+      error: 'Access denied: Valid 6-digit rolling passcode is required to view this exam paper.'
     });
   }
 
-  // Validate passcode against current or grace 5-minute window
   const currentCode = get5MinRollingCode(targetId, 0);
   const graceCode = get5MinRollingCode(targetId, -1);
 
@@ -750,7 +642,7 @@ router.get('/exams/:id', async (req, res) => {
         if (Array.isArray(data) && data.some(s => s.rolling_code === providedCode)) {
           isValidCode = true;
         }
-      } catch (e) {}
+      } catch (_) {}
     }
 
     if (!isValidCode) {
@@ -765,7 +657,7 @@ router.get('/exams/:id', async (req, res) => {
     if (!isValidCode) {
       return res.status(403).json({
         success: false,
-        error: 'Invalid or expired 6-digit Rolling Passcode.'
+        error: 'Invalid or expired 6-digit rolling passcode.'
       });
     }
 
@@ -790,11 +682,9 @@ router.get('/exams/:id', async (req, res) => {
 
       return res.json({ success: true, exam: data.snapshot_data });
     } catch (e) {
-      console.error('[Supabase Exam Fetch Exception]:', e.message);
       return res.status(500).json({ error: `Database error fetching exam: ${e.message}` });
     }
   } else {
-    // Unconfigured local dev mode fallback
     if (!isValidCode) {
       for (const session of activeRollingSessions.values()) {
         if ((session.examId || session.exam_id) === targetId && session.rollingCode === providedCode) {
@@ -807,7 +697,7 @@ router.get('/exams/:id', async (req, res) => {
     if (!isValidCode) {
       return res.status(403).json({
         success: false,
-        error: 'Invalid or expired 6-digit Rolling Passcode.'
+        error: 'Invalid or expired 6-digit rolling passcode.'
       });
     }
 
@@ -832,7 +722,6 @@ router.get('/exams/:id', async (req, res) => {
 
 /**
  * PROTECTED Teacher Endpoint: PATCH /api/exams/:id/status
- * Close or reopen an exam.
  */
 router.patch('/exams/:id/status', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -856,17 +745,14 @@ router.patch('/exams/:id/status', async (req, res) => {
         .eq('id', targetId);
 
       if (updateErr) {
-        console.error('[Supabase Exam Status Update Error]:', updateErr.message);
         return res.status(500).json({ error: `Failed to update exam status in database: ${updateErr.message}` });
       }
 
       return res.json({ success: true, examId: targetId, status });
     } catch (dbErr) {
-      console.error('[Supabase Exam Status Update Exception]:', dbErr.message);
       return res.status(500).json({ error: `Database error updating exam status: ${dbErr.message}` });
     }
   } else {
-    // Unconfigured local dev mode fallback
     const list = readExamsLocal();
     const examIdx = list.findIndex(e => e.id === targetId);
     if (examIdx !== -1) {

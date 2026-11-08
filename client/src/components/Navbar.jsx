@@ -1,8 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RefreshCw, Printer, Award, Share2, UploadCloud, FileText, LogOut, Users } from 'lucide-react';
+import {
+  BookOpen,
+  RefreshCw,
+  Printer,
+  Award,
+  Share2,
+  UploadCloud,
+  LogOut,
+  Users,
+  GraduationCap
+} from 'lucide-react';
 import { checkServerHealth } from '../services/apiService';
 
-export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, onOpenRoster, onSwitchToStudentPortal, onPublishExam, onLogout, onScrollToInput }) {
+export default function Navbar({
+  activeTab,
+  onSelectTab,
+  onReset,
+  onOpenPrintView,
+  onOpenSubmissions,
+  onSwitchToStudentPortal,
+  onPublishExam,
+  onLogout,
+  onScrollToInput
+}) {
   const [serverHealth, setServerHealth] = useState({ status: 'checking' });
 
   useEffect(() => {
@@ -11,159 +31,187 @@ export default function Navbar({ onReset, onOpenPrintView, onOpenSubmissions, on
 
   return (
     <>
-      {/* Top Main Navbar */}
-      <header className="bg-[#fbf9f5] border-b border-[#e2dacd] px-4 sm:px-6 py-3 sm:py-4 shadow-xs sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          
-          {/* Branding & Exam Title */}
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#2c2825] flex items-center justify-center text-[#fbf9f5] shadow-xs shrink-0">
-              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-[#e6cca6]" />
+      <header className="bg-[#fdfbf7] border-b border-[#dcd5c4] px-4 sm:px-6 h-16 sticky top-0 z-30 print:hidden">
+        <div className="max-w-6xl mx-auto h-full flex items-center justify-between gap-4">
+          {/* Left: Brand & Section Switcher */}
+          <div className="flex items-center gap-6 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-[#1f1b16] flex items-center justify-center text-[#fdfbf7] shrink-0">
+                <BookOpen className="w-4 h-4 text-[#fdfbf7]" strokeWidth={1.5} />
+              </div>
+              <div className="min-w-0">
+                <span className="font-serif font-medium text-base text-[#1f1b16] tracking-tight block truncate">
+                  Math Exam Studio
+                </span>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="font-serif font-bold text-base sm:text-lg text-[#1c1b18] tracking-tight truncate">
-                Exam Paper Math Builder
-              </h1>
-              <p className="text-[11px] sm:text-xs text-[#736c62] font-sans truncate">
-                Google Forms Style Math Catalogue & Editor
-              </p>
-            </div>
+
+            {/* Quiet Section Tabs */}
+            <nav className="hidden md:flex items-center gap-1 bg-[#efe9df] p-1 rounded-lg border border-[#dcd5c4]">
+              <button
+                type="button"
+                onClick={() => onSelectTab('catalogue')}
+                className={`px-3 h-7 rounded-md text-xs font-medium transition-calm ${
+                  activeTab === 'catalogue'
+                    ? 'bg-[#fdfbf7] text-[#1f1b16] shadow-2xs'
+                    : 'text-[#5e554a] hover:text-[#1f1b16]'
+                }`}
+              >
+                Question paper
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectTab('roster')}
+                className={`px-3 h-7 rounded-md text-xs font-medium transition-calm flex items-center gap-1.5 ${
+                  activeTab === 'roster'
+                    ? 'bg-[#fdfbf7] text-[#1f1b16] shadow-2xs'
+                    : 'text-[#5e554a] hover:text-[#1f1b16]'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+                <span>Student roster</span>
+              </button>
+            </nav>
           </div>
 
-          {/* Desktop Actions Bar (Screen >= sm) */}
-          <div className="hidden sm:flex items-center gap-2.5">
-            {/* Student Roster Button */}
+          {/* Right: Quiet Actions & One Primary CTA */}
+          <div className="hidden sm:flex items-center gap-2">
+            {/* Status indicator */}
+            <span
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs text-[#7b7266] font-mono"
+              title={serverHealth.hasApiKey ? 'Live AI extraction active' : 'Demo parser active'}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  serverHealth.status === 'ok' ? 'bg-[#3f6b4a]' : 'bg-[#b8622e]'
+                }`}
+              />
+              <span>{serverHealth.hasApiKey ? 'AI live' : 'Demo mode'}</span>
+            </span>
+
             <button
               type="button"
-              onClick={onOpenRoster}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] text-xs font-semibold border border-[#dcd0be] transition-all"
-              title="Open Student Roster & Printable Admit Cards"
+              onClick={onSwitchToStudentPortal}
+              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium border border-[#dcd5c4] transition-calm"
             >
-              <Users className="w-4 h-4 text-[#8c4a17]" />
-              <span>Student Roster</span>
+              <GraduationCap className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+              <span>Student portal</span>
             </button>
 
-            {/* Submissions Dashboard Button */}
             <button
               type="button"
               onClick={onOpenSubmissions}
-              className="btn-shimmer flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#2c2825] hover:bg-[#1c1b18] text-[#fbf9f5] text-xs font-semibold shadow-xs transition-all active:scale-95"
-              title="Open Teacher Submissions Dashboard"
+              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium border border-[#dcd5c4] transition-calm"
             >
-              <Award className="w-4 h-4 text-[#e6cca6]" />
-              <span>Submissions & Grading</span>
+              <Award className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+              <span>Submissions</span>
             </button>
 
-            {/* Publish Exam & Share Link Button */}
-            <button
-              type="button"
-              onClick={onPublishExam}
-              className="btn-shimmer flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
-              title="Freeze exam and generate shareable student link"
-            >
-              <Share2 className="w-4 h-4 text-emerald-200" />
-              <span>Publish Exam</span>
-            </button>
-
-            {/* Print / Save PDF Export Button */}
             <button
               type="button"
               onClick={onOpenPrintView}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95"
-              title="Print or Export Exam Paper PDF"
+              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium border border-[#dcd5c4] transition-calm"
             >
-              <Printer className="w-4 h-4 text-[#fbf9f5]" />
-              <span>Print / Export PDF</span>
+              <Printer className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+              <span>Print PDF</span>
             </button>
 
-            {/* Reset Action */}
+            <button
+              type="button"
+              onClick={onPublishExam}
+              className="flex items-center gap-1.5 px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm active:scale-[0.98]"
+            >
+              <Share2 className="w-4 h-4 text-[#fdfbf7]" strokeWidth={1.5} />
+              <span>Publish exam</span>
+            </button>
+
             <button
               type="button"
               onClick={onReset}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#5c5549] hover:bg-[#ede5d8] border border-[#e0d6c7] transition-all"
-              title="Clear catalogue and start fresh"
+              className="p-2 h-9 w-9 rounded-lg text-[#5e554a] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm flex items-center justify-center"
+              title="Reset paper to sample questions"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-[#736c62]" />
-              <span>New Test</span>
+              <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
             </button>
 
-            {/* Log Out Action */}
             {onLogout && (
               <button
                 type="button"
                 onClick={onLogout}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-red-700 hover:bg-red-50 border border-red-200 transition-all"
-                title="Log out of teacher account"
+                className="p-2 h-9 w-9 rounded-lg text-[#5e554a] hover:text-[#dc2626] hover:bg-[#efe9df] transition-calm flex items-center justify-center"
+                title="Sign out"
               >
-                <LogOut className="w-3.5 h-3.5 text-red-600" />
-                <span>Log Out</span>
+                <LogOut className="w-4 h-4" strokeWidth={1.5} />
               </button>
             )}
           </div>
 
-          {/* Quick Header Reset & Logout for Mobile (< sm) */}
+          {/* Mobile Header Controls (< sm) */}
           <div className="sm:hidden flex items-center gap-1.5">
             <button
               type="button"
-              onClick={onReset}
-              className="p-2 rounded-xl text-[#5c5549] bg-white border border-[#e0d6c7] text-xs font-medium shadow-2xs"
-              title="New Test"
+              onClick={() => onSelectTab(activeTab === 'roster' ? 'catalogue' : 'roster')}
+              className="px-2.5 h-8 rounded-lg bg-[#efe9df] border border-[#dcd5c4] text-xs font-medium text-[#1f1b16]"
             >
-              <RefreshCw className="w-4 h-4 text-[#736c62]" />
+              {activeTab === 'roster' ? 'Paper' : 'Roster'}
+            </button>
+            <button
+              type="button"
+              onClick={onSwitchToStudentPortal}
+              className="px-2.5 h-8 rounded-lg bg-[#efe9df] border border-[#dcd5c4] text-xs font-medium text-[#1f1b16]"
+            >
+              Student
             </button>
             {onLogout && (
               <button
                 type="button"
                 onClick={onLogout}
-                className="p-2 rounded-xl text-red-700 bg-white border border-red-200 text-xs font-medium shadow-2xs"
-                title="Log Out"
+                className="p-2 h-8 w-8 rounded-lg text-[#5e554a] bg-[#efe9df] border border-[#dcd5c4] flex items-center justify-center"
+                title="Sign out"
               >
-                <LogOut className="w-4 h-4 text-red-600" />
+                <LogOut className="w-4 h-4" strokeWidth={1.5} />
               </button>
             )}
           </div>
-
         </div>
       </header>
 
-      {/* App-Native Mobile Bottom Action Dock (< sm) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#fbf9f5] border-t border-[#e2dacd] px-2 py-2 shadow-lg flex items-center justify-around font-sans print:hidden">
+      {/* Mobile Bottom Action Bar (< sm) */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#fdfbf7] border-t border-[#dcd5c4] px-3 py-2 flex items-center justify-around font-sans print:hidden">
         <button
           type="button"
           onClick={onScrollToInput}
-          className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[#5c5346] active:bg-[#ede5d8] transition-colors"
+          className="flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[#5e554a] hover:text-[#1f1b16]"
         >
-          <UploadCloud className="w-5 h-5 text-[#8c4a17]" />
-          <span className="text-[10px] font-semibold mt-0.5">Upload</span>
+          <UploadCloud className="w-4 h-4" strokeWidth={1.5} />
+          <span className="text-[11px] font-medium mt-1">Import</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenSubmissions}
-          className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[#5c5346] active:bg-[#ede5d8] transition-colors"
+          className="flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[#5e554a] hover:text-[#1f1b16]"
         >
-          <Award className="w-5 h-5 text-[#2c2825]" />
-          <span className="text-[10px] font-semibold mt-0.5">Grades</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onPublishExam}
-          className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-emerald-800 active:bg-emerald-50 transition-colors"
-        >
-          <div className="w-8 h-8 rounded-full bg-emerald-800 text-white flex items-center justify-center shadow-xs">
-            <Share2 className="w-4 h-4 text-emerald-200" />
-          </div>
-          <span className="text-[10px] font-bold text-emerald-900 mt-0.5">Publish</span>
+          <Award className="w-4 h-4" strokeWidth={1.5} />
+          <span className="text-[11px] font-medium mt-1">Grades</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenPrintView}
-          className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[#5c5346] active:bg-[#ede5d8] transition-colors"
+          className="flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[#5e554a] hover:text-[#1f1b16]"
         >
-          <Printer className="w-5 h-5 text-[#8c4a17]" />
-          <span className="text-[10px] font-semibold mt-0.5">Print/PDF</span>
+          <Printer className="w-4 h-4" strokeWidth={1.5} />
+          <span className="text-[11px] font-medium mt-1">Print</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onPublishExam}
+          className="flex items-center gap-1.5 px-3.5 h-9 rounded-lg bg-[#1f1b16] text-[#fdfbf7] text-xs font-medium"
+        >
+          <Share2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+          <span>Publish</span>
         </button>
       </nav>
     </>

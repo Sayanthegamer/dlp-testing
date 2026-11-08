@@ -1,32 +1,26 @@
 import React from 'react';
 import katex from 'katex';
 import 'katex/contrib/mhchem';
-import { repairMissingMathBackslashes } from '../../services/mathSanitizerService';
 
 export default function MathRenderer({ text = '', needsReview = false, readOnly = false, onSelectMathForEdit }) {
   if (!text || text.trim() === '') {
-    return <span className="italic text-[#8c8275]">No text transcribed yet.</span>;
+    return <span className="text-[#7b7266]">No text entered</span>;
   }
 
   const sanitizedText = text;
-
-  // Split text by <math>...</math> tags
   const parts = [];
   const mathRegex = /<math>(.*?)<\/math>/gs;
   let lastIndex = 0;
   let match;
 
   while ((match = mathRegex.exec(sanitizedText)) !== null) {
-    // Plain text before math
     if (match.index > lastIndex) {
       parts.push({ type: 'text', content: sanitizedText.substring(lastIndex, match.index) });
     }
-    // Math content
     parts.push({ type: 'math', content: match[1] });
     lastIndex = mathRegex.lastIndex;
   }
 
-  // Remaining text
   if (lastIndex < sanitizedText.length) {
     parts.push({ type: 'text', content: sanitizedText.substring(lastIndex) });
   }
@@ -35,33 +29,23 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
     <span className="whitespace-pre-wrap">
       {parts.map((part, idx) => {
         if (part.type === 'text') {
-          // Render plain text preserving spaces & multiline breaks
           return <span key={idx}>{part.content}</span>;
         }
 
         let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
         if (!cleanMathContent) return null;
 
-
-
-        // Fix unescaped physical unit tags e.g. pu{10cm} -> \mathrm{10cm}
         cleanMathContent = cleanMathContent.replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
-
-        // Auto-escape unescaped percent signs inside math tags so KaTeX does not treat them as comments
         cleanMathContent = cleanMathContent.replace(/(?<!\\)%/g, '\\%');
 
-        // Fix fill-in-the-blank underscores inside \text{} or standalone consecutive underscores
         cleanMathContent = cleanMathContent
           .replace(/\\text\{([^{}]*)\}/g, (_, inner) => `\\text{${inner.replace(/(?<!\\)_/g, '\\_')}}`)
-          .replace(/(?<!\\)_{2,}/g, (match) => `\\underline{\\hspace{${match.length * 0.5}em}}`);
+          .replace(/(?<!\\)_{2,}/g, (m) => `\\underline{\\hspace{${m.length * 0.5}em}}`);
 
-        // If math content is purely plain English text words without math symbols, wrap in \text{} so spaces are preserved
         if (/^[a-zA-Z\s]{3,}$/.test(cleanMathContent) && !cleanMathContent.includes('\\')) {
           cleanMathContent = `\\text{${cleanMathContent}}`;
         }
 
-
-        // Render Math with KaTeX
         let renderedHtml = '';
         let isError = false;
 
@@ -77,7 +61,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
               "\\vhat": "\\hat{\\mathbf{#1}}"
             }
           });
-        } catch (e) {
+        } catch (_) {
           isError = true;
         }
 
@@ -87,13 +71,18 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
           return (
             <span
               key={idx}
-              onClick={() => !readOnly && onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
-              className={`inline-block font-sans text-xs font-semibold mx-1 rounded px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 ${
-                readOnly ? '' : 'cursor-pointer hover:bg-amber-200 transition-all'
+              onClick={(e) => {
+                if (!readOnly && onSelectMathForEdit) {
+                  e.stopPropagation();
+                  onSelectMathForEdit(cleanMathContent);
+                }
+              }}
+              className={`inline-block font-sans text-xs font-medium mx-1 rounded px-2 py-0.5 bg-[#efe9df] border border-[#b8622e] text-[#b8622e] ${
+                readOnly ? '' : 'cursor-pointer hover:bg-[#e5dec9] transition-calm'
               }`}
-              title={readOnly ? "Math formula needs review" : "Math formula syntax needs review — click to edit visually"}
+              title={readOnly ? "Formula needs a check" : "This formula needs a check — click to edit visually"}
             >
-              [Math Formula Needs Review]
+              This formula needs a check
             </span>
           );
         }
@@ -101,13 +90,22 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         return (
           <span
             key={idx}
-            onClick={() => !readOnly && onSelectMathForEdit && onSelectMathForEdit(cleanMathContent)}
-            className={`inline-block font-serif mx-0.5 rounded px-1 transition-all ${
+            onClick={(e) => {
+              if (!readOnly && onSelectMathForEdit) {
+                e.stopPropagation();
+                onSelectMathForEdit(cleanMathContent);
+              }
+            }}
+            className={`inline-block font-serif mx-0.5 rounded px-1 transition-calm ${
               readOnly
                 ? ''
-                : `cursor-pointer ${isHighlighted ? 'math-review-highlight hover:bg-amber-200/70' : 'hover:bg-amber-100/50 hover:underline'}`
+                : `cursor-pointer ${
+                    isHighlighted
+                      ? 'math-review-highlight'
+                      : 'hover:bg-[#efe9df]'
+                  }`
             }`}
-            title={readOnly ? undefined : "Click to edit formula visually"}
+            title={readOnly ? undefined : "Click to edit formula in visual builder"}
             dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
         );

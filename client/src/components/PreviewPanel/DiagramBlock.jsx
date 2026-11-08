@@ -9,21 +9,21 @@ export default function DiagramBlock({ diagrams = [], diagramImages = [] }) {
       {diagrams.map((d, idx) => {
         const img = Array.isArray(diagramImages) ? diagramImages.find((i) => i && i.id === d.id) : null;
         return (
-          <div key={d.id || idx} className="border border-[#e2dacd] rounded-xl p-2.5 bg-white inline-block max-w-full shadow-xs">
+          <div key={d.id || idx} className="border border-[#dcd5c4] rounded-lg p-3 bg-[#fdfbf7] inline-block max-w-full">
             {img && img.dataUrl ? (
               <img
                 src={img.dataUrl}
-                alt={d.caption || 'Diagram'}
-                className="max-w-full max-h-64 rounded-lg object-contain"
+                alt={d.caption || 'Question figure'}
+                className="max-w-full max-h-64 rounded-md object-contain"
               />
             ) : (
-              <div className="flex items-center gap-2 text-xs text-amber-800 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                <ImageOff className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>Diagram crop failed or requires manual re-attach</span>
+              <div className="flex items-center gap-2 text-xs text-[#b8622e] p-3 bg-[#f7f4ee] rounded-md border border-[#b8622e]">
+                <ImageOff className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                <span>Figure needs manual attachment</span>
               </div>
             )}
             {d.caption && (
-              <p className="text-[11px] font-sans font-medium text-[#736c62] mt-1.5 px-1 truncate">
+              <p className="text-xs font-serif text-[#5e554a] mt-1.5 px-1">
                 {d.caption}
               </p>
             )}

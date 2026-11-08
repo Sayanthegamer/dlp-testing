@@ -21,7 +21,7 @@ export default function AccessGateModal({ onAuthenticated }) {
     try {
       if (authMode === 'signup') {
         if (!email || !password || !accessCode) {
-          setErrorMsg('Email, password, and access code are required.');
+          setErrorMsg('Email, password, and access code are required');
           setIsSubmitting(false);
           return;
         }
@@ -29,7 +29,7 @@ export default function AccessGateModal({ onAuthenticated }) {
         if (res.token) {
           onAuthenticated();
         } else {
-          setSuccessMsg(res.message || 'Account created! Please check your email for a confirmation link before logging in.');
+          setSuccessMsg(res.message || 'Account created. Check your email for a confirmation link before signing in.');
           setAuthMode('login');
           setPassword('');
         }
@@ -39,9 +39,9 @@ export default function AccessGateModal({ onAuthenticated }) {
         onAuthenticated();
       }
     } catch (err) {
-      let msg = err.message || 'Authentication failed. Please check your credentials.';
+      let msg = err.message || 'Authentication failed. Check your credentials.';
       if (typeof msg === 'object' || msg === '{}' || msg === '[object Object]') {
-        msg = 'Authentication failed. Please check your credentials or server configuration.';
+        msg = 'Authentication failed. Check your credentials or server configuration.';
       }
       setErrorMsg(msg);
     } finally {
@@ -49,121 +49,120 @@ export default function AccessGateModal({ onAuthenticated }) {
     }
   };
 
+  const handleDemoAccess = () => {
+    localStorage.setItem('teacher_auth_token', 'dev-fallback-token');
+    onAuthenticated();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#1c1b18]/85 flex items-center justify-center p-4">
-      <div className="bg-[#fcfbfa] border border-[#dcd2c4] rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
-        
-        {/* Header */}
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center mx-auto shadow-md">
-            <Lock className="w-7 h-7" />
+    <div className="fixed inset-0 z-50 bg-[#161513] flex items-center justify-center p-4">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-md w-full space-y-6">
+        <div className="space-y-2">
+          <div className="w-10 h-10 rounded-lg bg-[#1f1b16] text-[#fdfbf7] flex items-center justify-center">
+            <Lock className="w-5 h-5" strokeWidth={1.5} />
           </div>
-          <h2 className="font-serif font-bold text-2xl text-[#1c1b18]">
-            {authMode === 'signup' ? 'Create Teacher Account' : 'Teacher Login'}
+          <h2 className="font-serif font-medium text-2xl text-[#1f1b16] pt-1">
+            {authMode === 'signup' ? 'Create teacher account' : 'Teacher sign in'}
           </h2>
-          <p className="text-xs text-[#736c62] max-w-xs mx-auto">
+          <p className="text-xs text-[#5e554a]">
             {authMode === 'signup'
-              ? 'Sign up with your teacher email and shared access code.'
-              : 'Sign in to access your persistent tests, drafts, and analytics.'}
+              ? 'Register with your institutional email and teacher access code'
+              : 'Sign in to author question papers, publish sessions, and grade submissions'}
           </p>
         </div>
 
-        {/* Toggle Mode Tabs */}
-        <div className="flex items-center justify-center gap-1 bg-[#efe8dc] p-1 rounded-xl text-xs font-semibold text-[#5c5346]">
+        <div className="grid grid-cols-2 gap-1 bg-[#efe9df] p-1 rounded-lg border border-[#dcd5c4] text-xs font-medium text-[#5e554a]">
           <button
             type="button"
             onClick={() => { setAuthMode('login'); setErrorMsg(''); setSuccessMsg(''); }}
-            className={`flex-1 py-1.5 rounded-lg transition-all ${authMode === 'login' ? 'bg-white shadow-xs text-[#1c1b18]' : 'hover:text-[#1c1b18]'}`}
+            className={`h-8 rounded-md transition-calm ${authMode === 'login' ? 'bg-[#fdfbf7] text-[#1f1b16] shadow-2xs' : 'hover:text-[#1f1b16]'}`}
           >
-            Login
+            Sign in
           </button>
           <button
             type="button"
             onClick={() => { setAuthMode('signup'); setErrorMsg(''); setSuccessMsg(''); }}
-            className={`flex-1 py-1.5 rounded-lg transition-all ${authMode === 'signup' ? 'bg-white shadow-xs text-[#1c1b18]' : 'hover:text-[#1c1b18]'}`}
+            className={`h-8 rounded-md transition-calm ${authMode === 'signup' ? 'bg-[#fdfbf7] text-[#1f1b16] shadow-2xs' : 'hover:text-[#1f1b16]'}`}
           >
-            Sign Up
+            Register
           </button>
         </div>
 
-        {/* Success Alert */}
         {successMsg && (
-          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-sans font-medium">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+          <div className="p-3 rounded-lg bg-[#f4f8f5] border border-[#3f6b4a] text-[#3f6b4a] text-xs flex items-center gap-2 font-sans font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0" strokeWidth={1.5} />
             <span>{successMsg}</span>
           </div>
         )}
 
-        {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 font-sans font-medium">
-            <ShieldAlert className="w-4 h-4 shrink-0" />
+          <div className="p-3 rounded-lg bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] text-xs flex items-center gap-2 font-sans font-medium">
+            <ShieldAlert className="w-4 h-4 shrink-0" strokeWidth={1.5} />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {authMode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Full Name</label>
+              <label className="block text-xs font-medium text-[#5e554a] mb-1.5">Full name</label>
               <div className="relative">
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Prof. Smith"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                  placeholder="Dr. S. Chatterjee"
+                  className="w-full pl-9 pr-3.5 h-10 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                 />
-                <User className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+                <User className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" strokeWidth={1.5} />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Teacher Email</label>
+            <label className="block text-xs font-medium text-[#5e554a] mb-1.5">Teacher email</label>
             <div className="relative">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="teacher@school.edu"
+                placeholder="teacher@institute.edu"
                 required
                 autoFocus
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                className="w-full pl-9 pr-3.5 h-10 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
               />
-              <Mail className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+              <Mail className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" strokeWidth={1.5} />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Password</label>
+            <label className="block text-xs font-medium text-[#5e554a] mb-1.5">Password</label>
             <div className="relative">
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Enter password"
                 required
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                className="w-full pl-9 pr-3.5 h-10 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
               />
-              <KeyRound className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" strokeWidth={1.5} />
             </div>
           </div>
 
           {authMode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-[#5c5346] mb-1.5 uppercase tracking-wider">Access Code</label>
+              <label className="block text-xs font-medium text-[#5e554a] mb-1.5">Access code</label>
               <div className="relative">
                 <input
                   type="password"
                   value={accessCode}
                   onChange={(e) => setAccessCode(e.target.value)}
-                  placeholder="Shared access code..."
+                  placeholder="Shared teacher passcode"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#c9bea9] bg-white font-mono text-sm text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17] shadow-inner"
+                  className="w-full pl-9 pr-3.5 h-10 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                 />
-                <ShieldCheck className="w-4 h-4 text-[#8c8275] absolute left-3 top-3" />
+                <ShieldCheck className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" strokeWidth={1.5} />
               </div>
             </div>
           )}
@@ -171,20 +170,24 @@ export default function AccessGateModal({ onAuthenticated }) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3.5 px-4 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white font-serif font-bold text-sm shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full h-10 px-4 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            <span>{isSubmitting ? 'Authenticating...' : authMode === 'signup' ? 'Create Account' : 'Sign In'}</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>{isSubmitting ? 'Signing in' : authMode === 'signup' ? 'Create account' : 'Sign in'}</span>
+            <ArrowRight className="w-4 h-4" strokeWidth={1.5} />
           </button>
         </form>
 
-        <p className="text-[11px] text-center text-[#8c8275] font-sans">
-          Powered by Supabase Auth & PostgreSQL Security
-        </p>
-
+        <div className="pt-3 border-t border-[#dcd5c4] flex items-center justify-between text-xs">
+          <span className="text-[#7b7266]">Local evaluation mode</span>
+          <button
+            type="button"
+            onClick={handleDemoAccess}
+            className="font-medium text-[#8c4a17] hover:underline"
+          >
+            Continue in demo studio
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-
-

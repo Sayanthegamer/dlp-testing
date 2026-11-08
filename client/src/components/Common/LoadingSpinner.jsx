@@ -1,13 +1,13 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 
-export default function LoadingSpinner({ message = 'Transcribing and converting math...' }) {
+export default function LoadingSpinner({ message = 'Typesetting math expressions' }) {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center bg-[#fbf9f5] rounded-xl border border-[#e2dacd]">
-      <Loader2 className="w-8 h-8 text-[#a36520] animate-spin mb-3" />
-      <p className="font-serif font-medium text-[#2c2825] text-base mb-1">{message}</p>
-      <p className="text-xs text-[#736c62] max-w-xs">
-        Converting math into typeset exam notation with zero LaTeX code.
+    <div className="flex flex-col items-center justify-center p-10 text-center bg-[#fdfbf7] rounded-xl border border-[#dcd5c4]">
+      <Loader2 className="w-6 h-6 text-[#8c4a17] animate-spin mb-3" strokeWidth={1.5} />
+      <p className="font-serif font-medium text-[#1f1b16] text-base mb-1">{message}</p>
+      <p className="text-xs text-[#7b7266] max-w-xs">
+        Converting questions into typeset exam notation
       </p>
     </div>
   );

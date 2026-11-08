@@ -1,6 +1,5 @@
 /**
  * Client API Service to interface with Express backend proxy.
- * The backend securely attaches ANTHROPIC_API_KEY server-side.
  */
 
 function getAuthHeader() {
@@ -12,10 +11,6 @@ function getAuthHeader() {
   return headers;
 }
 
-/**
- * Attempt to refresh the access token using the stored refresh token.
- * Returns true if refresh succeeded, false otherwise.
- */
 async function refreshAuthToken() {
   const refreshToken = localStorage.getItem('teacher_refresh_token');
   if (!refreshToken) return false;
@@ -28,7 +23,6 @@ async function refreshAuthToken() {
     });
 
     if (!response.ok) {
-      // Refresh failed — clear stale tokens
       localStorage.removeItem('teacher_auth_token');
       localStorage.removeItem('teacher_refresh_token');
       return false;
@@ -48,16 +42,10 @@ async function refreshAuthToken() {
   }
 }
 
-/**
- * Wrapper around fetch that auto-retries once on 401 by refreshing the token.
- * Use this for all authenticated API calls.
- */
 async function authenticatedFetch(url, options = {}) {
-  // First attempt with current token
   options.headers = { ...options.headers, ...getAuthHeader() };
   let response = await fetch(url, options);
 
-  // If 401, try refreshing the token and retry once
   if (response.status === 401) {
     const refreshed = await refreshAuthToken();
     if (refreshed) {
@@ -77,7 +65,7 @@ export async function loginTeacher(email, password) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-  } catch (networkErr) {
+  } catch (_) {
     throw new Error('Network error: Cannot reach the server. Please check your connection.');
   }
 
@@ -107,7 +95,7 @@ export async function signupTeacher(email, password, fullName, accessCode) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, fullName, accessCode })
     });
-  } catch (networkErr) {
+  } catch (_) {
     throw new Error('Network error: Cannot reach the server. Please check your connection.');
   }
 
@@ -177,7 +165,7 @@ export async function checkServerHealth() {
     const response = await fetch('/api/health');
     if (!response.ok) return { status: 'down' };
     return await response.json();
-  } catch (e) {
+  } catch (_) {
     return { status: 'offline' };
   }
 }
@@ -226,7 +214,6 @@ export async function gradeSubmission(submissionId, manualGrades) {
 }
 
 export async function publishExam(payload) {
-  // Strip large sourcePageImage base64 strings to keep JSON payload lightweight (< 50KB) and prevent HTTP 413 Payload Too Large errors on Vercel
   const cleanQuestions = (payload?.questions || []).map(q => {
     const cleanDiagramImages = (q.diagramImages || []).map(img => {
       if (!img || typeof img !== 'object') return img;
@@ -252,7 +239,6 @@ export async function publishExam(payload) {
   }
   return await response.json();
 }
-
 
 export async function fetchExamSnapshot(examId, rollingCode = '') {
   const headers = { 'Content-Type': 'application/json' };
@@ -336,7 +322,7 @@ export async function fetchExamSessionStatus(examId, rollingCode) {
       return { success: false, durationMinutes: 180, extendedMinutes: 0 };
     }
     return await response.json();
-  } catch (err) {
+  } catch (_) {
     return { success: false, durationMinutes: 180, extendedMinutes: 0 };
   }
 }
@@ -398,7 +384,7 @@ export function getStoredStudentProfile() {
   try {
     const raw = localStorage.getItem('student_profile');
     return raw ? JSON.parse(raw) : null;
-  } catch (e) {
+  } catch (_) {
     return null;
   }
 }
@@ -445,6 +431,43 @@ export async function fetchTeacherRoster(teacherId) {
   }
   const data = await response.json();
   return data.data || [];
+}
+
+export async function fetchStudentDossier(studentId) {
+  const response = await authenticatedFetch(`/api/teacher/students/${encodeURIComponent(studentId)}/dossier`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load candidate dossier');
+  }
+  return await response.json();
+}
+
+export async function updateStudentProfile(studentId, payload) {
+  const response = await authenticatedFetch(`/api/teacher/students/${encodeURIComponent(studentId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update student profile');
+  }
+  return await response.json();
+}
+
+export async function deleteStudentFromRoster(studentId) {
+  const response = await authenticatedFetch(`/api/teacher/students/${encodeURIComponent(studentId)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to remove student');
+  }
+  return await response.json();
 }
 
 export async function fetchTeacherRollingRefCode() {
@@ -535,4 +558,3 @@ async function handleApiResponse(response) {
   }
   return result.data;
 }
-

@@ -3,7 +3,7 @@ import { convertOmmlElementToLatex } from './ommlToLatex.js';
 
 /**
  * Extracts questions, text, and OMML equations directly from a .docx file.
- * Returns structured question data with zero LaTeX exposure to the user.
+ * Supports multi-question Word documents with numbered stems (1., Q1., Question 1:) and lettered options.
  */
 export async function parseDocxFile(file) {
   try {
@@ -29,19 +29,16 @@ export async function parseDocxFile(file) {
       const p = paragraphs[pIdx];
       let pText = '';
 
-      // Traverse children of paragraph sequentially
       const children = Array.from(p.childNodes);
       for (const child of children) {
         const tagName = child.tagName ? child.tagName.replace(/^.*:/, '') : '';
 
         if (tagName === 'r') {
-          // Standard text run
           const tTags = child.getElementsByTagName('w:t');
           for (let i = 0; i < tTags.length; i++) {
             pText += tTags[i].textContent;
           }
         } else if (tagName === 'oMath' || tagName === 'oMathPara') {
-          // OMML Native Word Equation
           const latex = convertOmmlElementToLatex(child).trim();
           if (latex) {
             pText += ` <math>${latex}</math> `;
@@ -56,58 +53,85 @@ export async function parseDocxFile(file) {
       }
     }
 
-    // Process extracted lines into question structure
-    const structuredResult = processDocxLines(extractedParagraphs, allMathSpans);
-    return structuredResult;
-
+    return processDocxLines(extractedParagraphs, allMathSpans, file.name);
   } catch (err) {
-    console.error('Docx Parsing Error:', err);
     throw new Error(`Failed to parse .docx file: ${err.message}`);
   }
 }
 
-function processDocxLines(lines, allMathSpans) {
+function processDocxLines(lines, allMathSpans, fileName = '') {
+  const cleanTitle = fileName ? fileName.replace(/\.docx$/i, '').replace(/[_-]+/g, ' ') : 'Word OMML Examination Paper';
+
   if (lines.length === 0) {
     return {
-      questionText: "Sample Question from Docx: Solve <math>x^2 - 4 = 0</math>",
-      type: "mcq",
-      options: ["<math>x = \\pm 2</math>", "<math>x = 0</math>", "<math>x = 4</math>", "<math>x = 1</math>"],
-      correctAnswer: 0,
-      mathSpans: ["x^2 - 4 = 0", "x = \\pm 2"],
-      confidenceScore: 1.0,
-      needsReview: false
+      testTitle: cleanTitle,
+      questions: [
+        {
+          id: 'q_docx_1',
+          questionText: 'Solve <math>x^2 - 4 = 0</math>',
+          type: 'mcq',
+          options: ['<math>x = \\pm 2</math>', '<math>x = 0</math>', '<math>x = 4</math>', '<math>x = 1</math>'],
+          correctAnswer: null,
+          mathSpans: ['x^2 - 4 = 0', 'x = \\pm 2'],
+          confidenceScore: 1.0,
+          numericalConfirmed: false,
+          needsReview: true
+        }
+      ]
     };
   }
 
-  let questionText = lines[0];
-  const options = [];
-  let isMcq = false;
+  const questionStartRegex = /^(?:Q(?:uestion)?\s*\d+|\d+)[\.\)\:]\s+/i;
+  const optionRegex = /^\(?([A-Da-d])[\.\)]\s+/;
 
-  const optionRegex = /^([A-Da-d1-4][\.\)]\s*)/;
+  const blocks = [];
+  let currentBlock = null;
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (optionRegex.test(line)) {
-      isMcq = true;
-      options.push(line.replace(optionRegex, '').trim());
-    } else if (options.length > 0) {
-      // Continuation of last option
-      options[options.length - 1] += ' ' + line;
+  for (const line of lines) {
+    if (questionStartRegex.test(line)) {
+      if (currentBlock) blocks.push(currentBlock);
+      currentBlock = {
+        questionText: line.replace(questionStartRegex, '').trim(),
+        options: []
+      };
+    } else if (optionRegex.test(line)) {
+      if (!currentBlock) {
+        currentBlock = { questionText: 'Question 1', options: [] };
+      }
+      currentBlock.options.push(line.replace(optionRegex, '').trim());
     } else {
-      // Continuation of question stem
-      questionText += ' ' + line;
+      if (!currentBlock) {
+        currentBlock = { questionText: line, options: [] };
+      } else if (currentBlock.options.length > 0) {
+        currentBlock.options[currentBlock.options.length - 1] += ' ' + line;
+      } else {
+        currentBlock.questionText += ' ' + line;
+      }
     }
   }
 
+  if (currentBlock) {
+    blocks.push(currentBlock);
+  }
+
+  const questions = blocks.map((b, idx) => {
+    const isMcq = b.options.length >= 2;
+    return {
+      id: `q_docx_${Date.now()}_${idx + 1}`,
+      questionText: b.questionText,
+      type: isMcq ? 'mcq' : 'short_answer_numeric',
+      options: isMcq ? b.options : [],
+      correctAnswer: null,
+      mathSpans: allMathSpans,
+      confidenceScore: 0.98,
+      numericalConfirmed: false,
+      needsReview: true
+    };
+  });
+
   return {
-    questionText,
-    type: isMcq ? "mcq" : "short_answer_numeric",
-    options: isMcq ? options : [],
-    correctAnswer: null,
-    mathSpans: allMathSpans,
-    confidenceScore: 0.98,
-    numericalConfirmed: false,
-    needsReview: true,
+    testTitle: cleanTitle,
+    questions,
     rawLines: lines
   };
 }

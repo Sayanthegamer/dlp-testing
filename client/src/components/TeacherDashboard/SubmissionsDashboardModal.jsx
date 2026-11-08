@@ -3,7 +3,19 @@ import MathRenderer from '../PreviewPanel/MathRenderer';
 import PublishedExamsList from './PublishedExamsList';
 import { fetchSubmissions, gradeSubmission } from '../../services/apiService';
 import { evaluateSubmission } from '../../services/gradingService';
-import { X, CheckCircle2, XCircle, Clock, RefreshCw, FileText, Check, Award, MessageSquare, Users, ShieldAlert } from 'lucide-react';
+import {
+  X,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  RefreshCw,
+  FileText,
+  Check,
+  Award,
+  MessageSquare,
+  Users,
+  ShieldAlert
+} from 'lucide-react';
 
 export default function SubmissionsDashboardModal({ onClose }) {
   const [activeTab, setActiveTab] = useState('submissions'); // 'submissions' | 'published_exams'
@@ -11,10 +23,11 @@ export default function SubmissionsDashboardModal({ onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'needs_review' | 'reviewed'
-  
+
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [manualGrades, setManualGrades] = useState({});
   const [saving, setSaving] = useState(false);
+  const [saveBanner, setSaveBanner] = useState('');
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
@@ -27,7 +40,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
         setSubmissions(res.submissions);
       }
     } catch (err) {
-      setError(err.message || 'Failed to load submissions.');
+      setError(err.message || 'Could not load submissions');
     } finally {
       setLoading(false);
     }
@@ -40,6 +53,7 @@ export default function SubmissionsDashboardModal({ onClose }) {
   function handleSelectSubmission(sub) {
     setSelectedSubmission(sub);
     setManualGrades(sub.manualGrades || {});
+    setSaveBanner('');
   }
 
   function handleToggleGrade(questionId, status) {
@@ -75,15 +89,18 @@ export default function SubmissionsDashboardModal({ onClose }) {
   async function handleSaveGrades() {
     if (!selectedSubmission) return;
     setSaving(true);
+    setSaveBanner('');
+    setError(null);
     try {
       const res = await gradeSubmission(selectedSubmission.id, manualGrades);
       if (res && res.submission) {
-        // Update in list
         setSubmissions(prev => prev.map(s => s.id === res.submission.id ? res.submission : s));
         setSelectedSubmission(res.submission);
+        setSaveBanner('Grades saved');
+        setTimeout(() => setSaveBanner(''), 3000);
       }
     } catch (err) {
-      alert(`Error saving grades: ${err.message}`);
+      setError(`Could not save grades: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -98,399 +115,362 @@ export default function SubmissionsDashboardModal({ onClose }) {
   const unreviewedCount = submissions.filter(s => s.status === 'pending_review').length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-black/50 overflow-y-auto">
-      <div className="bg-[#FAF7F0] border-0 sm:border border-[#dcd2c4] rounded-none sm:rounded-3xl max-w-5xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans text-[#1c1b18]">
-        
-        {/* Header Bar with Main Tabs */}
-        <div className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-[#e2d8ca] bg-[#f5efe4] gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-9 h-9 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center shadow-xs">
-              <Award className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-[#161513]/60 overflow-y-auto">
+      <div className="bg-[#f7f4ee] border-0 sm:border border-[#dcd5c4] rounded-none sm:rounded-2xl max-w-5xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-xl overflow-hidden font-sans text-[#1f1b16]">
+        {/* Header Bar */}
+        <div className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-[#dcd5c4] bg-[#fdfbf7] gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#efe9df] text-[#1f1b16] flex items-center justify-center">
+              <Award className="w-4 h-4" strokeWidth={1.5} />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-lg text-[#1c1b18] leading-tight">
-                Teacher Management Portal
+              <h3 className="font-serif font-medium text-lg text-[#1f1b16] leading-tight">
+                Submissions and published exams
               </h3>
-              <p className="text-xs text-[#786f63]">
-                {submissions.length} Total Submissions • {unreviewedCount} Pending Teacher Review
+              <p className="text-xs text-[#5e554a] font-mono tabular-nums">
+                {submissions.length} submissions • {unreviewedCount} pending review
               </p>
             </div>
           </div>
 
-          {/* Main Navigation Tabs */}
-          <div className="flex items-center gap-1.5 bg-[#e8decb] p-1 rounded-2xl">
+          <div className="flex items-center gap-1 bg-[#efe9df] p-1 rounded-lg border border-[#dcd5c4]">
             <button
               type="button"
               onClick={() => setActiveTab('submissions')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-medium transition-calm ${
                 activeTab === 'submissions'
-                  ? 'bg-[#1c1b18] text-white shadow-xs'
-                  : 'text-[#5c5346] hover:bg-[#dcd0be]'
+                  ? 'bg-[#fdfbf7] text-[#1f1b16] shadow-2xs'
+                  : 'text-[#5e554a] hover:text-[#1f1b16]'
               }`}
             >
-              <Users className="w-3.5 h-3.5" />
-              <span>Student Submissions</span>
+              <Users className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+              <span>Student submissions</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('published_exams')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-medium transition-calm ${
                 activeTab === 'published_exams'
-                  ? 'bg-[#1c1b18] text-white shadow-xs'
-                  : 'text-[#5c5346] hover:bg-[#dcd0be]'
+                  ? 'bg-[#fdfbf7] text-[#1f1b16] shadow-2xs'
+                  : 'text-[#5e554a] hover:text-[#1f1b16]'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Published Exams</span>
+              <FileText className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+              <span>Published exams</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {activeTab === 'submissions' && (
               <button
                 type="button"
                 onClick={loadSubmissions}
-                className="p-2 rounded-xl text-[#786f63] hover:bg-[#e8decb] transition-colors"
+                className="p-2 h-8 w-8 rounded-lg text-[#5e554a] hover:bg-[#efe9df] transition-calm flex items-center justify-center"
                 title="Refresh submissions"
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
               </button>
             )}
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-[#786f63] hover:bg-[#e8decb] transition-colors"
+              className="p-2 h-8 w-8 rounded-lg text-[#5e554a] hover:bg-[#efe9df] transition-calm flex items-center justify-center"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" strokeWidth={1.5} />
             </button>
           </div>
         </div>
 
-        {/* Modal Body Switcher */}
         {activeTab === 'published_exams' ? (
           <PublishedExamsList />
         ) : (
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             {/* Left Column: Submissions List */}
-            <div className={`${selectedSubmission ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-1/3 border-r border-[#e2d8ca] bg-[#fcfbfa]`}>
-              {/* Filter Tabs */}
-              <div className="p-3 border-b border-[#e2d8ca] flex items-center gap-1.5 bg-[#f5efe4]">
+            <div className={`${selectedSubmission ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 border-r border-[#dcd5c4] bg-[#fdfbf7]`}>
+              <div className="p-3 border-b border-[#dcd5c4] flex items-center gap-1 bg-[#f7f4ee]">
                 <button
                   type="button"
                   onClick={() => setFilter('all')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                    filter === 'all' ? 'bg-[#2c2825] text-white shadow-xs' : 'text-[#5c5346] hover:bg-[#e8decb]'
+                  className={`px-2.5 h-7 rounded-md text-xs font-medium tabular-nums transition-calm ${
+                    filter === 'all' ? 'bg-[#1f1b16] text-[#fdfbf7]' : 'text-[#5e554a] hover:bg-[#efe9df]'
                   }`}
                 >
-                All ({submissions.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('needs_review')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 ${
-                  filter === 'needs_review' ? 'bg-[#8c4a17] text-white shadow-xs' : 'text-[#8c4a17] hover:bg-[#e8decb]'
-                }`}
-              >
-                <span>Needs Review</span>
-                {unreviewedCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold">
-                    {unreviewedCount}
-                  </span>
+                  All ({submissions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter('needs_review')}
+                  className={`px-2.5 h-7 rounded-md text-xs font-medium tabular-nums transition-calm flex items-center gap-1.5 ${
+                    filter === 'needs_review' ? 'bg-[#b8622e] text-[#fdfbf7]' : 'text-[#5e554a] hover:bg-[#efe9df]'
+                  }`}
+                >
+                  <span>Needs review</span>
+                  {unreviewedCount > 0 && (
+                    <span className="font-mono text-[11px]">({unreviewedCount})</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter('reviewed')}
+                  className={`px-2.5 h-7 rounded-md text-xs font-medium transition-calm ${
+                    filter === 'reviewed' ? 'bg-[#1f1b16] text-[#fdfbf7]' : 'text-[#5e554a] hover:bg-[#efe9df]'
+                  }`}
+                >
+                  Graded
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {loading && submissions.length === 0 && (
+                  <div className="p-8 text-center text-xs text-[#7b7266]">
+                    Loading submissions
+                  </div>
                 )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('reviewed')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                  filter === 'reviewed' ? 'bg-[#2c2825] text-white shadow-xs' : 'text-[#5c5346] hover:bg-[#e8decb]'
-                }`}
-              >
-                Completed
-              </button>
+
+                {error && (
+                  <div className="p-3 rounded-lg bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] text-xs">
+                    {error}
+                  </div>
+                )}
+
+                {!loading && filteredSubmissions.length === 0 && (
+                  <div className="p-8 text-center text-xs text-[#7b7266]">
+                    No submissions match this filter
+                  </div>
+                )}
+
+                {filteredSubmissions.map(sub => {
+                  const isSelected = selectedSubmission && selectedSubmission.id === sub.id;
+                  const formattedTime = new Date(sub.submittedAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => handleSelectSubmission(sub)}
+                      className={`w-full text-left p-3.5 rounded-xl border transition-calm space-y-1.5 ${
+                        isSelected
+                          ? 'bg-[#efe9df] border-[#8c4a17]'
+                          : 'bg-[#fdfbf7] border-[#dcd5c4] hover:border-[#c4bba6]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-serif font-medium text-sm text-[#1f1b16] truncate">
+                          {sub.studentName}
+                        </span>
+                        {sub.cheatingFlagged ? (
+                          <span className="px-2 py-0.5 rounded-md bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] text-[11px] font-medium shrink-0">
+                            Flagged
+                          </span>
+                        ) : sub.status === 'pending_review' ? (
+                          <span className="px-2 py-0.5 rounded-md bg-[#efe9df] border border-[#b8622e] text-[#b8622e] text-[11px] font-medium shrink-0">
+                            Needs review
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-[#f4f8f5] border border-[#3f6b4a] text-[#3f6b4a] text-[11px] font-medium shrink-0">
+                            Graded
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-[#5e554a] flex items-center justify-between font-mono tabular-nums">
+                        <span className="font-sans truncate max-w-[140px]">{sub.testTitle}</span>
+                        {sub.cheatingFlagged ? (
+                          <span className="text-[#dc2626]">0 pts</span>
+                        ) : (
+                          <span className="text-[#1f1b16] font-medium">
+                            {sub.finalScore ? `${sub.finalScore.score}/${sub.finalScore.total}` : `${sub.autoGraded?.score || 0}/${sub.autoGraded?.total || 0}`}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-[#7b7266] font-mono tabular-nums">
+                        {formattedTime}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* List Items */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {loading && submissions.length === 0 && (
-                <div className="p-8 text-center text-xs text-[#786f63]">
-                  Loading student submissions...
-                </div>
-              )}
-
-              {error && (
-                <div className="p-4 rounded-2xl bg-red-50 text-red-700 text-xs">
-                  {error}
-                </div>
-              )}
-
-              {!loading && filteredSubmissions.length === 0 && (
-                <div className="p-8 text-center text-xs text-[#786f63] font-serif italic">
-                  No submissions found for this filter.
-                </div>
-              )}
-
-              {filteredSubmissions.map(sub => {
-                const isSelected = selectedSubmission && selectedSubmission.id === sub.id;
-                const formattedTime = new Date(sub.submittedAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
+            {/* Right Column: Submission Detail */}
+            <div className={`${selectedSubmission ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-[#f7f4ee] overflow-hidden`}>
+              {selectedSubmission ? (() => {
+                const evaluation = evaluateSubmission(
+                  selectedSubmission.questions,
+                  selectedSubmission.studentAnswers,
+                  manualGrades
+                );
 
                 return (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => handleSelectSubmission(sub)}
-                    className={`w-full text-left p-3.5 rounded-2xl border transition-all space-y-1.5 ${
-                      isSelected
-                        ? 'bg-[#f0e6d8] border-[#8c4a17] shadow-xs'
-                        : 'bg-white border-[#e2d8ca] hover:border-[#c5b9a7]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-serif font-bold text-sm text-[#1c1b18] truncate max-w-[150px]">
-                        {sub.studentName}
-                      </span>
-                      {sub.cheatingFlagged ? (
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-900 text-[10px] font-bold flex items-center gap-1">
-                          <ShieldAlert className="w-3 h-3 text-red-700" />
-                          <span>Cheating Flagged</span>
-                        </span>
-                      ) : sub.status === 'pending_review' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-amber-700" />
-                          <span>Review Needed</span>
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-[10px] font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                          <span>Reviewed</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-[#5c5346] flex items-center justify-between">
-                      <span className="truncate max-w-[140px]">{sub.testTitle}</span>
-                      {sub.cheatingFlagged ? (
-                        <span className="font-bold text-red-600">Disqualified (0)</span>
-                      ) : (
-                        <span className="font-semibold text-gray-900">
-                          {sub.finalScore ? `${sub.finalScore.score}/${sub.finalScore.total}` : `${sub.autoGraded.score}/${sub.autoGraded.total}`}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-[10px] text-gray-400 font-mono text-right">
-                      {formattedTime}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right Column: Submission Detail & Manual Grading Inspector */}
-          <div className={`${selectedSubmission ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-[#FAF7F0] overflow-hidden`}>
-            {selectedSubmission ? (() => {
-              const evaluation = evaluateSubmission(selectedSubmission.questions, selectedSubmission.studentAnswers, manualGrades);
-
-              return (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  
-                  {/* Mobile Back Button (< md) */}
-                  <div className="md:hidden p-3 border-b border-[#e2d8ca] bg-[#f5efe4] flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedSubmission(null)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#dcd0be] text-xs font-bold text-[#1c1b18] shadow-xs active:scale-95"
-                    >
-                      ← Back to Submissions List
-                    </button>
-                  </div>
-
-                  {/* Inspector Banner */}
-                  <div className="p-4 sm:p-6 border-b border-[#e2d8ca] bg-[#fcfbfa] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-[#8c4a17]">
-                          Candidate Scorecard
-                        </span>
-                        {selectedSubmission.cheatingFlagged ? (
-                          <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold flex items-center gap-1">
-                            <ShieldAlert className="w-3.5 h-3.5" />
-                            <span>MALPRACTICE / CHEATING FLAGGED</span>
-                          </span>
-                        ) : selectedSubmission.status === 'pending_review' ? (
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold">
-                            Pending Review ({selectedSubmission.pendingCount} items)
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-semibold">
-                            Reviewed
-                          </span>
-                        )}
-                      </div>
-                      <h2 className="font-serif font-bold text-xl sm:text-2xl text-[#1c1b18] mt-1">
-                        {selectedSubmission.studentName}
-                      </h2>
-                      <p className="text-xs text-[#786f63]">
-                        Test: {selectedSubmission.testTitle} • Submitted {new Date(selectedSubmission.submittedAt).toLocaleString()}
-                      </p>
-                      {selectedSubmission.cheatingFlagged && (
-                        <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs font-semibold flex items-center gap-1.5">
-                          <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
-                          <span>Violation Detail: {selectedSubmission.cheatingReason || 'Excessive tab switching / window inactivity during exam.'}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="text-left sm:text-right space-y-1 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[#e2d8ca]">
-                      <div className="text-xs text-gray-500 font-medium">
-                        {evaluation.pendingCount > 0 ? (
-                          <span className="text-amber-800 font-semibold">Provisional Score ({evaluation.pendingCount} pending)</span>
-                        ) : (
-                          <span>Final Score</span>
-                        )}
-                      </div>
-                      <div className="font-serif font-bold text-2xl sm:text-3xl text-[#1c1b18] flex items-baseline justify-start sm:justify-end gap-2">
-                        <span>{evaluation.score} / {evaluation.total}</span>
-                        <span className="text-xs font-sans font-semibold text-[#8c4a17]">
-                          {evaluation.pendingCount > 0
-                            ? `(${evaluation.provisionalPercentage}% graded rate)`
-                            : `(${evaluation.percentage}%)`}
-                        </span>
-                      </div>
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="md:hidden p-3 border-b border-[#dcd5c4] bg-[#fdfbf7] flex items-center">
                       <button
                         type="button"
-                        onClick={handleSaveGrades}
-                        disabled={saving}
-                        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#703a11] text-white text-xs font-semibold shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50 sm:ml-auto mt-2 sm:mt-0"
+                        onClick={() => setSelectedSubmission(null)}
+                        className="px-3 h-8 rounded-lg bg-[#efe9df] border border-[#dcd5c4] text-xs font-medium text-[#1f1b16]"
                       >
-                        <Check className="w-4 h-4" />
-                        <span>{saving ? 'Saving...' : 'Save & Finalize Grades'}</span>
+                        Back to list
                       </button>
                     </div>
-                  </div>
 
-                  {/* Itemized Questions & Manual Grade Form */}
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-                    {selectedSubmission.questions.map((q, idx) => {
-                      const studentAns = selectedSubmission.studentAnswers[q.id];
-                      const gradeInfo = manualGrades[q.id] || {};
-                      const qEval = evaluation.perQuestion[idx] || {};
-                      const effectiveStatus = qEval.effectiveStatus || 'pending_review';
-
-                    let formattedStudentAns = 'No response provided';
-                    if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
-                      if (q.type === 'mcq' && typeof studentAns === 'number') {
-                        formattedStudentAns = `Option ${optionLetters[studentAns] || studentAns}`;
-                      } else {
-                        formattedStudentAns = `"${studentAns}"`;
-                      }
-                    }
-
-                    return (
-                      <div key={q.id || idx} className="bg-white border border-[#e2d8ca] rounded-2xl p-5 shadow-xs space-y-4">
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2.5 text-xs">
-                          <span className="font-bold text-gray-900">Question #{idx + 1} ({q.type})</span>
-                          <span className="font-bold">
-                            {effectiveStatus === 'correct' && <span className="text-emerald-700">Correct (+1)</span>}
-                            {effectiveStatus === 'incorrect' && <span className="text-red-700">Incorrect (0)</span>}
-                            {effectiveStatus === 'pending_review' && <span className="text-amber-800">Pending Review</span>}
+                    <div className="p-5 border-b border-[#dcd5c4] bg-[#fdfbf7] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-medium text-[#5e554a]">
+                            Candidate script
                           </span>
-                        </div>
-
-                        {/* Stem */}
-                        <div className="font-serif text-base text-[#1c1b18]">
-                          <MathRenderer text={q.questionText} readOnly={true} />
-                        </div>
-
-                        {/* MCQ options summary if MCQ */}
-                        {q.type === 'mcq' && q.options && (
-                          <div className="text-xs text-gray-600 bg-gray-50 p-2.5 rounded-lg space-y-1">
-                            <span className="font-semibold block text-gray-700">Options:</span>
-                            {q.options.map((opt, oIdx) => (
-                              <div key={oIdx} className="flex items-center gap-2">
-                                <span className="font-bold">({optionLetters[oIdx]})</span>
-                                <MathRenderer text={opt} readOnly={true} />
-                                {q.correctAnswer === oIdx && <span className="text-emerald-700 font-bold ml-2">(Correct Key)</span>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Response & Evaluation */}
-                        <div className="bg-[#FAF7F0] border border-[#e2d8ca] rounded-xl p-3.5 text-xs space-y-2">
-                          <div>
-                            <span className="text-gray-500 font-medium">Candidate Response: </span>
-                            <strong className="text-gray-900">{formattedStudentAns}</strong>
-                          </div>
-
-                          {/* Teacher Manual Grading Action Controls for short answers / text */}
-                          {(qEval.autoStatus === 'pending_review' || q.type === 'short_answer_text' || q.type === 'short_answer') && (
-                            <div className="pt-2 border-t border-[#e2d8ca] space-y-2">
-                              <span className="font-bold text-[#8c4a17] block">Teacher Manual Evaluation:</span>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleGrade(q.id, 'correct')}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all text-xs ${
-                                    effectiveStatus === 'correct'
-                                      ? 'bg-emerald-700 text-white shadow-xs'
-                                      : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                                  }`}
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Mark Correct (+1)</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleGrade(q.id, 'incorrect')}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all text-xs ${
-                                    effectiveStatus === 'incorrect'
-                                      ? 'bg-red-700 text-white shadow-xs'
-                                      : 'bg-red-50 text-red-800 border border-red-200 hover:bg-red-100'
-                                  }`}
-                                >
-                                  <XCircle className="w-3.5 h-3.5" />
-                                  <span>Mark Incorrect (0)</span>
-                                </button>
-                              </div>
-
-                              {/* Optional Comment */}
-                              <div className="pt-1 flex items-center gap-2">
-                                <MessageSquare className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                <input
-                                  type="text"
-                                  placeholder="Add optional teacher feedback comment..."
-                                  value={gradeInfo.comment || ''}
-                                  onChange={e => handleCommentChange(q.id, e.target.value)}
-                                  className="w-full bg-white border border-[#e2d8ca] rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-[#8c4a17]"
-                                />
-                              </div>
-                            </div>
+                          {saveBanner && (
+                            <span className="px-2 py-0.5 rounded-md bg-[#f4f8f5] border border-[#3f6b4a] text-[#3f6b4a] text-xs font-medium">
+                              {saveBanner}
+                            </span>
                           )}
                         </div>
+                        <h2 className="font-serif font-medium text-xl text-[#1f1b16]">
+                          {selectedSubmission.studentName}
+                        </h2>
+                        <p className="text-xs text-[#7b7266] font-mono tabular-nums">
+                          {selectedSubmission.testTitle} • {new Date(selectedSubmission.submittedAt).toLocaleString()}
+                        </p>
+                        {selectedSubmission.cheatingFlagged && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] text-xs flex items-center gap-1.5">
+                            <ShieldAlert className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                            <span>Violation recorded: {selectedSubmission.cheatingReason || 'Window focus lost during exam'}</span>
+                          </div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
 
-              </div>
-              );
-            })() : (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400 space-y-3 font-serif">
-                <FileText className="w-12 h-12 text-gray-300" />
-                <p className="text-base text-gray-600">Select a student submission from the left list to inspect answers and perform manual grading.</p>
-              </div>
-            )}
+                      <div className="text-left sm:text-right space-y-1.5 w-full sm:w-auto">
+                        <div className="font-mono tabular-nums font-medium text-2xl text-[#1f1b16]">
+                          {evaluation.score} / {evaluation.total} <span className="text-sm text-[#5e554a]">({evaluation.percentage}%)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveGrades}
+                          disabled={saving}
+                          className="w-full sm:w-auto px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Check className="w-4 h-4" strokeWidth={1.5} />
+                          <span>{saving ? 'Saving' : 'Save grades'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                      {selectedSubmission.questions.map((q, idx) => {
+                        const studentAns = selectedSubmission.studentAnswers[q.id];
+                        const gradeInfo = manualGrades[q.id] || {};
+                        const qEval = evaluation.perQuestion[idx] || {};
+                        const effectiveStatus = qEval.effectiveStatus || 'pending_review';
+
+                        let formattedStudentAns = 'No response';
+                        if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
+                          if ((q.type === 'mcq' || q.type === 'match_following') && typeof studentAns === 'number') {
+                            formattedStudentAns = `Option ${optionLetters[studentAns] || studentAns}`;
+                          } else {
+                            formattedStudentAns = `${studentAns}`;
+                          }
+                        }
+
+                        return (
+                          <div key={q.id || idx} className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-5 space-y-3">
+                            <div className="flex items-center justify-between border-b border-[#efe9df] pb-2 text-xs">
+                              <span className="font-serif font-medium text-sm text-[#1f1b16] tabular-nums">
+                                Q{idx + 1}.
+                              </span>
+                              <span className="font-mono tabular-nums font-medium">
+                                {effectiveStatus === 'correct' && <span className="text-[#3f6b4a]">Correct (+1)</span>}
+                                {effectiveStatus === 'incorrect' && <span className="text-[#dc2626]">Incorrect (0)</span>}
+                                {effectiveStatus === 'pending_review' && <span className="text-[#b8622e]">Needs review</span>}
+                              </span>
+                            </div>
+
+                            <div className="font-serif text-base text-[#1f1b16]">
+                              <MathRenderer text={q.questionText} readOnly={true} />
+                            </div>
+
+                            {(q.type === 'mcq' || q.type === 'match_following') && q.options && (
+                              <div className="text-xs text-[#5e554a] bg-[#f7f4ee] p-3 rounded-lg space-y-1.5 border border-[#dcd5c4]">
+                                {q.options.map((opt, oIdx) => (
+                                  <div key={oIdx} className="flex items-center gap-2 font-serif">
+                                    <span className="font-mono text-xs text-[#7b7266]">({optionLetters[oIdx]})</span>
+                                    <MathRenderer text={opt} readOnly={true} />
+                                    {q.correctAnswer === oIdx && (
+                                      <span className="text-[#3f6b4a] font-sans text-[11px] font-medium ml-auto">Answer key</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg p-3.5 text-xs space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[#5e554a]">Student response</span>
+                                <span className="font-mono font-medium text-[#1f1b16]">{formattedStudentAns}</span>
+                              </div>
+
+                              <div className="pt-2 border-t border-[#dcd5c4] space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleGrade(q.id, 'correct')}
+                                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md font-medium transition-calm text-xs border ${
+                                      effectiveStatus === 'correct'
+                                        ? 'bg-[#3f6b4a] border-[#3f6b4a] text-[#fdfbf7]'
+                                        : 'bg-[#fdfbf7] text-[#3f6b4a] border-[#dcd5c4] hover:bg-[#efe9df]'
+                                    }`}
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                    <span>Mark correct</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleGrade(q.id, 'incorrect')}
+                                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md font-medium transition-calm text-xs border ${
+                                      effectiveStatus === 'incorrect'
+                                        ? 'bg-[#dc2626] border-[#dc2626] text-[#fdfbf7]'
+                                        : 'bg-[#fdfbf7] text-[#dc2626] border-[#dcd5c4] hover:bg-[#efe9df]'
+                                    }`}
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                    <span>Mark incorrect</span>
+                                  </button>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <MessageSquare className="w-3.5 h-3.5 text-[#7b7266] shrink-0" strokeWidth={1.5} />
+                                  <input
+                                    type="text"
+                                    placeholder="Teacher note"
+                                    value={gradeInfo.comment || ''}
+                                    onChange={e => handleCommentChange(q.id, e.target.value)}
+                                    className="w-full bg-[#fdfbf7] border border-[#dcd5c4] rounded-md px-2.5 h-8 text-xs text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#7b7266] space-y-2">
+                  <FileText className="w-8 h-8 text-[#7b7266]" strokeWidth={1.5} />
+                  <p className="text-sm font-serif text-[#5e554a]">Select a submission on the left to inspect responses and grade</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 }

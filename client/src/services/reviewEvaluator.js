@@ -1,7 +1,6 @@
 import katex from 'katex';
 import { hasBareCommandRun, repairMissingMathBackslashes } from './mathSanitizerService';
 
-
 /**
  * Computes deterministic needsReview status and concrete reasons based on product invariants.
  * @param {Object} question - Question block object
@@ -12,41 +11,38 @@ export function computeNeedsReview(question) {
 
   const reasons = [];
 
-  // Rule 1: Correct Answer must be set
   if (question.correctAnswer === null || question.correctAnswer === undefined || question.correctAnswer === '') {
-    reasons.push('Answer Key Unset');
+    reasons.push('Answer key unset');
   }
 
-  // Rule 2: Question Type specific validation
-  if (question.type === 'mcq') {
+  if (question.type === 'mcq' || question.type === 'match_following') {
     if (!Array.isArray(question.options) || question.options.length < 2) {
-      reasons.push('Fewer than 2 MCQ Options');
+      reasons.push('Fewer than 2 options');
     }
   } else if (question.type === 'short_answer' || question.type === 'short_answer_text') {
-    // Legacy non-numeric question type handles
-    reasons.push('Legacy Answer Type (Convert to Numerical)');
+    reasons.push('Legacy answer type (convert to numerical)');
   } else if (question.type === 'short_answer_numeric') {
     const range = question.acceptedRange;
-    const isValidRange = Array.isArray(range) && 
-      range.length === 2 && 
+    const isValidRange = Array.isArray(range) &&
+      range.length === 2 &&
       typeof range[0] === 'number' && Number.isFinite(range[0]) &&
       typeof range[1] === 'number' && Number.isFinite(range[1]) &&
       range[0] <= range[1];
-    
+
     if (!isValidRange) {
-      reasons.push('Numeric Range Not Set');
+      reasons.push('Numeric range not set');
     } else if (!question.numericalConfirmed) {
-      reasons.push('Numerical Range Unconfirmed');
+      reasons.push('Numeric range unconfirmed');
     }
+  } else {
+    reasons.push('Unclassified question type');
   }
 
-  // Rule 3: Question stem content check
   const stem = (question.questionText || '').trim();
   if (!stem || stem.length < 3) {
-    reasons.push('Empty or Very Short Question Stem');
+    reasons.push('Question stem missing');
   }
 
-  // Rule 4: KaTeX Syntax Evaluation on math spans
   const fullTextToTest = [
     question.questionText || '',
     ...(Array.isArray(question.options) ? question.options : [])
@@ -68,40 +64,35 @@ export function computeNeedsReview(question) {
   };
 
   for (const match of mathMatches) {
-    let rawFormula = match.replace(/<\/?math>/gi, '').trim();
+    const rawFormula = match.replace(/<\/?math>/gi, '').trim();
     if (!rawFormula) continue;
 
-    // Apply auto-repair before syntax check
     const cleanFormula = repairMissingMathBackslashes(rawFormula)
       .replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
 
     try {
       katex.renderToString(cleanFormula, KATEX_EVAL_OPTIONS);
-    } catch (err) {
+    } catch (_) {
       katexHasError = true;
       break;
     }
   }
 
   if (katexHasError) {
-    reasons.push('Math Formula Syntax Error');
+    reasons.push('Formula syntax check needed');
   }
 
-  // Structural Diagram Leakage Detector (Structural drawings shouldn't be raw text LaTeX)
   const structuralHints = /benzene ring|skeletal structure|wedge.?dash|orbital diagram|circuit diagram/i;
-  if (structuralHints.test(fullTextToTest)) {
-    reasons.push('Possible Structural Diagram — Verify Not Misrendered as Text');
+  if (structuralHints.test(fullTextToTest) && (!Array.isArray(question.diagrams) || question.diagrams.length === 0)) {
+    reasons.push('Verify structural diagram attachment');
   }
 
-  // Bare LaTeX command run detector (missing leading backslash)
   if (hasBareCommandRun(fullTextToTest)) {
-    reasons.push('Possible Malformed LaTeX (Missing Backslash)');
+    reasons.push('Formula formatting check needed');
   }
 
-
-  // AI-cropped diagrams always require teacher confirmation
   if (Array.isArray(question.diagrams) && question.diagrams.length > 0 && !question.diagramsConfirmed) {
-    reasons.push('Diagram Needs Review');
+    reasons.push('Diagram needs confirmation');
   }
 
   return {

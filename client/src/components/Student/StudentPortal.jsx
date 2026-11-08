@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Award, PlayCircle, History, Clock, FileText, CheckCircle, XCircle, ChevronRight, RefreshCw, Eye, QrCode, KeyRound, Link2, CheckCircle2 } from 'lucide-react';
+import {
+  LogOut,
+  History,
+  Clock,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  ChevronRight,
+  RefreshCw,
+  Eye,
+  KeyRound,
+  Link2,
+  Play
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   fetchStudentHistory,
@@ -10,7 +23,7 @@ import {
 } from '../../services/apiService';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 
-export default function StudentPortal({ student, onJoinExam, onLogout }) {
+export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPaper, onLogout }) {
   const [rollingCode, setRollingCode] = useState('');
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -18,11 +31,9 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const [joinError, setJoinError] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
 
-  // Student 5-Min Rolling Code State
   const [studentRefCode, setStudentRefCode] = useState('');
   const [stuCodeTimer, setStuCodeTimer] = useState(300);
 
-  // Link to Teacher Modal State
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [teacherInputCode, setTeacherInputCode] = useState('');
   const [linkError, setLinkError] = useState('');
@@ -30,7 +41,9 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const [linking, setLinking] = useState(false);
 
   const admNum = student.admission_number || student.admissionNumber || '';
-  const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/?adm=${encodeURIComponent(admNum)}&dob=${encodeURIComponent(student.dob || '')}` : '';
+  const qrUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/?adm=${encodeURIComponent(admNum)}&dob=${encodeURIComponent(student.dob || '')}`
+    : '';
 
   useEffect(() => {
     loadTestHistory();
@@ -57,7 +70,7 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
         setStudentRefCode(res.refCode);
         if (res.expiresInSeconds) setStuCodeTimer(res.expiresInSeconds);
       }
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const handleRegenerateStudentCode = async () => {
@@ -67,7 +80,7 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
         setStudentRefCode(res.refCode);
         if (res.expiresInSeconds) setStuCodeTimer(res.expiresInSeconds);
       }
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const loadTestHistory = async () => {
@@ -75,9 +88,7 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
     try {
       const data = await fetchStudentHistory();
       setHistory(data);
-    } catch (err) {
-      console.warn('[Student Portal History Load Error]:', err.message);
-    } finally {
+    } catch (_) {} finally {
       setLoadingHistory(false);
     }
   };
@@ -85,7 +96,7 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const handleJoinSubmit = (e) => {
     e.preventDefault();
     if (!rollingCode.trim() || rollingCode.trim().length < 6) {
-      setJoinError('Please enter a valid 6-digit exam rolling code.');
+      setJoinError('Enter the 6-digit session passcode displayed by your instructor');
       return;
     }
     setJoinError('');
@@ -95,7 +106,7 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const handleLinkTeacherSubmit = async (e) => {
     e.preventDefault();
     if (!teacherInputCode.trim()) {
-      setLinkError('Please enter your teacher\'s reference code.');
+      setLinkError('Enter your teacher reference code');
       return;
     }
     setLinkError('');
@@ -105,11 +116,11 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
     try {
       const res = await studentLinkToTeacher(teacherInputCode.trim());
       if (res && res.success) {
-        setLinkSuccess('Successfully linked your profile to your teacher!');
+        setLinkSuccess('Linked your profile to your instructor roster');
         setTeacherInputCode('');
       }
     } catch (err) {
-      setLinkError(err.message || 'Failed to link teacher. Code may be invalid or expired.');
+      setLinkError(err.message || 'Could not link teacher. Code may be expired.');
     } finally {
       setLinking(false);
     }
@@ -125,83 +136,77 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
   const avgPercentage = totalTests > 0
     ? Math.round(history.reduce((acc, h) => acc + (parseFloat(h.percentage) || 0), 0) / totalTests)
     : 0;
+  const latestPercentage = totalTests > 0 ? Math.round(parseFloat(history[0]?.percentage) || 0) : null;
 
   return (
-    <div className="min-h-screen bg-[#f7f3ed] text-[#1c1b18] p-4 sm:p-6 md:p-8 font-sans">
+    <div className="min-h-screen bg-[#f7f4ee] text-[#1f1b16] p-4 sm:p-6 font-sans">
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* Top Student Banner */}
-        <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        {/* Candidate Header Card */}
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#8c4a17] text-white flex items-center justify-center font-serif font-bold text-xl shadow-md shrink-0">
-              {student.full_name ? student.full_name.charAt(0).toUpperCase() : 'S'}
+            <div className="w-12 h-12 rounded-lg bg-[#1f1b16] text-[#fdfbf7] flex items-center justify-center font-serif font-medium text-lg shrink-0">
+              {student.full_name ? student.full_name.charAt(0).toUpperCase() : 'C'}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#2c2825]">
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-serif font-medium text-[#1f1b16]">
                   {student.full_name || student.fullName}
                 </h1>
-                <span className="bg-amber-100 border border-amber-300 text-amber-900 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                  Student Profile
+                <span className="bg-[#efe9df] border border-[#dcd5c4] text-[#5e554a] text-xs font-medium px-2 py-0.5 rounded-md">
+                  Candidate
                 </span>
               </div>
-              <p className="text-xs font-mono text-[#736c62] mt-0.5">
-                Admission Number: <span className="font-bold text-[#8c4a17]">{student.admission_number || student.admissionNumber}</span>
+              <p className="text-xs font-mono tabular-nums text-[#5e554a] mt-0.5">
+                Roll number: <span className="font-medium text-[#1f1b16]">{admNum}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Student 5-Min Rolling Code Card */}
-            <div className="bg-[#f7f3ed] border border-[#e2d8ca] rounded-2xl p-2.5 sm:px-4 sm:py-2 flex items-center gap-3 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Student 5-Min Reference Code */}
+            <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg px-3.5 py-2 flex items-center gap-3">
               <div>
-                <div className="flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-[#8c4a17]">
-                  <KeyRound className="w-3 h-3" />
-                  <span>REF CODE (5-MIN)</span>
+                <div className="flex items-center gap-1 text-[11px] text-[#5e554a]">
+                  <KeyRound className="w-3 h-3 text-[#8c4a17]" strokeWidth={1.5} />
+                  <span>Reference code</span>
                 </div>
-                <div className="font-mono font-bold text-sm sm:text-base text-[#1c1b18] tracking-wider">
-                  {studentRefCode || 'STU-LOADING'}
+                <div className="font-mono tabular-nums font-medium text-sm text-[#1f1b16] tracking-wider">
+                  {studentRefCode || 'STU-••••••'}
                 </div>
               </div>
               <div className="text-right border-l border-[#dcd5c4] pl-3">
-                <span className="text-xs font-mono font-bold text-amber-900 flex items-center justify-end gap-1">
-                  <Clock className="w-3 h-3" />
+                <span className="text-xs font-mono tabular-nums text-[#5e554a] flex items-center justify-end gap-1">
+                  <Clock className="w-3 h-3 text-[#7b7266]" strokeWidth={1.5} />
                   {formatSec(stuCodeTimer)}
                 </span>
                 <button
                   type="button"
                   onClick={handleRegenerateStudentCode}
-                  className="text-[10px] font-bold text-[#8c4a17] hover:underline block"
+                  className="text-[11px] font-medium text-[#8c4a17] hover:underline block"
                 >
-                  Regenerate
+                  Rotate
                 </button>
               </div>
             </div>
 
-            {/* Link to Teacher Button */}
             <button
               type="button"
               onClick={() => setShowLinkModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-all cursor-pointer border border-amber-300"
-              title="Link your student profile to your teacher using their 5-minute passcode"
+              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm border border-[#dcd5c4]"
             >
-              <Link2 className="w-4 h-4 text-amber-800" />
-              <span className="hidden sm:inline">Link Teacher</span>
+              <Link2 className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+              <span>Link teacher</span>
             </button>
 
-            {/* Digital Candidate QR Ticket */}
-            <div
+            <button
+              type="button"
               onClick={() => setShowQrModal(true)}
-              className="bg-white border border-[#e2d8ca] p-2 rounded-2xl flex items-center gap-2.5 shadow-2xs hover:border-[#8c4a17] transition-all cursor-pointer group"
-              title="Click to view full Digital Hall Ticket QR"
+              className="bg-[#fdfbf7] border border-[#dcd5c4] px-3 h-9 rounded-lg flex items-center gap-2 hover:bg-[#efe9df] transition-calm text-xs font-medium text-[#1f1b16]"
+              title="Open digital hall ticket QR"
             >
-              <div className="p-1 bg-[#fdfaf5] border border-[#e2d8ca] rounded-xl group-hover:border-[#8c4a17] transition-all">
-                <QRCodeSVG value={qrUrl} size={42} level="M" />
-              </div>
-              <div className="hidden sm:block text-left pr-1">
-                <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#8c4a17] block">DIGITAL QR</span>
-                <span className="text-[11px] font-bold text-[#2c2825] block">Hall Ticket</span>
-              </div>
-            </div>
+              <QRCodeSVG value={qrUrl} size={22} level="M" />
+              <span>Hall ticket</span>
+            </button>
 
             <button
               type="button"
@@ -209,243 +214,170 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
                 logoutStudent();
                 onLogout();
               }}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all cursor-pointer border border-red-200"
+              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#fdfbf7] hover:bg-[#efe9df] text-[#5e554a] hover:text-[#dc2626] text-xs font-medium transition-calm border border-[#dcd5c4]"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
+              <LogOut className="w-4 h-4" strokeWidth={1.5} />
+              <span>Sign out</span>
             </button>
           </div>
         </div>
 
-        {/* Digital QR Modal Popup */}
-        {showQrModal && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
-              <div className="border-b border-[#e2d8ca] pb-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#8c4a17]">DISTANCE LEARNING PROGRAM</span>
-                <h3 className="text-lg font-serif font-bold text-[#1c1b18] mt-0.5">Candidate Digital Hall Ticket</h3>
-              </div>
-
-              <div className="bg-white border-2 border-[#1c1b18] p-4 rounded-2xl inline-block shadow-md">
-                <QRCodeSVG value={qrUrl} size={180} level="H" includeMargin={true} />
-              </div>
-
-              <div className="space-y-1 font-mono text-xs text-[#4a4237]">
-                <p className="font-bold text-sm text-[#1c1b18]">{student.full_name || student.fullName}</p>
-                <p className="text-[#8c4a17] font-bold">Roll No: {admNum}</p>
-                <p className="text-gray-500 text-[11px]">DOB: {student.dob}</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowQrModal(false)}
-                className="w-full py-2.5 rounded-xl bg-[#1c1b18] hover:bg-black text-white text-xs font-bold transition-all"
-              >
-                Close Ticket
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Link to Teacher Modal Popup */}
-        {showLinkModal && (
-          <div className="fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 font-sans animate-in zoom-in-95 duration-150">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-100 text-amber-900">
-                  <Link2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-serif font-bold text-[#2c2825]">
-                    Link to Teacher Roster
-                  </h3>
-                  <p className="text-[11px] text-[#736c62]">
-                    Enter your teacher's 5-minute passcode to assign your profile to their class.
-                  </p>
-                </div>
-              </div>
-
-              {linkError && <p className="text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">{linkError}</p>}
-              {linkSuccess && <p className="text-xs text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{linkSuccess}</p>}
-
-              <form onSubmit={handleLinkTeacherSubmit} className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-bold text-[#4a4237] mb-1">Teacher Reference Code (5-Min Passcode) *</label>
-                  <input
-                    type="text"
-                    value={teacherInputCode}
-                    onChange={(e) => setTeacherInputCode(e.target.value.toUpperCase())}
-                    placeholder="e.g. TCH-8K9P2M"
-                    className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-widest text-sm text-[#8c4a17]"
-                    required
-                  />
-                  <p className="text-[10px] text-[#736c62] mt-1">
-                    Ask your teacher for their current 5-minute passcode displayed on their teacher dashboard.
-                  </p>
-                </div>
-
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowLinkModal(false)}
-                    className="px-4 py-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] font-bold"
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={linking}
-                    className="px-5 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#733b11] text-white font-bold"
-                  >
-                    {linking ? 'Linking...' : 'Link My Profile'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Stats Summary Bar */}
+        {/* Stat Cards Row (Numbers only, shared height, no decorative icons inside) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-[#e5dcd0] rounded-2xl p-4 flex items-center gap-3 shadow-2xs">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-[#8c4a17] flex items-center justify-center">
-              <FileText className="w-5 h-5" />
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-5 space-y-1">
+            <span className="text-xs text-[#5e554a] block">Completed assessments</span>
+            <div className="text-2xl font-mono tabular-nums font-medium text-[#1f1b16]">
+              {totalTests}
             </div>
-            <div>
-              <span className="text-[11px] text-[#736c62] uppercase tracking-wider font-semibold block">Exams Completed</span>
-              <span className="text-xl font-bold font-mono text-[#1c1b18]">{totalTests}</span>
-            </div>
+            <span className="text-xs text-[#7b7266] block">
+              {totalTests === 0 ? 'No papers submitted yet' : 'Recorded in candidate history'}
+            </span>
           </div>
 
-          <div className="bg-white border border-[#e5dcd0] rounded-2xl p-4 flex items-center gap-3 shadow-2xs">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Award className="w-5 h-5" />
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-5 space-y-1">
+            <span className="text-xs text-[#5e554a] block">Average score</span>
+            <div className="text-2xl font-mono tabular-nums font-medium text-[#1f1b16]">
+              {avgPercentage}%
             </div>
-            <div>
-              <span className="text-[11px] text-[#736c62] uppercase tracking-wider font-semibold block">Average Performance</span>
-              <span className="text-xl font-bold font-mono text-emerald-700">{avgPercentage}%</span>
-            </div>
+            <span className="text-xs text-[#7b7266] block">
+              {latestPercentage !== null ? `Latest paper: ${latestPercentage}%` : 'Across graded attempts'}
+            </span>
           </div>
 
-          <div className="bg-white border border-[#e5dcd0] rounded-2xl p-4 flex items-center gap-3 shadow-2xs">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-5 space-y-1">
+            <span className="text-xs text-[#5e554a] block">Roll number</span>
+            <div className="text-2xl font-mono tabular-nums font-medium text-[#8c4a17] truncate">
+              {admNum}
             </div>
-            <div>
-              <span className="text-[11px] text-[#736c62] uppercase tracking-wider font-semibold block">Status</span>
-              <span className="text-xs font-bold text-purple-800">Active Candidate</span>
-            </div>
+            <span className="text-xs text-[#7b7266] block">
+              Verified candidate registration
+            </span>
           </div>
         </div>
 
-        {/* Join Active Exam Box */}
-        <div className="bg-gradient-to-r from-[#8c4a17] to-[#a86e2d] text-white rounded-3xl p-6 sm:p-8 shadow-md relative overflow-hidden">
-          <div className="max-w-xl space-y-3 relative z-10">
-            <div className="flex items-center gap-2 text-amber-200 text-xs font-bold uppercase tracking-wider">
-              <PlayCircle className="w-4 h-4" />
-              <span>Take Live Examination</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold leading-tight">
-              Enter Exam Rolling Code
+        {/* Enter Live Examination Card (Solid raised surface instead of gradient banner) */}
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1.5 max-w-lg">
+            <span className="text-xs font-medium text-[#8c4a17] block">
+              Live examination session
+            </span>
+            <h2 className="text-2xl font-serif font-medium text-[#1f1b16]">
+              Enter 6-digit rolling passcode
             </h2>
-            <p className="text-xs sm:text-sm text-amber-100 leading-relaxed">
-              Enter the 6-digit code provided by your teacher to start your proctored test session.
+            <p className="text-xs text-[#5e554a] leading-relaxed">
+              Enter the 6-digit session code displayed by your instructor to unlock the examination paper and begin the timed session.
             </p>
+            {joinError && <p className="text-xs text-[#dc2626] pt-1 font-medium">{joinError}</p>}
+          </div>
 
-            <form onSubmit={handleJoinSubmit} className="pt-2 flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <form onSubmit={handleJoinSubmit} className="flex flex-col sm:flex-row gap-2.5">
               <input
                 type="text"
                 maxLength={6}
                 value={rollingCode}
                 onChange={(e) => setRollingCode(e.target.value.toUpperCase())}
-                placeholder="6-Digit Code (e.g. 849201)"
-                className="px-4 py-3 rounded-2xl bg-white text-[#1c1b18] font-mono text-lg font-bold tracking-widest focus:outline-none shadow-inner w-full sm:w-64 placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:font-normal"
+                placeholder="849201"
+                className="px-4 h-11 rounded-lg bg-[#f7f4ee] border border-[#dcd5c4] text-[#1f1b16] font-mono tabular-nums text-base font-medium tracking-widest focus:outline-none focus:border-[#8c4a17] w-full sm:w-44"
               />
               <button
                 type="submit"
-                className="px-6 py-3 rounded-2xl bg-[#2c2825] hover:bg-black text-white font-bold text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                className="px-5 h-11 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-2 shrink-0"
               >
-                <span>Start Test Now</span>
-                <ChevronRight className="w-4 h-4" />
+                <span>Join exam</span>
+                <ChevronRight className="w-4 h-4" strokeWidth={1.5} />
               </button>
             </form>
-            {joinError && <p className="text-xs text-red-200 font-medium">{joinError}</p>}
+
+            {onPreviewCurrentPaper && (
+              <button
+                type="button"
+                onClick={onPreviewCurrentPaper}
+                className="px-4 h-11 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] border border-[#dcd5c4] text-[#1f1b16] font-medium text-xs transition-calm flex items-center justify-center gap-1.5 shrink-0"
+                title="Practice with the current studio question paper"
+              >
+                <Play className="w-3.5 h-3.5 text-[#5e554a]" strokeWidth={1.5} />
+                <span>Practice current paper</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Test History List */}
-        <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-[#e2d8ca] pb-4">
-            <div className="flex items-center gap-2 font-serif font-bold text-lg sm:text-xl text-[#2c2825]">
-              <History className="w-5 h-5 text-[#8c4a17]" />
-              <h2>My Test History & Scorecards</h2>
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#dcd5c4] pb-4">
+            <div className="flex items-center gap-2 font-serif font-medium text-lg text-[#1f1b16]">
+              <History className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+              <h2>Submission history and scorecards</h2>
             </div>
 
             <button
               type="button"
               onClick={loadTestHistory}
-              className="p-2 rounded-xl text-[#736c62] hover:bg-[#f0e6d8] transition-colors"
-              title="Refresh Test History"
+              className="p-2 h-8 w-8 rounded-lg text-[#5e554a] hover:bg-[#efe9df] transition-calm flex items-center justify-center"
+              title="Refresh history"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
             </button>
           </div>
 
           {loadingHistory ? (
-            <div className="py-12 text-center text-xs text-[#736c62]">
-              Loading your exam history...
+            <div className="py-12 text-center text-xs text-[#7b7266]">
+              Loading examination history
             </div>
           ) : history.length === 0 ? (
             <div className="py-12 text-center space-y-2">
-              <FileText className="w-10 h-10 mx-auto text-[#c9bea9]" />
-              <p className="text-sm font-semibold text-[#5c5346]">No completed exams found yet.</p>
-              <p className="text-xs text-[#8c8275]">Enter a 6-digit rolling code above to take your first test.</p>
+              <FileText className="w-8 h-8 mx-auto text-[#7b7266]" strokeWidth={1.5} />
+              <p className="text-sm font-serif font-medium text-[#1f1b16]">No completed assessments yet</p>
+              <p className="text-xs text-[#5e554a]">Enter a 6-digit rolling passcode above or launch a practice paper</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {history.map((sub, idx) => {
-                const perc = parseFloat(sub.percentage) || 0;
+                const perc = Math.round(parseFloat(sub.percentage) || 0);
                 const isPassed = perc >= 40;
 
                 return (
                   <div
                     key={sub.id || idx}
-                    className="p-4 rounded-2xl border border-[#e5dcd0] bg-white hover:border-[#a86e2d] transition-all flex flex-wrap items-center justify-between gap-3 shadow-2xs"
+                    className="p-4 rounded-lg border border-[#dcd5c4] bg-[#f7f4ee] flex flex-wrap items-center justify-between gap-3"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-serif font-bold text-base text-[#1c1b18]">
-                          {sub.testTitle || sub.examTitle || 'Mathematics Exam'}
+                        <span className="font-serif font-medium text-base text-[#1f1b16]">
+                          {sub.testTitle || sub.examTitle || 'Mathematics Assessment'}
                         </span>
                         {sub.is_dev_demo && (
-                          <span className="text-[10px] bg-purple-100 text-purple-900 border border-purple-300 font-bold px-2 py-0.5 rounded-md">
-                            DEV DEMO
+                          <span className="text-[11px] bg-[#efe9df] text-[#5e554a] border border-[#dcd5c4] font-medium px-2 py-0.5 rounded">
+                            Demo
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-[#736c62] font-mono">
-                        <span>Submitted: {new Date(sub.submitted_at || sub.submittedAt).toLocaleDateString()}</span>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-[#5e554a] font-mono tabular-nums">
+                        <span>{new Date(sub.submitted_at || sub.submittedAt).toLocaleDateString()}</span>
                         <span>•</span>
-                        <span>Score: {sub.total_score || sub.finalScore?.score || 0} / {sub.max_possible || sub.finalScore?.total || 0}</span>
+                        <span>Score: {sub.total_score ?? sub.finalScore?.score ?? 0} / {sub.max_possible ?? sub.finalScore?.total ?? 0}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className={`text-base font-bold font-mono px-3 py-1 rounded-xl border ${
-                        isPassed
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                          : 'bg-red-50 text-red-800 border-red-300'
-                      }`}>
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className={`text-sm font-medium font-mono tabular-nums px-2.5 py-1 rounded-md border ${
+                          isPassed
+                            ? 'bg-[#f4f8f5] text-[#3f6b4a] border-[#3f6b4a]'
+                            : 'bg-[#fdf2f2] text-[#dc2626] border-[#dc2626]'
+                        }`}
+                      >
                         {perc}%
                       </span>
 
                       <button
                         type="button"
                         onClick={() => setSelectedReviewSub(sub)}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="px-3 h-8 rounded-lg bg-[#fdfbf7] hover:bg-[#efe9df] border border-[#dcd5c4] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
                       >
-                        <Eye className="w-3.5 h-3.5 text-[#8c4a17]" />
-                        <span>Review Paper</span>
+                        <Eye className="w-3.5 h-3.5 text-[#5e554a]" strokeWidth={1.5} />
+                        <span>Inspect paper</span>
                       </button>
                     </div>
                   </div>
@@ -456,7 +388,86 @@ export default function StudentPortal({ student, onJoinExam, onLogout }) {
         </div>
       </div>
 
-      {/* Answer Key & Paper Review Modal */}
+      {/* Digital QR Hall Ticket Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-sm w-full shadow-xl text-center space-y-5">
+            <div className="exam-rule-double pb-3">
+              <span className="text-xs text-[#5e554a] block">Distance Learning Assessment</span>
+              <h3 className="text-lg font-serif font-medium text-[#1f1b16] mt-0.5">Candidate Hall Ticket</h3>
+            </div>
+
+            <div className="bg-white border border-[#1f1b16] p-4 rounded-xl inline-block">
+              <QRCodeSVG value={qrUrl} size={176} level="H" includeMargin={true} />
+            </div>
+
+            <div className="space-y-1 font-mono tabular-nums text-xs text-[#5e554a]">
+              <p className="font-serif font-medium text-base text-[#1f1b16]">{student.full_name || student.fullName}</p>
+              <p className="text-[#8c4a17] font-medium">Roll number: {admNum}</p>
+              {student.dob && <p className="text-[#7b7266]">DOB: {student.dob}</p>}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowQrModal(false)}
+              className="w-full h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm"
+            >
+              Close ticket
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Link Teacher Modal */}
+      {showLinkModal && (
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
+            <div>
+              <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
+                Link to instructor roster
+              </h3>
+              <p className="text-xs text-[#5e554a] mt-0.5">
+                Enter your instructor's 5-minute reference code to link your candidate profile
+              </p>
+            </div>
+
+            {linkError && <p className="text-xs text-[#dc2626] bg-[#fdf2f2] p-2.5 rounded-lg border border-[#dc2626]">{linkError}</p>}
+            {linkSuccess && <p className="text-xs text-[#3f6b4a] bg-[#f4f8f5] p-2.5 rounded-lg border border-[#3f6b4a]">{linkSuccess}</p>}
+
+            <form onSubmit={handleLinkTeacherSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-[#5e554a] mb-1">Teacher reference code</label>
+                <input
+                  type="text"
+                  value={teacherInputCode}
+                  onChange={(e) => setTeacherInputCode(e.target.value.toUpperCase())}
+                  placeholder="TCH-8K9P2M"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#8c4a17]"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLinkModal(false)}
+                  className="px-4 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] font-medium"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={linking}
+                  className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium"
+                >
+                  {linking ? 'Linking' : 'Link profile'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {selectedReviewSub && (
         <StudentPaperReviewModal
           submission={selectedReviewSub}
@@ -473,31 +484,31 @@ function StudentPaperReviewModal({ submission, onClose }) {
   const studentAnswers = responses.studentAnswers || {};
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-[#e2d8ca] pb-4">
+    <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-3xl w-full shadow-xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-[#dcd5c4] pb-4">
           <div>
-            <h3 className="text-xl font-serif font-bold text-[#2c2825]">
-              Question Paper Detailed Review
+            <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
+              Completed paper review
             </h3>
-            <p className="text-xs text-[#736c62] font-mono mt-0.5">
-              {submission.testTitle || 'Exam'} • Score: {submission.total_score || responses.finalScore?.score} / {submission.max_possible || responses.finalScore?.total} ({submission.percentage}%)
+            <p className="text-xs text-[#5e554a] font-mono tabular-nums mt-0.5">
+              {submission.testTitle || 'Assessment'} • Score: {submission.total_score ?? responses.finalScore?.score ?? 0} / {submission.max_possible ?? responses.finalScore?.total ?? 0} ({Math.round(parseFloat(submission.percentage) || 0)}%)
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-[#736c62] hover:bg-[#f0e6d8] font-bold text-xs"
+            className="px-3 h-8 rounded-lg bg-[#efe9df] text-[#1f1b16] font-medium text-xs"
           >
             Close
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {questions.map((q, idx) => {
             const studentAns = studentAnswers[q.id];
-            const isMcq = q.type === 'mcq';
+            const isMcq = q.type === 'mcq' || q.type === 'match_following';
             const optionLetters = ['A', 'B', 'C', 'D', 'E'];
 
             let isCorrect = false;
@@ -511,25 +522,29 @@ function StudentPaperReviewModal({ submission, onClose }) {
             }
 
             return (
-              <div key={q.id || idx} className="p-4 sm:p-5 rounded-2xl border border-[#e2d8ca] bg-white space-y-3">
+              <div key={q.id || idx} className="p-4 rounded-xl border border-[#dcd5c4] bg-[#f7f4ee] space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-serif font-bold text-sm text-[#8c4a17]">
-                    Question #{idx + 1}
+                  <span className="font-serif font-medium text-sm text-[#1f1b16] tabular-nums">
+                    Q{idx + 1}.
                   </span>
-                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
-                    isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {isCorrect ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                    <span>{isCorrect ? 'Correct (+4)' : 'Incorrect (0)'}</span>
+                  <span
+                    className={`text-xs font-mono tabular-nums font-medium px-2.5 py-0.5 rounded-md flex items-center gap-1 border ${
+                      isCorrect
+                        ? 'bg-[#f4f8f5] border-[#3f6b4a] text-[#3f6b4a]'
+                        : 'bg-[#fdf2f2] border-[#dc2626] text-[#dc2626]'
+                    }`}
+                  >
+                    {isCorrect ? <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.5} /> : <XCircle className="w-3.5 h-3.5" strokeWidth={1.5} />}
+                    <span>{isCorrect ? 'Correct (+1)' : 'Incorrect (0)'}</span>
                   </span>
                 </div>
 
-                <div className="text-sm font-serif text-[#1c1b18]">
+                <div className="text-base font-serif text-[#1f1b16]">
                   <MathRenderer text={q.questionText} readOnly={true} />
                 </div>
 
                 {isMcq && Array.isArray(q.options) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                     {q.options.map((opt, optIdx) => {
                       const letter = optionLetters[optIdx] || optIdx;
                       const isStudentSelected = studentAns === optIdx;
@@ -538,24 +553,26 @@ function StudentPaperReviewModal({ submission, onClose }) {
                       return (
                         <div
                           key={optIdx}
-                          className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                          className={`p-2.5 rounded-lg border flex items-center gap-2.5 ${
                             isKey
-                              ? 'bg-emerald-50 border-emerald-400 font-bold'
+                              ? 'bg-[#f4f8f5] border-[#3f6b4a] font-medium'
                               : isStudentSelected
-                              ? 'bg-red-50 border-red-300'
-                              : 'bg-[#faf7f2] border-[#e2d8ca]'
+                              ? 'bg-[#fdf2f2] border-[#dc2626]'
+                              : 'bg-[#fdfbf7] border-[#dcd5c4]'
                           }`}
                         >
-                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            isKey ? 'bg-emerald-700 text-white' : 'bg-[#e2d8ca] text-[#4a4237]'
-                          }`}>
+                          <span
+                            className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-mono font-medium ${
+                              isKey ? 'bg-[#3f6b4a] text-[#fdfbf7]' : 'bg-[#efe9df] text-[#5e554a]'
+                            }`}
+                          >
                             {letter}
                           </span>
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 font-serif text-sm">
                             <MathRenderer text={opt} readOnly={true} />
                           </div>
-                          {isKey && <span className="text-[10px] text-emerald-800 font-bold ml-auto">Correct Key</span>}
-                          {isStudentSelected && !isKey && <span className="text-[10px] text-red-800 font-bold ml-auto">Your Answer</span>}
+                          {isKey && <span className="text-[11px] text-[#3f6b4a] font-medium ml-auto">Key</span>}
+                          {isStudentSelected && !isKey && <span className="text-[11px] text-[#dc2626] font-medium ml-auto">Selected</span>}
                         </div>
                       );
                     })}

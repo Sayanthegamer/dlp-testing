@@ -1,14 +1,16 @@
-const fs = require('fs');
-const path = require('path');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { supabase, isConfigured } = require('./supabaseClient');
+const {
+  readLocalStudents,
+  writeLocalStudents,
+  readSubmissionsLocal
+} = require('./localStoreService');
 
-function getStudentsFilePath() {
-  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
-  if (isVercel) {
-    return path.join('/tmp', 'students.json');
-  }
-  return path.join(__dirname, '../data/students.json');
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(val) {
+  return typeof val === 'string' && UUID_REGEX.test(val.trim());
 }
 
 function getJwtSecret() {
@@ -20,59 +22,6 @@ function getSupabaseClient() {
     return null;
   }
   return isConfigured() ? supabase : null;
-}
-
-// Ensure local JSON storage directory & file exist for fallback
-function ensureLocalStore() {
-  const filePath = getStudentsFilePath();
-  const dir = path.dirname(filePath);
-  try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify([], null, 2), 'utf-8');
-    }
-    return filePath;
-  } catch (err) {
-    const tmpPath = path.join('/tmp', 'students.json');
-    try {
-      if (!fs.existsSync(tmpPath)) {
-        fs.writeFileSync(tmpPath, JSON.stringify([], null, 2), 'utf-8');
-      }
-    } catch (e) {}
-    return tmpPath;
-  }
-}
-
-function readLocalStudents() {
-  const filePath = ensureLocalStore();
-  try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data) || [];
-  } catch (err) {
-    try {
-      const dataTmp = fs.readFileSync('/tmp/students.json', 'utf-8');
-      return JSON.parse(dataTmp) || [];
-    } catch (e) {
-      return [];
-    }
-  }
-}
-
-function writeLocalStudents(students) {
-  const filePath = ensureLocalStore();
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(students, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    try {
-      fs.writeFileSync('/tmp/students.json', JSON.stringify(students, null, 2), 'utf-8');
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
 }
 
 function formatDob(rawDob) {
@@ -104,6 +53,7 @@ function generateStudentToken(student) {
 
 /**
  * Authenticate student via Admission Number + Date of Birth (DOB)
+ * Uses Supabase exclusively when configured; falls back to local store only in Vitest/unconfigured mode.
  */
 async function studentLogin({ admissionNumber, dob }) {
   if (!admissionNumber || !dob) {
@@ -113,24 +63,23 @@ async function studentLogin({ admissionNumber, dob }) {
   const cleanAdm = String(admissionNumber).trim().toUpperCase();
   const cleanDob = formatDob(dob);
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    const { data, error } = await supabase
+  const sb = getSupabaseClient();
+  if (sb) {
+    const { data, error } = await sb
       .from('students')
       .select('*')
       .eq('admission_number', cleanAdm)
       .eq('dob', cleanDob)
       .maybeSingle();
 
-    if (error) {
-      console.warn('[Supabase Student Login Warning]:', error.message);
-    } else if (data) {
-      const token = generateStudentToken(data);
-      return { student: data, token };
+    if (error || !data) {
+      throw new Error('Invalid Admission Number or Date of Birth. Please check your credentials.');
     }
+
+    const token = generateStudentToken(data);
+    return { student: data, token };
   }
 
-  // Local JSON fallback check
   const localList = readLocalStudents();
   const found = localList.find(
     s => s.admission_number.toUpperCase() === cleanAdm && formatDob(s.dob) === cleanDob
@@ -143,8 +92,6 @@ async function studentLogin({ admissionNumber, dob }) {
   const token = generateStudentToken(found);
   return { student: found, token };
 }
-
-const crypto = require('crypto');
 
 function generateAdmissionNumber(prefix = 'DLP') {
   const year = new Date().getFullYear().toString().slice(-2);
@@ -173,29 +120,36 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
   const validAccessCode = process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
   let resolvedTeacherId = null;
 
+  const sb = getSupabaseClient();
+
   if (
     cleanTeacherCode === validAccessCode ||
     cleanTeacherCode === 'dlp_teacher_secret_passcode_2026' ||
-    cleanTeacherCode === 'admin'
+    cleanTeacherCode === 'admin' ||
+    cleanTeacherCode === 'local-dev-user' ||
+    cleanTeacherCode === 'teacher_general'
   ) {
-    resolvedTeacherId = 'teacher_general';
-  } else {
-    // Check if cleanTeacherCode is a registered teacher ID or email in Supabase
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      const { data: teacher } = await supabase
-        .from('teachers')
-        .select('id')
-        .or(`id.eq.${cleanTeacherCode},email.eq.${cleanTeacherCode}`)
-        .maybeSingle();
-
-      if (teacher) {
-        resolvedTeacherId = teacher.id;
+    resolvedTeacherId = sb ? null : 'teacher_general';
+  } else if (sb) {
+    try {
+      if (isValidUuid(cleanTeacherCode)) {
+        const { data: teacher } = await sb
+          .from('teachers')
+          .select('id')
+          .eq('id', cleanTeacherCode)
+          .maybeSingle();
+        if (teacher) resolvedTeacherId = teacher.id;
+      } else {
+        const { data: teacher } = await sb
+          .from('teachers')
+          .select('id')
+          .eq('email', cleanTeacherCode)
+          .maybeSingle();
+        if (teacher) resolvedTeacherId = teacher.id;
       }
-    }
-    if (!resolvedTeacherId) {
-      resolvedTeacherId = cleanTeacherCode;
-    }
+    } catch (_) {}
+  } else {
+    resolvedTeacherId = cleanTeacherCode;
   }
 
   const rawAdm = admissionNumber ? String(admissionNumber).trim() : generateAdmissionNumber();
@@ -212,13 +166,12 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     admission_number: cleanAdm,
     full_name: cleanName,
     dob: cleanDob,
-    teacher_id: resolvedTeacherId,
+    teacher_id: sb ? (isValidUuid(resolvedTeacherId) ? resolvedTeacherId : null) : (resolvedTeacherId || 'teacher_general'),
     created_at: new Date().toISOString()
   };
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    const { data, error } = await supabase
+  if (sb) {
+    const { data, error } = await sb
       .from('students')
       .insert([newStudent])
       .select()
@@ -227,24 +180,14 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     if (error && error.code === '23505') {
       throw new Error(`Admission Number "${cleanAdm}" is already registered. Please log in.`);
     }
-
-    if (!error && data) {
-      // Sync to local JSON cache as well
-      const localList = readLocalStudents();
-      const existingIdx = localList.findIndex(s => s.admission_number.toUpperCase() === cleanAdm);
-      if (existingIdx >= 0) {
-        localList[existingIdx] = data;
-      } else {
-        localList.unshift(data);
-      }
-      writeLocalStudents(localList);
-
-      const token = generateStudentToken(data);
-      return { student: data, token };
+    if (error) {
+      throw new Error(`Failed to register student in Supabase: ${error.message}`);
     }
+
+    const token = generateStudentToken(data);
+    return { student: data, token };
   }
 
-  // Local JSON fallback
   const localList = readLocalStudents();
   const existing = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
   if (existing) {
@@ -264,88 +207,232 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
 async function getStudentSubmissions(studentId) {
   if (!studentId) return [];
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
+  const sb = getSupabaseClient();
+  if (sb) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('submissions')
         .select('*, exams(title, subject, grade)')
         .eq('student_id', studentId)
         .order('submitted_at', { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
+      if (!error && Array.isArray(data)) {
         return data;
       }
-    } catch (e) {}
+    } catch (_) {}
+    return [];
   }
 
-  try {
-    const subsPath = path.join(__dirname, '../data/submissions.json');
-    if (fs.existsSync(subsPath)) {
-      const raw = fs.readFileSync(subsPath, 'utf-8');
-      const allSubmissions = JSON.parse(raw);
-      return allSubmissions.filter(s => s.student_id === studentId);
-    }
-  } catch (e) {
-    console.warn('[Student Submissions Local Fallback Error]:', e.message);
-  }
-
-  return [];
+  const allSubmissions = readSubmissionsLocal();
+  return allSubmissions.filter(s => s.student_id === studentId || s.studentId === studentId);
 }
 
 /**
  * Teacher adds a student to their roster
  */
 async function teacherCreateStudent({ teacherId, admissionNumber, fullName, dob }) {
-  return await studentSignup({ admissionNumber, fullName, dob, teacherId });
+  return await studentSignup({
+    admissionNumber,
+    fullName,
+    dob,
+    teacherId: teacherId || 'teacher_general'
+  });
 }
 
 /**
- * Get all students enrolled under a specific teacher profile
- * STRICT PRIVACY ENFORCEMENT: Self-registered students (teacher_id = 'teacher_general' or null)
- * WILL NOT show up on a teacher's roster UNLESS they explicitly link via Teacher's code
- * or the teacher claims them via the Student's 5-minute passcode.
+ * Get all students enrolled under a specific teacher profile.
+ * Safely handles UUID vs non-UUID teacher IDs on Supabase PostgreSQL.
  */
 async function getTeacherRoster(teacherId) {
-  const effectiveTeacherId = teacherId || 'teacher_general';
-  let supabaseStudents = [];
-  const supabase = getSupabaseClient();
-  if (supabase) {
+  const sb = getSupabaseClient();
+  if (sb) {
     try {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .or(`teacher_id.eq.${effectiveTeacherId},teacher_id.eq.local-dev-user,teacher_id.eq.teacher_general`)
-        .order('created_at', { ascending: false });
-
-      if (!error && Array.isArray(data)) {
-        supabaseStudents = data;
+      let query = sb.from('students').select('*').order('created_at', { ascending: false });
+      if (isValidUuid(teacherId)) {
+        query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null`);
       }
-    } catch (err) {}
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
+        return data;
+      }
+    } catch (err) {
+      console.warn('[Supabase Roster Query Warning]:', err.message);
+    }
+    return [];
+  }
+
+  const effectiveTeacherId = teacherId || 'teacher_general';
+  const localList = readLocalStudents();
+  return localList.filter(s =>
+    !s.teacher_id ||
+    s.teacher_id === effectiveTeacherId ||
+    s.teacher_id === 'local-dev-user' ||
+    s.teacher_id === 'teacher_general'
+  );
+}
+
+/**
+ * Fetch a comprehensive Candidate Dossier (student profile + all matching exam submissions + aggregate stats)
+ */
+async function getStudentDossier(studentId) {
+  if (!studentId) {
+    throw new Error('Student ID is required');
+  }
+
+  let student = null;
+  let submissions = [];
+  const sb = getSupabaseClient();
+
+  if (sb) {
+    const { data: stData } = await sb
+      .from('students')
+      .select('*')
+      .or(`id.eq.${studentId},admission_number.eq.${studentId}`)
+      .maybeSingle();
+    student = stData;
+
+    if (!student) {
+      throw new Error('Student record not found');
+    }
+
+    const { data: subData } = await sb
+      .from('submissions')
+      .select('*, exams(title, subject, grade)')
+      .order('submitted_at', { ascending: false });
+
+    const allSubs = Array.isArray(subData) ? subData : [];
+    const targetName = (student.full_name || '').trim().toLowerCase();
+    const targetAdm = (student.admission_number || '').trim().toUpperCase();
+
+    submissions = allSubs.filter(sub => {
+      const resp = sub.responses && typeof sub.responses === 'object' ? sub.responses : {};
+      const sId = sub.student_id || resp.studentId || resp.student_id;
+      const sName = (sub.student_name || resp.studentName || '').trim().toLowerCase();
+      return (
+        sId === student.id ||
+        (targetAdm && sName.toUpperCase().includes(targetAdm)) ||
+        (targetName && sName === targetName)
+      );
+    });
+  } else {
+    const localStudents = readLocalStudents();
+    student = localStudents.find(
+      s => s.id === studentId || (s.admission_number && s.admission_number.toUpperCase() === String(studentId).toUpperCase())
+    );
+    if (!student) {
+      throw new Error('Student record not found');
+    }
+
+    const allSubs = readSubmissionsLocal();
+    const targetName = (student.full_name || '').trim().toLowerCase();
+    const targetAdm = (student.admission_number || '').trim().toUpperCase();
+
+    submissions = allSubs.filter(sub => {
+      const resp = sub.responses && typeof sub.responses === 'object' ? sub.responses : {};
+      const sId = sub.student_id || sub.studentId || resp.studentId || resp.student_id;
+      const sName = (sub.student_name || sub.studentName || resp.studentName || '').trim().toLowerCase();
+      return (
+        sId === student.id ||
+        (targetAdm && sName.toUpperCase().includes(targetAdm)) ||
+        (targetName && sName === targetName)
+      );
+    });
+  }
+
+  const normalizedSubmissions = submissions.map(item => {
+    const resp = item.responses ? (typeof item.responses === 'string' ? JSON.parse(item.responses) : item.responses) : item;
+    const pct = Number(item.percentage ?? resp.finalScore?.percentage ?? resp.autoGraded?.percentage ?? 0);
+    const score = Number(item.total_score ?? resp.finalScore?.score ?? resp.autoGraded?.score ?? 0);
+    const maxScore = Number(item.max_possible ?? resp.finalScore?.total ?? resp.autoGraded?.total ?? (Array.isArray(resp.questions) ? resp.questions.length : 0));
+    return {
+      id: item.id || resp.id,
+      examId: item.exam_id || resp.examId,
+      testTitle: item.exams?.title || resp.testTitle || 'Mathematics Examination',
+      submittedAt: item.submitted_at || resp.submittedAt,
+      score,
+      maxScore,
+      percentage: pct,
+      timeTakenSeconds: item.time_taken_seconds || resp.timeTakenSeconds || 0,
+      cheatingFlagged: Boolean(resp.cheatingFlagged),
+      cheatingReason: resp.cheatingReason || '',
+      questions: resp.questions || [],
+      studentAnswers: resp.studentAnswers || {},
+      status: resp.status || 'reviewed'
+    };
+  });
+
+  const totalAttempts = normalizedSubmissions.length;
+  const averagePercentage = totalAttempts > 0
+    ? Math.round(normalizedSubmissions.reduce((acc, s) => acc + (Number(s.percentage) || 0), 0) / totalAttempts)
+    : 0;
+  const bestPercentage = totalAttempts > 0
+    ? Math.max(...normalizedSubmissions.map(s => Number(s.percentage) || 0))
+    : 0;
+  const flaggedAttempts = normalizedSubmissions.filter(s => s.cheatingFlagged).length;
+
+  return {
+    student,
+    metrics: {
+      totalAttempts,
+      averagePercentage,
+      bestPercentage,
+      flaggedAttempts
+    },
+    submissions: normalizedSubmissions
+  };
+}
+
+/**
+ * Update a student's identity record (name, admission number, or DOB)
+ */
+async function updateStudentProfile(studentId, { fullName, admissionNumber, dob }) {
+  if (!studentId) throw new Error('Student ID is required');
+  const updates = {};
+  if (fullName && String(fullName).trim()) updates.full_name = String(fullName).trim();
+  if (admissionNumber && String(admissionNumber).trim()) {
+    updates.admission_number = String(admissionNumber).trim().replace(/[^A-Z0-9_\-]/gi, '').toUpperCase();
+  }
+  if (dob && String(dob).trim()) updates.dob = formatDob(dob);
+
+  const sb = getSupabaseClient();
+  if (sb) {
+    const { data, error } = await sb
+      .from('students')
+      .update(updates)
+      .eq('id', studentId)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to update student: ${error.message}`);
+    return data;
   }
 
   const localList = readLocalStudents();
-  const filteredLocal = localList.filter(s => 
-    s.teacher_id === effectiveTeacherId || 
-    s.teacher_id === 'local-dev-user' || 
-    (s.teacher_id && s.teacher_id === 'teacher_general')
-  );
-
-  // Merge Supabase & Local rosters for THIS teacher
-  const map = new Map();
-  for (const s of [...supabaseStudents, ...filteredLocal]) {
-    const key = (s.admission_number || s.id).toUpperCase();
-    if (!map.has(key)) {
-      map.set(key, s);
-    }
-  }
-
-  return Array.from(map.values());
+  const idx = localList.findIndex(s => s.id === studentId);
+  if (idx === -1) throw new Error('Student not found');
+  localList[idx] = { ...localList[idx], ...updates };
+  writeLocalStudents(localList);
+  return localList[idx];
 }
 
-// In-memory salts for manual code regeneration requests
+/**
+ * Remove a student from the roster
+ */
+async function deleteStudentProfile(studentId) {
+  if (!studentId) throw new Error('Student ID is required');
+  const sb = getSupabaseClient();
+  if (sb) {
+    const { error } = await sb.from('students').delete().eq('id', studentId);
+    if (error) throw new Error(`Failed to remove student: ${error.message}`);
+    return { deleted: true, id: studentId };
+  }
+
+  const localList = readLocalStudents();
+  const filtered = localList.filter(s => s.id !== studentId);
+  writeLocalStudents(filtered);
+  return { deleted: true, id: studentId };
+}
+
 const entitySalts = new Map();
-// Active code registry mapping TCH-XXXXXX -> teacherId
 const activeCodeToTeacherMap = new Map();
 
 function getEntitySalt(entityId) {
@@ -361,11 +448,6 @@ function regenerateEntitySalt(entityId) {
   return newSalt;
 }
 
-/**
- * 5-Minute Alphanumeric Rolling Reference Code Generator
- * Hashed via HMAC-SHA256 with 5-minute TOTP window + salt.
- * Pattern: TCH-8K9P2M / STU-7X4W9N (Undecodable, un-bruteforcible)
- */
 function get5MinRollingRefCode(entityId, prefix = 'REF', offsetWindows = 0) {
   const windowMs = 5 * 60 * 1000;
   const currentWindowIndex = Math.floor(Date.now() / windowMs) + offsetWindows;
@@ -398,9 +480,6 @@ function getRefCodeSecondsLeft() {
   return Math.max(1, Math.ceil((windowMs - elapsedMs) / 1000));
 }
 
-/**
- * Student links to a Teacher using the Teacher's 5-Min Rolling Code
- */
 async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   if (!studentId || !teacherRefCode) {
     throw new Error('Student ID and Teacher Reference Code are required.');
@@ -409,16 +488,14 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   const cleanCode = String(teacherRefCode).trim().toUpperCase();
   let matchedTeacherId = null;
 
-  // 1. Check in-memory active code registry
   if (activeCodeToTeacherMap.has(cleanCode)) {
     matchedTeacherId = activeCodeToTeacherMap.get(cleanCode);
   }
 
-  // 2. Check Supabase teachers table
-  const supabase = getSupabaseClient();
-  if (!matchedTeacherId && supabase) {
+  const sb = getSupabaseClient();
+  if (!matchedTeacherId && sb) {
     try {
-      const { data: teachers } = await supabase.from('teachers').select('id, email');
+      const { data: teachers } = await sb.from('teachers').select('id, email');
       if (Array.isArray(teachers)) {
         for (const t of teachers) {
           const code0 = get5MinRollingRefCode(t.id, 'TCH', 0);
@@ -429,10 +506,9 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
           }
         }
       }
-    } catch (e) {}
+    } catch (_) {}
   }
 
-  // 3. Check fallback teacher IDs
   if (!matchedTeacherId) {
     const defaultTeachers = ['teacher_general', 'local-dev-user', 'default_teacher', 'admin'];
     for (const tId of defaultTeachers) {
@@ -446,24 +522,22 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   }
 
   if (!matchedTeacherId) {
-    throw new Error('Invalid or expired Teacher Reference Code. Passcodes auto-refresh every 5 minutes.');
+    throw new Error('Invalid or expired Teacher Reference Code. Passcodes refresh every 5 minutes.');
   }
 
-  // Update Supabase Database
-  if (supabase) {
-    try {
-      await supabase
-        .from('students')
-        .update({ teacher_id: matchedTeacherId })
-        .or(`id.eq.${studentId},admission_number.eq.${studentId}`);
-    } catch (e) {}
+  if (sb) {
+    const dbTeacherId = isValidUuid(matchedTeacherId) ? matchedTeacherId : null;
+    await sb
+      .from('students')
+      .update({ teacher_id: dbTeacherId })
+      .or(`id.eq.${studentId},admission_number.eq.${studentId}`);
+    return { success: true, teacherId: matchedTeacherId };
   }
 
-  // Update Local Store Backup
   const localList = readLocalStudents();
   const cleanId = String(studentId).trim().toUpperCase();
-  const found = localList.find(s => 
-    s.id === studentId || 
+  const found = localList.find(s =>
+    s.id === studentId ||
     (s.admission_number && s.admission_number.toUpperCase() === cleanId)
   );
   if (found) {
@@ -474,9 +548,6 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   return { success: true, teacherId: matchedTeacherId };
 }
 
-/**
- * Teacher claims an existing student using Student's Admission Number, Name, or 5-Min Student Ref Code
- */
 async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode }) {
   const rawAdm = admissionNumber ? String(admissionNumber).trim() : '';
   const rawCode = studentRefCode ? String(studentRefCode).trim() : '';
@@ -489,30 +560,21 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
   const strippedAdm = rawAdm.replace(/[^A-Z0-9]/gi, '').toUpperCase();
   const cleanCode = rawCode.toUpperCase();
 
-  let allStudents = [];
-  const supabase = getSupabaseClient();
-  if (supabase) {
+  let candidatePool = [];
+  const sb = getSupabaseClient();
+  if (sb) {
     try {
-      const { data } = await supabase.from('students').select('*').order('created_at', { ascending: false });
+      const { data } = await sb.from('students').select('*').order('created_at', { ascending: false });
       if (Array.isArray(data)) {
-        allStudents = data;
+        candidatePool = data;
       }
-    } catch (e) {}
+    } catch (_) {}
+  } else {
+    candidatePool = readLocalStudents();
   }
-
-  const localList = readLocalStudents();
-  const map = new Map();
-  for (const s of [...allStudents, ...localList]) {
-    const key = (s.admission_number || s.id).toUpperCase();
-    if (!map.has(key)) {
-      map.set(key, s);
-    }
-  }
-  const candidatePool = Array.from(map.values());
 
   let targetStudent = null;
 
-  // 1. Try matching by 5-minute Student Reference Code (if provided or entered in either box)
   const targetCode = cleanCode.startsWith('STU-') ? cleanCode : (cleanAdm.startsWith('STU-') ? cleanAdm : cleanCode);
   if (targetCode) {
     for (const s of candidatePool) {
@@ -525,7 +587,6 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
     }
   }
 
-  // 2. If not matched by code, try matching by Admission Number, ID, or Candidate Name
   if (!targetStudent && (cleanAdm || strippedAdm)) {
     targetStudent = candidatePool.find(s => {
       const sAdm = (s.admission_number || s.admissionNumber || '').toUpperCase();
@@ -546,20 +607,20 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
     throw new Error(`No student found matching "${rawAdm || rawCode}". Please verify candidate registration.`);
   }
 
-  // Update Supabase Database
   const effectiveTeacherId = teacherId || 'teacher_general';
-  if (supabase) {
-    try {
-      await supabase
-        .from('students')
-        .update({ teacher_id: effectiveTeacherId })
-        .or(`id.eq.${targetStudent.id},admission_number.eq.${targetStudent.admission_number}`);
-    } catch (e) {}
+  if (sb) {
+    const dbTeacherId = isValidUuid(effectiveTeacherId) ? effectiveTeacherId : null;
+    await sb
+      .from('students')
+      .update({ teacher_id: dbTeacherId })
+      .or(`id.eq.${targetStudent.id},admission_number.eq.${targetStudent.admission_number}`);
+    targetStudent.teacher_id = dbTeacherId;
+    return { success: true, student: targetStudent };
   }
 
-  // Update Local Backup Store
-  const foundLocal = localList.find(s => 
-    s.id === targetStudent.id || 
+  const localList = readLocalStudents();
+  const foundLocal = localList.find(s =>
+    s.id === targetStudent.id ||
     (s.admission_number && s.admission_number.toUpperCase() === (targetStudent.admission_number || '').toUpperCase())
   );
   if (foundLocal) {
@@ -581,6 +642,9 @@ module.exports = {
   getStudentSubmissions,
   teacherCreateStudent,
   getTeacherRoster,
+  getStudentDossier,
+  updateStudentProfile,
+  deleteStudentProfile,
   formatDob,
   generateAdmissionNumber,
   get5MinRollingRefCode,

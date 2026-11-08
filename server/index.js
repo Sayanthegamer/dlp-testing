@@ -34,12 +34,11 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
-  process.env.CLIENT_ORIGIN, // e.g. https://your-app.vercel.app
+  process.env.CLIENT_ORIGIN,
 ].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (server-to-server, curl, mobile apps)
     if (!origin) return callback(null, true);
     if (allowedOrigins.some(allowed => origin === allowed)) {
       return callback(null, true);
@@ -54,7 +53,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Rate Limiters
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
@@ -79,10 +78,16 @@ const parseLimiter = rateLimit({
 
 app.use('/api/', globalLimiter);
 app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/teacher-login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/student/login', authLimiter);
 app.use('/api/student/signup', authLimiter);
+app.use('/api/student-auth/login', authLimiter);
+app.use('/api/student-auth/signup', authLimiter);
 app.use('/api/parse-question', parseLimiter);
+app.use('/api/parse-text', parseLimiter);
+app.use('/api/parse-image', parseLimiter);
+app.use('/api/parse-docx', parseLimiter);
 
 app.get('/api/health', (req, res) => {
   const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
@@ -106,7 +111,6 @@ app.use('/api', studentAuthRoutes);
 app.use('/api', submissionsRoutes);
 app.use('/api', examsRoutes);
 
-
 // Protect remaining parsing API routes
 app.use('/api', authMiddleware, parseRoutes);
 
@@ -129,7 +133,6 @@ app.use((err, req, res, next) => {
 });
 
 // Only call app.listen in standalone mode (not when imported as Vercel serverless function)
-
 if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
   app.listen(PORT, () => {
     const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
@@ -145,4 +148,3 @@ if (process.env.VERCEL !== '1' && !process.env.VERCEL_ENV) {
 }
 
 module.exports = app;
-

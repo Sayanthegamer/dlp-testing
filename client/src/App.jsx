@@ -22,20 +22,19 @@ import {
   parseQuestionImage,
   parseDocxStructure,
   publishExam,
-  fetchExamSnapshot,
   logoutTeacher,
   getStoredStudentProfile,
   logoutStudent
 } from './services/apiService';
 import { computeNeedsReview } from './services/reviewEvaluator';
-import { GraduationCap, ArrowLeft, Terminal } from 'lucide-react';
+import { ArrowLeft, Terminal, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 const INITIAL_CATALOGUE = {
-  testTitle: "Mathematics Practice Test",
+  testTitle: "Higher Secondary Mathematics — Unit Assessment",
   questions: [
     {
       id: "q_init_1",
-      questionText: "Solve for <math>x</math>: <math>x^2 + 2x - 3 = 0</math>",
+      questionText: "Find all real roots of the quadratic equation <math>x^2 + 2x - 3 = 0</math>.",
       type: "mcq",
       options: [
         "<math>x = 1, -3</math>",
@@ -44,23 +43,20 @@ const INITIAL_CATALOGUE = {
         "<math>x = -2, 1</math>"
       ],
       correctAnswer: 0,
-      mathSpans: ["x", "x^2 + 2x - 3 = 0"],
+      mathSpans: ["x^2 + 2x - 3 = 0", "x = 1, -3"],
       confidenceScore: 0.98,
       needsReview: false
     },
     {
       id: "q_init_2",
-      questionText: "Evaluate the definite integral: <math>\\int_{0}^{1} x^2 \\, dx</math>",
-      type: "mcq",
-      options: [
-        "<math>\\frac{1}{3}</math>",
-        "<math>\\frac{1}{2}</math>",
-        "<math>1</math>",
-        "<math>\\frac{2}{3}</math>"
-      ],
-      correctAnswer: 0,
-      mathSpans: ["\\int_{0}^{1} x^2 \\, dx", "\\frac{1}{3}"],
-      confidenceScore: 0.96,
+      questionText: "Evaluate the definite integral <math>\\int_{0}^{1} (3x^2 + 1) \\, dx</math>.",
+      type: "short_answer_numeric",
+      options: [],
+      correctAnswer: 2,
+      acceptedRange: [1.98, 2.02],
+      numericalConfirmed: true,
+      mathSpans: ["\\int_{0}^{1} (3x^2 + 1) \\, dx"],
+      confidenceScore: 0.97,
       needsReview: false
     }
   ]
@@ -71,23 +67,21 @@ export default function App() {
   const [testTitle, setTestTitle] = useState(INITIAL_CATALOGUE.testTitle);
   const [questions, setQuestions] = useState(INITIAL_CATALOGUE.questions);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Processing...');
+  const [loadingMessage, setLoadingMessage] = useState('Typesetting questions');
   const [isJustParsed, setIsJustParsed] = useState(false);
   const [showSubmissionsModal, setShowSubmissionsModal] = useState(false);
   const [activeTab, setActiveTab] = useState('catalogue'); // 'catalogue' | 'roster'
+  const [notice, setNotice] = useState(null); // { type: 'error' | 'info', title: string, details?: string[] }
 
-  // URL parameters check
   const searchParams = new URLSearchParams(window.location.search);
   const isStudentUrl = searchParams.get('mode') === 'student';
   const [targetTestId, setTargetTestId] = useState(() => searchParams.get('testId') || searchParams.get('examId') || '');
 
-  // Application View Mode
   const [viewMode, setViewMode] = useState(() => isStudentUrl ? 'student_portal' : 'teacher');
   const [studentUser, setStudentUser] = useState(() => getStoredStudentProfile());
   const [isDevDemo, setIsDevDemo] = useState(false);
 
   const [publishedExamInfo, setPublishedExamInfo] = useState(null);
-  const [isFetchingExam, setIsFetchingExam] = useState(false);
 
   // Student Test Flow State Machine
   const [studentStep, setStudentStep] = useState('portal'); // 'portal' | 'intro' | 'test' | 'review' | 'result'
@@ -98,6 +92,10 @@ export default function App() {
   const [cheatingFlagged, setCheatingFlagged] = useState(false);
   const [cheatingReason, setCheatingReason] = useState('');
 
+  const showBanner = (type, title, details = []) => {
+    setNotice({ type, title, details });
+  };
+
   const handleUpdateQuestionStatus = (qId, status) => {
     setQuestionStatuses(prev => ({
       ...prev,
@@ -105,7 +103,7 @@ export default function App() {
     }));
   };
 
-  const handleDisqualifyCheating = ({ cheatingFlagged, reason }) => {
+  const handleDisqualifyCheating = ({ reason }) => {
     setCheatingFlagged(true);
     setCheatingReason(reason || 'Proctoring security violation');
     setStudentStep('result');
@@ -119,8 +117,7 @@ export default function App() {
   }, []);
 
   const handleStudentAnswerChange = (questionId, value) => {
-    const updated = { ...studentAnswers, [questionId]: value };
-    setStudentAnswers(updated);
+    setStudentAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
   const handleClearStudentSession = () => {
@@ -130,7 +127,6 @@ export default function App() {
     setCheatingReason('');
   };
 
-  // Popovers & Modals
   const [activeMathEdit, setActiveMathEdit] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
@@ -139,12 +135,14 @@ export default function App() {
     setQuestions(INITIAL_CATALOGUE.questions);
     setIsJustParsed(false);
     setActiveMathEdit(null);
+    setNotice(null);
   };
 
   const handleSubmitText = async (rawText) => {
     setIsLoading(true);
     setIsJustParsed(false);
-    setLoadingMessage('Extracting & typesetting math questions...');
+    setNotice(null);
+    setLoadingMessage('Extracting and typesetting math questions');
     try {
       const parsed = await parseQuestionText(rawText);
       if (parsed.questions && parsed.questions.length > 0) {
@@ -153,7 +151,7 @@ export default function App() {
         setIsJustParsed(true);
       }
     } catch (err) {
-      alert(`Parsing error: ${err.message}`);
+      showBanner('error', `Could not parse text: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +160,8 @@ export default function App() {
   const handleSubmitImage = async (payload, mediaType) => {
     setIsLoading(true);
     setIsJustParsed(false);
-    setLoadingMessage('Transcribing photos & PDF document pages with AI Vision...');
+    setNotice(null);
+    setLoadingMessage('Transcribing document pages and extracting diagrams');
     try {
       const parsed = await parseQuestionImage(payload, mediaType);
       if (parsed.questions && parsed.questions.length > 0) {
@@ -171,7 +170,7 @@ export default function App() {
         setIsJustParsed(true);
       }
     } catch (err) {
-      alert(`Transcription error: ${err.message}`);
+      showBanner('error', `Could not transcribe document: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +179,8 @@ export default function App() {
   const handleSubmitDocx = async (docxStatus) => {
     setIsLoading(true);
     setIsJustParsed(false);
-    setLoadingMessage('Parsing Word OMML XML equations...');
+    setNotice(null);
+    setLoadingMessage('Converting Word OMML equations');
     try {
       const parsed = await parseDocxStructure(docxStatus);
       if (parsed.questions && parsed.questions.length > 0) {
@@ -189,18 +189,18 @@ export default function App() {
         setIsJustParsed(true);
       }
     } catch (err) {
-      alert(`Docx parsing error: ${err.message}`);
+      showBanner('error', `Could not process Word document: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleLoadDocxSample = () => {
-    setTestTitle("Word OMML Document Test Paper");
+    setTestTitle("Word OMML Calculus Paper");
     setQuestions([
       {
         id: "q_docx_sample_1",
-        questionText: "Word Document Sample: Evaluate the integral <math>\\int_{0}^{1} x^2 \\, dx</math> and state its exact value.",
+        questionText: "Evaluate the definite integral <math>\\int_{0}^{1} x^2 \\, dx</math> and select the exact value.",
         type: "mcq",
         options: [
           "<math>\\frac{1}{3}</math>",
@@ -215,6 +215,7 @@ export default function App() {
       }
     ]);
     setIsJustParsed(true);
+    setNotice(null);
   };
 
   const handleUpdateQuestion = (questionId, updatedData) => {
@@ -231,8 +232,8 @@ export default function App() {
     const target = questions[targetIdx];
     const duplicated = {
       ...target,
-      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      questionText: `${target.questionText} (Copy)`
+      id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      questionText: `${target.questionText}`
     };
     const newQuestions = [...questions];
     newQuestions.splice(targetIdx + 1, 0, duplicated);
@@ -242,18 +243,18 @@ export default function App() {
   const handleAddQuestion = () => {
     const newQ = {
       id: `q_${Date.now()}`,
-      questionText: "New Question: Solve for <math>x</math>: <math>x + 5 = 10</math>",
+      questionText: "Solve for <math>x</math> in the linear equation <math>2x + 5 = 17</math>.",
       type: "mcq",
       options: [
+        "<math>x = 6</math>",
         "<math>x = 5</math>",
-        "<math>x = 10</math>",
-        "<math>x = 15</math>",
-        "<math>x = 0</math>"
+        "<math>x = 11</math>",
+        "<math>x = 4</math>"
       ],
-      correctAnswer: 0,
-      mathSpans: ["x + 5 = 10", "x = 5"],
+      correctAnswer: null,
+      mathSpans: ["x", "2x + 5 = 17", "x = 6"],
       confidenceScore: 1.0,
-      needsReview: false
+      needsReview: true
     };
     setQuestions(prev => [...prev, newQ]);
   };
@@ -272,7 +273,7 @@ export default function App() {
       let updatedStem = q.questionText;
       if (oldLatex) {
         updatedStem = updatedStem.replace(
-          new RegExp(`<math>${escapeRegExp(oldLatex)}<\/math>`, 'g'),
+          new RegExp(`<math>${escapeRegExp(oldLatex)}<\\/math>`, 'g'),
           `<math>${newLatex}</math>`
         );
       }
@@ -280,7 +281,7 @@ export default function App() {
       const updatedOptions = (q.options || []).map(opt => {
         if (oldLatex && opt.includes(oldLatex)) {
           return opt.replace(
-            new RegExp(`<math>${escapeRegExp(oldLatex)}<\/math>`, 'g'),
+            new RegExp(`<math>${escapeRegExp(oldLatex)}<\\/math>`, 'g'),
             `<math>${newLatex}</math>`
           );
         }
@@ -303,20 +304,22 @@ export default function App() {
     questions.forEach((q, idx) => {
       const evaluation = computeNeedsReview(q);
       if (evaluation.needsReview) {
-        unreviewedQuestions.push({ index: idx + 1, reasons: evaluation.reasons });
+        unreviewedQuestions.push(`Question ${idx + 1}: ${evaluation.reasons.join(', ')}`);
       }
     });
 
     if (unreviewedQuestions.length > 0) {
-      const details = unreviewedQuestions
-        .map(u => `Question #${u.index}: ${u.reasons.join(', ')}`)
-        .join('\n');
-      alert(`Cannot publish exam paper yet!\n\nPlease review all numerical ranges and answer keys:\n\n${details}`);
+      showBanner(
+        'error',
+        'Complete question review before publishing the exam paper',
+        unreviewedQuestions
+      );
       return;
     }
 
+    setNotice(null);
     setIsLoading(true);
-    setLoadingMessage('Publishing frozen exam snapshot...');
+    setLoadingMessage('Publishing frozen exam snapshot');
     try {
       const res = await publishExam({ testTitle, questions });
       if (res && res.examId) {
@@ -327,19 +330,19 @@ export default function App() {
         });
       }
     } catch (err) {
-      alert(`Publish Failed: ${err.message}`);
+      showBanner('error', `Could not publish exam: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Student Exam Join Handler
   const handleStudentJoinExam = async (code) => {
     setRollingCodeUsed(code);
     setIsLoading(true);
-    setLoadingMessage('Validating exam rolling code...');
+    setNotice(null);
+    setLoadingMessage('Validating 6-digit rolling passcode');
     try {
-      const studentName = studentUser?.full_name || studentUser?.fullName || 'Student Candidate';
+      const studentName = studentUser?.full_name || studentUser?.fullName || 'Candidate';
       const response = await fetch('/api/exams/student-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -352,12 +355,12 @@ export default function App() {
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Invalid or expired 6-Digit Rolling Passcode.');
+        throw new Error(data.error || 'Invalid or expired 6-digit rolling passcode');
       }
 
       let examObj = data.exam;
       if (typeof examObj === 'string') {
-        try { examObj = JSON.parse(examObj); } catch (e) {}
+        try { examObj = JSON.parse(examObj); } catch (_) {}
       }
 
       if (examObj) {
@@ -370,7 +373,7 @@ export default function App() {
       }
       setStudentStep('intro');
     } catch (err) {
-      alert(`Error joining exam: ${err.message}`);
+      showBanner('error', err.message);
     } finally {
       setIsLoading(false);
     }
@@ -380,7 +383,6 @@ export default function App() {
   // RENDER: STUDENT PORTAL MODE
   // -------------------------------------------------------------
   if (viewMode === 'student_portal') {
-    // Unauthenticated student prompt (unless in Dev Demo mode)
     if (!studentUser && !isDevDemo) {
       return (
         <StudentAuthModal
@@ -388,12 +390,14 @@ export default function App() {
             setStudentUser(stu);
             setIsDevDemo(false);
           }}
+          onBackToTeacher={() => setViewMode('teacher')}
           onLaunchDevDemo={() => {
             setIsDevDemo(true);
             setStudentUser({
               id: 'dev_demo_candidate',
-              admission_number: 'DEMO-999',
-              full_name: 'Developer Demo Candidate'
+              admission_number: 'DLP-26-DEMO',
+              full_name: 'Arjun Sen',
+              dob: '2008-05-14'
             });
           }}
         />
@@ -401,8 +405,8 @@ export default function App() {
     }
 
     const currentStudentName = isDevDemo
-      ? '[Dev Demo] Developer Candidate'
-      : (studentUser ? (studentUser.full_name || studentUser.fullName) : 'Student Candidate');
+      ? 'Arjun Sen (Demo)'
+      : (studentUser ? (studentUser.full_name || studentUser.fullName) : 'Candidate');
 
     if (studentStep === 'intro') {
       return (
@@ -414,6 +418,7 @@ export default function App() {
             setStudentStep('test');
             setCurrentQuestionIndex(0);
           }}
+          onCancel={() => setStudentStep('portal')}
         />
       );
     }
@@ -499,41 +504,59 @@ export default function App() {
       );
     }
 
-    // Default Student Portal View
     return (
-      <div className="min-h-screen bg-[#f7f3ed]">
-        {/* Dev Mode Top Banner */}
+      <div className="min-h-screen bg-[#f7f4ee]">
         {isDevDemo && (
-          <div className="bg-purple-900 text-purple-100 px-4 py-2 text-xs font-mono font-bold flex items-center justify-between">
+          <div className="bg-[#1f1b16] text-[#fdfbf7] px-4 py-2 text-xs font-mono flex items-center justify-between border-b border-[#dcd5c4]">
             <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-purple-300" />
-              <span>DEV DEMO EXAM MODE (No Account Required • Submissions Sent to Teacher Dashboard)</span>
+              <Terminal className="w-3.5 h-3.5 text-[#8a847a]" strokeWidth={1.5} />
+              <span>Demo candidate mode — submissions appear in teacher grading</span>
             </div>
             <button
               type="button"
               onClick={() => setIsDevDemo(false)}
-              className="text-xs bg-purple-800 hover:bg-purple-700 text-white px-2.5 py-1 rounded-md"
+              className="text-xs bg-[#262421] hover:bg-[#332d25] text-[#fdfbf7] px-2.5 py-1 rounded-md transition-calm"
             >
-              Exit Dev Demo
+              Exit demo
             </button>
           </div>
         )}
 
-        {/* Back to Teacher Dashboard Button */}
-        <div className="max-w-5xl mx-auto p-4 flex justify-between items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 flex justify-between items-center">
           <button
             type="button"
             onClick={() => setViewMode('teacher')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e2d8ca] text-xs font-bold text-[#4a4237] hover:bg-[#faf7f2] shadow-2xs"
+            className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] text-xs font-medium text-[#5e554a] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm"
           >
-            <ArrowLeft className="w-4 h-4 text-[#8c4a17]" />
-            <span>Switch to Teacher Mode</span>
+            <ArrowLeft className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+            <span>Return to teacher studio</span>
           </button>
         </div>
 
+        {notice && (
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-3">
+            <div className="p-3.5 rounded-xl bg-[#fdfbf7] border border-[#b8622e] text-xs text-[#1f1b16] flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-[#b8622e] shrink-0 mt-0.5" strokeWidth={1.5} />
+                <div>
+                  <p className="font-medium text-[#1f1b16]">{notice.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="text-[#7b7266] hover:text-[#1f1b16]"
+              >
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+          </div>
+        )}
+
         <StudentPortal
-          student={studentUser || { full_name: 'Developer Candidate', admission_number: 'DEMO-999' }}
+          student={studentUser || { full_name: 'Arjun Sen', admission_number: 'DLP-26-DEMO', dob: '2008-05-14' }}
           onJoinExam={handleStudentJoinExam}
+          onPreviewCurrentPaper={() => setStudentStep('intro')}
           onLogout={() => {
             logoutStudent();
             setStudentUser(null);
@@ -549,19 +572,20 @@ export default function App() {
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <div className="min-h-dvh bg-[#1c1b18] flex items-center justify-center p-4 font-sans">
+      <div className="min-h-dvh bg-[#161513] flex items-center justify-center p-4 font-sans">
         <AccessGateModal onAuthenticated={() => setIsAuthenticated(true)} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-dvh bg-[#f7f4ee] flex flex-col font-sans">
+    <div className="min-h-dvh bg-[#f7f4ee] flex flex-col font-sans text-[#1f1b16]">
       <Navbar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         onReset={handleReset}
         onOpenPrintView={() => setShowPrintModal(true)}
         onOpenSubmissions={() => setShowSubmissionsModal(true)}
-        onOpenRoster={() => setActiveTab('roster')}
         onSwitchToStudentPortal={() => setViewMode('student_portal')}
         onPublishExam={handlePublishExam}
         onLogout={() => {
@@ -574,46 +598,42 @@ export default function App() {
         }}
       />
 
-      {/* Mode Switch Bar: Catalogue vs Student Roster */}
-      <div className="bg-[#f0e6d8] border-b border-[#e2d8ca] px-4 sm:px-6 py-2 mode-switch-bar print:hidden">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-12 space-y-6">
+        {notice && (
+          <div
+            className={`p-4 rounded-xl border flex items-start justify-between gap-3 ${
+              notice.type === 'error'
+                ? 'bg-[#fdfbf7] border-[#b8622e] text-[#1f1b16]'
+                : 'bg-[#fdfbf7] border-[#3f6b4a] text-[#1f1b16]'
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              {notice.type === 'error' ? (
+                <AlertTriangle className="w-4 h-4 text-[#b8622e] shrink-0 mt-0.5" strokeWidth={1.5} />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-[#3f6b4a] shrink-0 mt-0.5" strokeWidth={1.5} />
+              )}
+              <div className="space-y-1 text-xs">
+                <p className="font-medium text-sm text-[#1f1b16]">{notice.title}</p>
+                {Array.isArray(notice.details) && notice.details.length > 0 && (
+                  <ul className="list-disc list-inside text-[#5e554a] space-y-0.5 pt-1">
+                    {notice.details.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => setActiveTab('catalogue')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'catalogue'
-                  ? 'bg-white text-[#8c4a17] shadow-2xs'
-                  : 'text-[#6b6255] hover:text-[#2c2825]'
-              }`}
+              onClick={() => setNotice(null)}
+              className="p-1 rounded-md text-[#7b7266] hover:text-[#1f1b16] hover:bg-[#efe9df]"
             >
-              Question Catalogue & Editor
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('roster')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'roster'
-                  ? 'bg-white text-[#8c4a17] shadow-2xs'
-                  : 'text-[#6b6255] hover:text-[#2c2825]'
-              }`}
-            >
-              Student Roster & Credentials
+              <X className="w-4 h-4" strokeWidth={1.5} />
             </button>
           </div>
+        )}
 
-          <button
-            type="button"
-            onClick={() => setViewMode('student_portal')}
-            className="flex items-center gap-1 text-xs font-bold text-[#8c4a17] hover:underline"
-          >
-            <GraduationCap className="w-4 h-4" />
-            <span>Open Student Portal</span>
-          </button>
-        </div>
-      </div>
-
-      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 sm:pb-8 space-y-6 sm:space-y-8">
         {activeTab === 'roster' ? (
           <StudentRosterTab />
         ) : (

@@ -15,47 +15,44 @@ export default function TestReviewScreen({
   const unansweredCount = totalQuestions - answeredCount;
 
   return (
-    <div className="min-h-screen bg-[#FAF7F0] text-[#232323] py-10 px-4 sm:px-6">
-      <div className="max-w-3xl w-full mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="bg-[#fcfbfa] border border-[#DCD5C4] rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#f7f4ee] text-[#1f1b16] py-10 px-4 sm:px-6 font-sans">
+      <div className="max-w-3xl w-full mx-auto space-y-6">
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="font-serif font-bold text-2xl text-[#232323]">Pre-Submission Review</h1>
-            <p className="text-xs text-[#5c5346] font-sans mt-1">
-              Check your responses before submitting your test paper for grading.
+            <h1 className="font-serif font-medium text-2xl text-[#1f1b16]">Review responses before submission</h1>
+            <p className="text-xs text-[#5e554a] mt-1">
+              Click any item below to return to that question, or submit your paper for grading
             </p>
           </div>
 
-          <div className="flex items-center gap-3 font-sans text-xs shrink-0">
-            <span className="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>{answeredCount} Answered</span>
+          <div className="flex items-center gap-2 font-mono tabular-nums text-xs shrink-0">
+            <span className="px-2.5 py-1 rounded-md bg-[#f4f8f5] border border-[#3f6b4a] text-[#3f6b4a] font-medium flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>{answeredCount} answered</span>
             </span>
             {unansweredCount > 0 && (
-              <span className="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-semibold flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-amber-700" />
-                <span>{unansweredCount} Unanswered</span>
+              <span className="px-2.5 py-1 rounded-md bg-[#efe9df] border border-[#b8622e] text-[#b8622e] font-medium flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <span>{unansweredCount} unanswered</span>
               </span>
             )}
           </div>
         </div>
 
-        {/* Question Grid Review */}
-        <div className="space-y-4">
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl divide-y divide-[#dcd5c4] overflow-hidden">
           {questions.map((q, idx) => {
-            const isUnclassified = q.type !== 'mcq' && q.type !== 'short_answer_numeric';
+            const isUnclassified = q.type !== 'mcq' && q.type !== 'match_following' && q.type !== 'short_answer_numeric';
             const hasAnswer = !isUnclassified && answers[q.id] !== undefined && answers[q.id] !== null && answers[q.id] !== '';
-            let answerSummary = 'Not answered';
+            let answerSummary = 'Unanswered';
 
             if (isUnclassified) {
-              answerSummary = 'Pending Teacher Classification';
+              answerSummary = 'Pending classification';
             } else if (hasAnswer) {
-              if (q.type === 'mcq' && typeof answers[q.id] === 'number') {
+              if ((q.type === 'mcq' || q.type === 'match_following') && typeof answers[q.id] === 'number') {
                 const letter = ['A', 'B', 'C', 'D', 'E', 'F'][answers[q.id]] || answers[q.id];
                 answerSummary = `Option ${letter}`;
               } else {
-                answerSummary = `"${answers[q.id]}"`;
+                answerSummary = `${answers[q.id]}`;
               }
             }
 
@@ -63,69 +60,54 @@ export default function TestReviewScreen({
               <div
                 key={q.id || idx}
                 onClick={() => onJumpToQuestion(idx)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-4 ${
-                  isUnclassified
-                    ? 'bg-amber-100/70 border-amber-400 hover:bg-amber-100'
-                    : hasAnswer
-                    ? 'bg-[#fcfbfa] border-[#DCD5C4] hover:border-[#232323]'
-                    : 'bg-amber-50/60 border-amber-300 hover:bg-amber-100/50'
-                }`}
+                className="p-4 sm:p-5 hover:bg-[#f7f4ee] transition-calm cursor-pointer flex items-center justify-between gap-4"
               >
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  <span className={`w-8 h-8 rounded-xl font-serif font-bold text-xs flex items-center justify-center shrink-0 ${
-                    isUnclassified ? 'bg-amber-800 text-white' : hasAnswer ? 'bg-[#232323] text-white' : 'bg-amber-700 text-white'
-                  }`}>
-                    #{idx + 1}
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  <span className="font-serif font-medium text-base text-[#1f1b16] tabular-nums w-8 shrink-0">
+                    Q{idx + 1}.
                   </span>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="font-serif text-sm text-[#232323] truncate">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="font-serif text-base text-[#1f1b16] truncate">
                       <MathRenderer text={q.questionText} readOnly={true} />
                     </div>
-                    <div className="text-xs font-sans mt-0.5">
-                      {isUnclassified ? (
-                        <span className="text-amber-950 font-semibold">Pending Teacher Classification</span>
-                      ) : hasAnswer ? (
-                        <span className="text-emerald-800 font-medium">Selected Answer: {answerSummary}</span>
+                    <div className="text-xs font-mono tabular-nums">
+                      {hasAnswer ? (
+                        <span className="text-[#3f6b4a] font-medium">Response: {answerSummary}</span>
                       ) : (
-                        <span className="text-amber-900 font-semibold">Answer missing</span>
+                        <span className="text-[#b8622e]">{answerSummary}</span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="text-xs font-sans font-semibold text-[#8c4a17] hover:underline shrink-0"
-                >
-                  Jump to Q#{idx + 1}
-                </button>
+                <span className="text-xs font-medium text-[#8c4a17] hover:underline shrink-0">
+                  Edit
+                </span>
               </div>
             );
           })}
         </div>
 
-        {/* Bottom CTA Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-[#DCD5C4]">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
           <button
             type="button"
             onClick={() => onJumpToQuestion(0)}
-            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-[#f0e6d8] hover:bg-[#e4d8c5] text-[#232323] font-serif font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-4 h-10 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] hover:bg-[#efe9df] text-[#1f1b16] font-sans font-medium text-xs transition-calm flex items-center justify-center gap-2"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Return to Questions</span>
+            <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
+            <span>Back to questions</span>
           </button>
 
           <button
             type="button"
             onClick={onSubmitTest}
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-[#8c4a17] hover:bg-[#703a11] text-white font-serif font-bold text-base shadow-md transition-all active:scale-98 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 h-10 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-2"
           >
-            <Send className="w-5 h-5" />
-            <span>Submit Test Paper</span>
+            <Send className="w-4 h-4" strokeWidth={1.5} />
+            <span>Submit examination paper</span>
           </button>
         </div>
-
       </div>
     </div>
   );

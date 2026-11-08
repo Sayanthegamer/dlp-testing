@@ -1,14 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Printer, Search, RefreshCw, Contact, Calendar, CheckCircle, KeyRound, UserCheck, Clock } from 'lucide-react';
+import {
+  Users,
+  UserPlus,
+  Printer,
+  Search,
+  RefreshCw,
+  Contact,
+  KeyRound,
+  UserCheck,
+  Clock,
+  FileText,
+  Edit3,
+  Trash2,
+  X,
+  ShieldAlert,
+  Award
+} from 'lucide-react';
 import {
   fetchTeacherRoster,
   teacherCreateStudent,
   generateAdmissionNumber,
   fetchTeacherRollingRefCode,
   regenerateTeacherRollingRefCode,
-  teacherAddExistingStudent
+  teacherAddExistingStudent,
+  fetchStudentDossier,
+  updateStudentProfile,
+  deleteStudentFromRoster
 } from '../../services/apiService';
 import StudentCredentialCardsModal from './StudentCredentialCardsModal';
+import ResultPrintModal from '../Student/ResultPrintModal';
 
 export default function StudentRosterTab() {
   const [roster, setRoster] = useState([]);
@@ -19,11 +39,20 @@ export default function StudentRosterTab() {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [selectedPrintRoster, setSelectedPrintRoster] = useState([]);
 
-  // Teacher Rolling Code State
+  // Dossier & Edit State
+  const [activeDossier, setActiveDossier] = useState(null);
+  const [dossierLoading, setDossierLoading] = useState(false);
+  const [dossierError, setDossierError] = useState('');
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editAdm, setEditAdm] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [selectedAttemptForPrint, setSelectedAttemptForPrint] = useState(null);
+
   const [teacherRefCode, setTeacherRefCode] = useState('');
   const [codeTimer, setCodeTimer] = useState(300);
 
-  // Add Student Form State
   const [admNum, setAdmNum] = useState('');
   const [fullName, setFullName] = useState('');
   const [dob, setDob] = useState('');
@@ -31,7 +60,6 @@ export default function StudentRosterTab() {
   const [addSuccess, setAddSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Claim Existing Student State
   const [claimAdmNum, setClaimAdmNum] = useState('');
   const [claimStudentRefCode, setClaimStudentRefCode] = useState('');
   const [claimError, setClaimError] = useState('');
@@ -63,7 +91,7 @@ export default function StudentRosterTab() {
         setTeacherRefCode(res.refCode);
         if (res.expiresInSeconds) setCodeTimer(res.expiresInSeconds);
       }
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const handleRegenerateCode = async () => {
@@ -73,7 +101,7 @@ export default function StudentRosterTab() {
         setTeacherRefCode(res.refCode);
         if (res.expiresInSeconds) setCodeTimer(res.expiresInSeconds);
       }
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const loadRoster = async () => {
@@ -81,17 +109,78 @@ export default function StudentRosterTab() {
     try {
       const data = await fetchTeacherRoster();
       setRoster(data || []);
-    } catch (err) {
-      console.warn('[Roster Load Error]:', err.message);
-    } finally {
+    } catch (_) {} finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenDossier = async (student) => {
+    setDossierLoading(true);
+    setDossierError('');
+    setEditingStudent(null);
+    setActiveDossier({
+      student,
+      metrics: { totalAttempts: 0, averagePercentage: 0, bestPercentage: 0, flaggedAttempts: 0 },
+      submissions: []
+    });
+    try {
+      const data = await fetchStudentDossier(student.id || student.admission_number);
+      if (data && data.student) {
+        setActiveDossier(data);
+      }
+    } catch (err) {
+      setDossierError(err.message || 'Could not load candidate dossier.');
+    } finally {
+      setDossierLoading(false);
+    }
+  };
+
+  const handleStartEditStudent = (student) => {
+    setEditingStudent(student);
+    setEditName(student.full_name || student.fullName || '');
+    setEditAdm(student.admission_number || student.admissionNumber || '');
+    setEditDob(student.dob || '');
+  };
+
+  const handleSaveStudentEdit = async (e) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    setSavingEdit(true);
+    setDossierError('');
+    try {
+      const res = await updateStudentProfile(editingStudent.id, {
+        fullName: editName,
+        admissionNumber: editAdm,
+        dob: editDob
+      });
+      if (res && res.student) {
+        setEditingStudent(null);
+        loadRoster();
+        if (activeDossier) {
+          setActiveDossier(prev => ({ ...prev, student: res.student }));
+        }
+      }
+    } catch (err) {
+      setDossierError(err.message || 'Could not update student record.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteStudent = async (studentId) => {
+    try {
+      await deleteStudentFromRoster(studentId);
+      setActiveDossier(null);
+      loadRoster();
+    } catch (err) {
+      setDossierError(err.message || 'Could not remove student.');
     }
   };
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!admNum.trim() || !fullName.trim() || !dob) {
-      setAddError('Please fill in all fields.');
+      setAddError('Fill in all fields');
       return;
     }
     setAddError('');
@@ -101,14 +190,14 @@ export default function StudentRosterTab() {
     try {
       const res = await teacherCreateStudent(null, admNum.trim(), fullName.trim(), dob);
       if (res && res.student) {
-        setAddSuccess(`Enrolled student ${res.student.full_name} (${res.student.admission_number}) successfully!`);
-        setAdmNum('');
+        setAddSuccess(`Enrolled ${res.student.full_name} (${res.student.admission_number})`);
+        setAdmNum(generateAdmissionNumber());
         setFullName('');
         setDob('');
         loadRoster();
       }
     } catch (err) {
-      setAddError(err.message || 'Failed to enroll student. Admission number may already exist.');
+      setAddError(err.message || 'Could not enroll student');
     } finally {
       setSubmitting(false);
     }
@@ -116,8 +205,8 @@ export default function StudentRosterTab() {
 
   const handleClaimStudent = async (e) => {
     e.preventDefault();
-    if (!claimAdmNum.trim() || !claimStudentRefCode.trim()) {
-      setClaimError('Please enter Admission Number and Student Reference Code.');
+    if (!claimAdmNum.trim() && !claimStudentRefCode.trim()) {
+      setClaimError('Enter an admission number or 5-minute student reference code');
       return;
     }
     setClaimError('');
@@ -127,13 +216,13 @@ export default function StudentRosterTab() {
     try {
       const res = await teacherAddExistingStudent(claimAdmNum.trim(), claimStudentRefCode.trim());
       if (res && res.success) {
-        setClaimSuccess(`Added student ${res.student.full_name || res.student.admission_number} to your roster successfully!`);
+        setClaimSuccess(`Added ${res.student.full_name || res.student.admission_number} to your roster`);
         setClaimAdmNum('');
         setClaimStudentRefCode('');
         loadRoster();
       }
     } catch (err) {
-      setClaimError(err.message || 'Invalid Admission Number or Student Reference Code.');
+      setClaimError(err.message || 'Invalid admission number or student reference code');
     } finally {
       setClaiming(false);
     }
@@ -155,53 +244,52 @@ export default function StudentRosterTab() {
 
   return (
     <div className="space-y-6">
-      {/* 5-Minute Teacher Rolling Reference Code & Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm print:hidden">
+      {/* Top Roster Header & Rolling Reference Code */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 print:hidden">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 font-serif font-bold text-xl sm:text-2xl text-[#2c2825]">
-            <Users className="w-6 h-6 text-[#8c4a17]" />
-            <h2>Student Batch Roster & Admit Cards</h2>
+          <div className="flex items-center gap-2.5 font-serif font-medium text-xl text-[#1f1b16]">
+            <Users className="w-5 h-5 text-[#5e554a]" strokeWidth={1.5} />
+            <h2>Student roster, dossiers, and admit cards</h2>
           </div>
-          <p className="text-xs text-[#736c62] font-sans">
-            Manage student candidates enrolled in your institute and link self-registered students via 5-minute rolling codes.
+          <p className="text-xs text-[#5e554a] font-sans">
+            Enroll candidates, inspect academic dossiers, print QR admit cards, or link existing students via 5-minute rolling codes
           </p>
         </div>
 
-        {/* Teacher Rolling Ref Code Card */}
-        <div className="bg-[#f7f3ed] border border-[#e2d8ca] rounded-2xl p-3 sm:px-5 sm:py-3 flex items-center gap-4 shadow-2xs">
+        {/* Teacher Rolling Link Code */}
+        <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg px-4 py-2.5 flex items-center gap-4">
           <div>
-            <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-[#8c4a17]">
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>TEACHER LINK CODE (5-MIN TOTP)</span>
+            <div className="flex items-center gap-1.5 text-xs text-[#5e554a]">
+              <KeyRound className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
+              <span>Teacher link code</span>
             </div>
-            <div className="font-mono font-bold text-lg sm:text-xl text-[#1c1b18] tracking-widest">
-              {teacherRefCode || 'TCH-LOADING'}
+            <div className="font-mono tabular-nums font-medium text-base text-[#1f1b16] tracking-wider">
+              {teacherRefCode || 'TCH-••••••'}
             </div>
           </div>
-          <div className="text-right border-l border-[#dcd5c4] pl-4">
-            <span className="text-[10px] font-mono text-[#736c62] block">Auto-Refreshes</span>
-            <span className="text-xs font-mono font-bold text-amber-900 flex items-center justify-end gap-1">
-              <Clock className="w-3 h-3" />
+          <div className="text-right border-l border-[#dcd5c4] pl-3">
+            <span className="text-xs font-mono tabular-nums text-[#5e554a] flex items-center justify-end gap-1">
+              <Clock className="w-3 h-3 text-[#7b7266]" strokeWidth={1.5} />
               {formatSec(codeTimer)}
             </span>
             <button
               type="button"
               onClick={handleRegenerateCode}
-              className="text-[10px] font-bold text-[#8c4a17] hover:underline block mt-0.5"
+              className="text-[11px] font-medium text-[#8c4a17] hover:underline block mt-0.5"
             >
-              Regenerate
+              Rotate
             </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setShowClaimModal(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-amber-100 border border-amber-300 hover:bg-amber-200 text-amber-950 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
           >
-            <UserCheck className="w-4 h-4 text-amber-800" />
-            <span>Add Existing Student</span>
+            <UserCheck className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+            <span>Link existing student</span>
           </button>
 
           <button
@@ -210,10 +298,10 @@ export default function StudentRosterTab() {
               setAdmNum(generateAdmissionNumber());
               setShowAddModal(true);
             }}
-            className="px-4 py-2.5 rounded-xl bg-[#8c4a17] hover:bg-[#733b11] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
           >
-            <UserPlus className="w-4 h-4" />
-            <span>Enroll New Student</span>
+            <UserPlus className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+            <span>Enroll student</span>
           </button>
 
           <button
@@ -223,91 +311,104 @@ export default function StudentRosterTab() {
               setShowPrintModal(true);
             }}
             disabled={roster.length === 0}
-            className="px-4 py-2.5 rounded-xl bg-[#2c2825] hover:bg-black text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Printer className="w-4 h-4" />
-            <span>Print Admit Cards ({roster.length})</span>
+            <Printer className="w-4 h-4" strokeWidth={1.5} />
+            <span className="tabular-nums">Print admit cards ({roster.length})</span>
           </button>
         </div>
       </div>
 
-      {/* Search & Roster Table */}
-      <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 shadow-sm space-y-4 font-sans print:hidden">
+      {/* Roster Table */}
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 space-y-4 font-sans print:hidden">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="relative max-w-xs w-full">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by candidate name or roll #"
-              className="w-full pl-8 pr-3 py-2 rounded-xl border border-[#c9bea9] bg-white text-xs text-[#1c1b18] focus:outline-none focus:ring-2 focus:ring-[#8c4a17]"
+              placeholder="Search name or roll number"
+              className="w-full pl-9 pr-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#f7f4ee] text-xs text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
             />
-            <Search className="w-3.5 h-3.5 text-[#8c8275] absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-[#7b7266] absolute left-3 top-2.5" strokeWidth={1.5} />
           </div>
 
           <button
             type="button"
             onClick={loadRoster}
-            className="p-2 rounded-xl text-[#736c62] hover:bg-[#f0e6d8] transition-colors text-xs flex items-center gap-1"
+            className="px-3 h-8 rounded-lg text-[#5e554a] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm text-xs flex items-center gap-1.5"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh Roster</span>
+            <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
+            <span>Refresh</span>
           </button>
         </div>
 
         {loading ? (
-          <div className="py-12 text-center text-xs text-[#736c62]">
-            Loading student roster...
+          <div className="py-12 text-center text-xs text-[#7b7266]">
+            Loading student roster
           </div>
         ) : filteredRoster.length === 0 ? (
           <div className="py-12 text-center space-y-2">
-            <Contact className="w-10 h-10 mx-auto text-[#c9bea9]" />
-            <p className="text-sm font-semibold text-[#5c5346]">No students enrolled in roster yet.</p>
-            <p className="text-xs text-[#8c8275]">Click "Enroll New Student" to add candidate profiles.</p>
+            <Contact className="w-8 h-8 mx-auto text-[#7b7266]" strokeWidth={1.5} />
+            <p className="text-sm font-serif font-medium text-[#1f1b16]">No students enrolled yet</p>
+            <p className="text-xs text-[#5e554a]">Click Enroll student to register candidates and print QR hall tickets</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-[#e2d8ca] text-[#736c62] uppercase tracking-wider font-semibold">
-                  <th className="pb-3 px-3">#</th>
-                  <th className="pb-3 px-3">Admission Number</th>
-                  <th className="pb-3 px-3">Candidate Name</th>
-                  <th className="pb-3 px-3">Date of Birth (Login Key)</th>
-                  <th className="pb-3 px-3">Enrolled Date</th>
-                  <th className="pb-3 px-3 text-right">Actions</th>
+                <tr className="border-b border-[#dcd5c4] text-[#5e554a] font-medium">
+                  <th className="pb-3 px-3 w-12">#</th>
+                  <th className="pb-3 px-3">Roll number</th>
+                  <th className="pb-3 px-3">Candidate name</th>
+                  <th className="pb-3 px-3">Date of birth</th>
+                  <th className="pb-3 px-3">Enrolled</th>
+                  <th className="pb-3 px-3 text-right">Dossier &amp; admit card</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#f0e6d8]">
+              <tbody className="divide-y divide-[#efe9df]">
                 {filteredRoster.map((st, idx) => (
-                  <tr key={st.id || idx} className="hover:bg-[#faf7f2] transition-colors">
-                    <td className="py-3.5 px-3 font-mono font-bold text-[#8c4a17]">
+                  <tr key={st.id || idx} className="hover:bg-[#f7f4ee] transition-calm">
+                    <td className="py-3 px-3 font-mono tabular-nums text-[#7b7266]">
                       {idx + 1}
                     </td>
-                    <td className="py-3.5 px-3 font-mono font-bold text-[#1c1b18]">
+                    <td className="py-3 px-3 font-mono tabular-nums font-medium text-[#1f1b16]">
                       {st.admission_number || st.admissionNumber}
                     </td>
-                    <td className="py-3.5 px-3 font-serif font-bold text-sm text-[#2c2825]">
-                      {st.full_name || st.fullName}
+                    <td className="py-3 px-3 font-serif font-medium text-sm text-[#1f1b16]">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDossier(st)}
+                        className="hover:text-[#8c4a17] hover:underline text-left"
+                      >
+                        {st.full_name || st.fullName}
+                      </button>
                     </td>
-                    <td className="py-3.5 px-3 font-mono text-[#4a4237]">
+                    <td className="py-3 px-3 font-mono tabular-nums text-[#5e554a]">
                       {st.dob}
                     </td>
-                    <td className="py-3.5 px-3 text-[#736c62] font-mono">
+                    <td className="py-3 px-3 text-[#7b7266] font-mono tabular-nums">
                       {st.created_at ? new Date(st.created_at).toLocaleDateString() : 'Active'}
                     </td>
-                    <td className="py-3.5 px-3 text-right">
+                    <td className="py-3 px-3 text-right space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDossier(st)}
+                        className="px-3 h-7 rounded-md bg-[#f7f4ee] border border-[#dcd5c4] hover:border-[#8c4a17] text-[#1f1b16] text-xs font-medium transition-calm inline-flex items-center gap-1.5"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
+                        <span>Dossier</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
                           setSelectedPrintRoster([st]);
                           setShowPrintModal(true);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-[#f0e6d8] hover:bg-[#8c4a17] text-[#4a4237] hover:text-white text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                        title="Print admit card for this candidate"
+                        className="px-3 h-7 rounded-md bg-[#efe9df] hover:bg-[#1f1b16] text-[#1f1b16] hover:text-[#fdfbf7] text-xs font-medium transition-calm inline-flex items-center gap-1.5"
                       >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Print Card</span>
+                        <Printer className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        <span>Hall ticket</span>
                       </button>
                     </td>
                   </tr>
@@ -318,59 +419,287 @@ export default function StudentRosterTab() {
         )}
       </div>
 
-      {/* Add Student Modal */}
+      {/* Candidate Academic Dossier Modal */}
+      {activeDossier && (
+        <div className="fixed inset-0 z-50 bg-[#161513]/65 flex items-center justify-center p-4 overflow-y-auto print:hidden">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-3xl w-full shadow-xl space-y-6 max-h-[90vh] overflow-y-auto font-sans">
+            <div className="exam-rule-double pb-4 flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b7266] block">
+                  CANDIDATE ACADEMIC DOSSIER
+                </span>
+                <h3 className="text-2xl font-serif font-semibold text-[#1f1b16] mt-0.5">
+                  {activeDossier.student.full_name || activeDossier.student.fullName}
+                </h3>
+                <div className="text-xs font-mono tabular-nums text-[#5e554a] mt-1 flex flex-wrap items-center gap-3">
+                  <span>Roll No: <strong className="text-[#1f1b16]">{activeDossier.student.admission_number || activeDossier.student.admissionNumber}</strong></span>
+                  <span>•</span>
+                  <span>DOB: {activeDossier.student.dob}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPrintRoster([activeDossier.student]);
+                    setShowPrintModal(true);
+                  }}
+                  className="px-3 h-8 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Print admit card</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStartEditStudent(activeDossier.student)}
+                  className="px-3 h-8 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteStudent(activeDossier.student.id)}
+                  className="px-3 h-8 rounded-lg bg-[#fdf2f2] border border-[#dc2626]/30 hover:bg-[#dc2626] text-[#dc2626] hover:text-white text-xs font-medium flex items-center gap-1.5 transition-calm"
+                >
+                  <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Remove</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveDossier(null)}
+                  className="p-2 h-8 w-8 rounded-lg text-[#5e554a] hover:bg-[#efe9df] flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+              </div>
+            </div>
+
+            {dossierError && (
+              <div className="p-3 rounded-lg bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] text-xs">
+                {dossierError}
+              </div>
+            )}
+
+            {/* Inline Edit Profile Form */}
+            {editingStudent && (
+              <form onSubmit={handleSaveStudentEdit} className="p-4 rounded-xl bg-[#f7f4ee] border border-[#dcd5c4] space-y-3 text-xs">
+                <div className="font-serif font-medium text-sm text-[#1f1b16]">Update candidate identity</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[#5e554a] mb-1">Full name</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full px-2.5 h-8 rounded border border-[#dcd5c4] bg-white text-[#1f1b16]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#5e554a] mb-1">Roll / admission No.</label>
+                    <input
+                      type="text"
+                      value={editAdm}
+                      onChange={(e) => setEditAdm(e.target.value.toUpperCase())}
+                      className="w-full px-2.5 h-8 rounded border border-[#dcd5c4] bg-white font-mono text-[#1f1b16]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#5e554a] mb-1">Date of birth</label>
+                    <input
+                      type="date"
+                      value={editDob}
+                      onChange={(e) => setEditDob(e.target.value)}
+                      className="w-full px-2.5 h-8 rounded border border-[#dcd5c4] bg-white font-mono text-[#1f1b16]"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingStudent(null)}
+                    className="px-3 h-8 rounded bg-[#efe9df] text-[#1f1b16]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEdit}
+                    className="px-3.5 h-8 rounded bg-[#8c4a17] text-white font-medium"
+                  >
+                    {savingEdit ? 'Saving...' : 'Save changes'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Dossier Performance Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-xl bg-[#f7f4ee] border border-[#dcd5c4]">
+                <span className="text-[11px] text-[#7b7266] block">Scripts submitted</span>
+                <strong className="font-mono tabular-nums text-xl text-[#1f1b16]">
+                  {activeDossier.metrics?.totalAttempts ?? 0}
+                </strong>
+              </div>
+              <div className="p-3.5 rounded-xl bg-[#f7f4ee] border border-[#dcd5c4]">
+                <span className="text-[11px] text-[#7b7266] block">Mean accuracy</span>
+                <strong className="font-mono tabular-nums text-xl text-[#3f6b4a]">
+                  {activeDossier.metrics?.averagePercentage ?? 0}%
+                </strong>
+              </div>
+              <div className="p-3.5 rounded-xl bg-[#f7f4ee] border border-[#dcd5c4]">
+                <span className="text-[11px] text-[#7b7266] block">Highest score</span>
+                <strong className="font-mono tabular-nums text-xl text-[#8c4a17]">
+                  {activeDossier.metrics?.bestPercentage ?? 0}%
+                </strong>
+              </div>
+              <div className="p-3.5 rounded-xl bg-[#f7f4ee] border border-[#dcd5c4]">
+                <span className="text-[11px] text-[#7b7266] block">Focus alerts</span>
+                <strong className="font-mono tabular-nums text-xl text-[#b8622e]">
+                  {activeDossier.metrics?.flaggedAttempts ?? 0}
+                </strong>
+              </div>
+            </div>
+
+            {/* Examination Submission History */}
+            <div className="space-y-3">
+              <h4 className="font-serif font-medium text-base text-[#1f1b16]">
+                Examination script history
+              </h4>
+
+              {dossierLoading ? (
+                <div className="py-8 text-center text-xs text-[#7b7266]">
+                  Loading candidate script records...
+                </div>
+              ) : !activeDossier.submissions || activeDossier.submissions.length === 0 ? (
+                <div className="p-8 rounded-xl border border-[#dcd5c4] bg-[#f7f4ee] text-center space-y-1">
+                  <Award className="w-6 h-6 text-[#7b7266] mx-auto" strokeWidth={1.5} />
+                  <p className="text-xs font-medium text-[#1f1b16]">No examination scripts recorded yet</p>
+                  <p className="text-[11px] text-[#5e554a]">Completed examination attempts by this candidate will appear here automatically.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-[#dcd5c4] rounded-xl">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#dcd5c4] bg-[#f7f4ee] text-[#5e554a]">
+                        <th className="py-2.5 px-3">Examination paper</th>
+                        <th className="py-2.5 px-3">Submitted</th>
+                        <th className="py-2.5 px-3">Score</th>
+                        <th className="py-2.5 px-3">Accuracy</th>
+                        <th className="py-2.5 px-3 text-right">Script report</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#efe9df]">
+                      {activeDossier.submissions.map((sub, sIdx) => (
+                        <tr key={sub.id || sIdx} className="hover:bg-[#f7f4ee]">
+                          <td className="py-2.5 px-3 font-serif font-medium text-sm text-[#1f1b16]">
+                            <div className="flex items-center gap-1.5">
+                              <span>{sub.testTitle}</span>
+                              {sub.cheatingFlagged && (
+                                <ShieldAlert className="w-3.5 h-3.5 text-[#dc2626]" title={sub.cheatingReason || 'Proctoring alert'} />
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono tabular-nums text-[#5e554a]">
+                            {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'Recorded'}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono tabular-nums font-medium text-[#1f1b16]">
+                            {sub.score} / {sub.maxScore}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono tabular-nums font-semibold text-[#3f6b4a]">
+                            {sub.percentage}%
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {Array.isArray(sub.questions) && sub.questions.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAttemptForPrint(sub)}
+                                className="px-2.5 h-7 rounded bg-[#efe9df] hover:bg-[#1f1b16] text-[#1f1b16] hover:text-[#fdfbf7] text-xs font-medium inline-flex items-center gap-1"
+                              >
+                                <Printer className="w-3 h-3" strokeWidth={1.5} />
+                                <span>Scorecard</span>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printable Candidate Scorecard Modal from Dossier */}
+      {selectedAttemptForPrint && (
+        <ResultPrintModal
+          testTitle={selectedAttemptForPrint.testTitle}
+          studentName={activeDossier?.student?.full_name || 'Candidate'}
+          questions={selectedAttemptForPrint.questions || []}
+          studentAnswers={selectedAttemptForPrint.studentAnswers || {}}
+          onClose={() => setSelectedAttemptForPrint(null)}
+        />
+      )}
+
+      {/* Enroll Student Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 font-sans">
-            <h3 className="text-xl font-serif font-bold text-[#2c2825]">
-              Enroll Candidate Profile
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
+            <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
+              Enroll candidate profile
             </h3>
 
-            {addError && <p className="text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">{addError}</p>}
-            {addSuccess && <p className="text-xs text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{addSuccess}</p>}
+            {addError && <p className="text-xs text-[#dc2626] bg-[#fdf2f2] p-2.5 rounded-lg border border-[#dc2626]">{addError}</p>}
+            {addSuccess && <p className="text-xs text-[#3f6b4a] bg-[#f4f8f5] p-2.5 rounded-lg border border-[#3f6b4a]">{addSuccess}</p>}
 
             <form onSubmit={handleAddStudent} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-[#4a4237] mb-1">Candidate Full Name *</label>
+                <label className="block font-medium text-[#5e554a] mb-1">Candidate full name</label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Ananya Roy"
-                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white text-sm"
+                  placeholder="Ananya Roy"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                   required
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block font-bold text-[#4a4237]">Admission / Roll Number *</label>
+                  <label className="block font-medium text-[#5e554a]">Admission / roll number</label>
                   <button
                     type="button"
                     onClick={() => setAdmNum(generateAdmissionNumber())}
-                    className="text-[11px] font-bold text-[#8c4a17] hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] font-medium text-[#8c4a17] hover:underline flex items-center gap-1"
                   >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>Auto-Generate</span>
+                    <RefreshCw className="w-3 h-3" strokeWidth={1.5} />
+                    <span>Generate</span>
                   </button>
                 </div>
                 <input
                   type="text"
                   value={admNum}
                   onChange={(e) => setAdmNum(e.target.value.replace(/[^A-Za-z0-9_\-]/g, '').toUpperCase())}
-                  placeholder="Auto-generated e.g. DLP-26-8K39X"
-                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-wider text-sm"
+                  placeholder="DLP-26-8K39X"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                   required
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-[#4a4237] mb-1">Date of Birth (DOB) *</label>
+                <label className="block font-medium text-[#5e554a] mb-1">Date of birth</label>
                 <input
                   type="date"
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white text-sm"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                   required
                 />
               </div>
@@ -379,16 +708,16 @@ export default function StudentRosterTab() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] font-bold"
+                  className="px-4 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] font-medium"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 rounded-xl bg-[#8c4a17] hover:bg-[#733b11] text-white font-bold"
+                  className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium"
                 >
-                  {submitting ? 'Enrolling...' : 'Save Student'}
+                  {submitting ? 'Saving' : 'Save student'}
                 </button>
               </div>
             </form>
@@ -396,69 +725,61 @@ export default function StudentRosterTab() {
         </div>
       )}
 
-      {/* Add Existing Student via Student 5-Min Ref Code Modal */}
+      {/* Link Existing Student Modal */}
       {showClaimModal && (
-        <div className="fixed inset-0 z-50 bg-[#1c1b18]/60 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#fefcf8] border border-[#e2d8ca] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 font-sans animate-in zoom-in-95 duration-150">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-amber-100 text-amber-900">
-                <UserCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-serif font-bold text-[#2c2825]">
-                  Add Existing Self-Registered Student
-                </h3>
-                <p className="text-[11px] text-[#736c62]">
-                  Link a student who registered via App Password to your teacher roster using their 5-minute passcode.
-                </p>
-              </div>
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
+            <div>
+              <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
+                Link existing student
+              </h3>
+              <p className="text-xs text-[#5e554a] mt-0.5">
+                Link a registered student to your roster using their admission number and 5-minute reference code
+              </p>
             </div>
 
-            {claimError && <p className="text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200">{claimError}</p>}
-            {claimSuccess && <p className="text-xs text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">{claimSuccess}</p>}
+            {claimError && <p className="text-xs text-[#dc2626] bg-[#fdf2f2] p-2.5 rounded-lg border border-[#dc2626]">{claimError}</p>}
+            {claimSuccess && <p className="text-xs text-[#3f6b4a] bg-[#f4f8f5] p-2.5 rounded-lg border border-[#3f6b4a]">{claimSuccess}</p>}
 
             <form onSubmit={handleClaimStudent} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-[#4a4237] mb-1">Student Admission Number *</label>
+                <label className="block font-medium text-[#5e554a] mb-1">Student admission number</label>
                 <input
                   type="text"
                   value={claimAdmNum}
                   onChange={(e) => setClaimAdmNum(e.target.value.toUpperCase())}
-                  placeholder="e.g. DLP-26-8K9P2"
-                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold text-sm"
+                  placeholder="DLP-26-8K9P2"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#1f1b16]"
                   required
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-[#4a4237] mb-1">Student 5-Minute Ref Code *</label>
+                <label className="block font-medium text-[#5e554a] mb-1">Student 5-minute reference code</label>
                 <input
                   type="text"
                   value={claimStudentRefCode}
                   onChange={(e) => setClaimStudentRefCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. STU-7X4W9N"
-                  className="w-full px-3 py-2 rounded-xl border border-[#c9bea9] bg-white font-mono font-bold tracking-widest text-sm text-[#8c4a17]"
+                  placeholder="STU-7X4W9N"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#8c4a17]"
                   required
                 />
-                <p className="text-[10px] text-[#736c62] mt-1">
-                  The student can view their 5-minute rolling code on their Student Portal dashboard.
-                </p>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowClaimModal(false)}
-                  className="px-4 py-2 rounded-xl bg-[#f0e6d8] hover:bg-[#e4dbcc] text-[#4a4237] font-bold"
+                  className="px-4 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] font-medium"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={claiming}
-                  className="px-5 py-2 rounded-xl bg-amber-800 hover:bg-amber-900 text-white font-bold"
+                  className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium"
                 >
-                  {claiming ? 'Linking...' : 'Add to My Roster'}
+                  {claiming ? 'Linking' : 'Add to roster'}
                 </button>
               </div>
             </form>
@@ -466,7 +787,6 @@ export default function StudentRosterTab() {
         </div>
       )}
 
-      {/* WYSIWYG Credentials Modal */}
       {showPrintModal && (
         <StudentCredentialCardsModal
           roster={selectedPrintRoster.length > 0 ? selectedPrintRoster : roster}

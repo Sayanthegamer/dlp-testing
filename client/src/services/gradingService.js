@@ -8,7 +8,7 @@
 export function evaluateQuestion(question, studentAnswer) {
   if (!question) return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
 
-  if (question.type === 'mcq') {
+  if (question.type === 'mcq' || question.type === 'match_following') {
     if (question.correctAnswer === null || question.correctAnswer === undefined || typeof question.correctAnswer !== 'number') {
       return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
     }
@@ -18,14 +18,13 @@ export function evaluateQuestion(question, studentAnswer) {
 
   if (question.type === 'short_answer_numeric' || question.type === 'short_answer_text' || question.type === 'short_answer') {
     let range = question.acceptedRange;
-    
-    // If range is missing but correctAnswer is a number, create exact range [target, target]
+
     if ((!Array.isArray(range) || range.length !== 2) && typeof question.correctAnswer === 'number' && Number.isFinite(question.correctAnswer)) {
       range = [question.correctAnswer, question.correctAnswer];
     }
 
-    const isValidRange = Array.isArray(range) && 
-      range.length === 2 && 
+    const isValidRange = Array.isArray(range) &&
+      range.length === 2 &&
       typeof range[0] === 'number' && Number.isFinite(range[0]) &&
       typeof range[1] === 'number' && Number.isFinite(range[1]) &&
       range[0] <= range[1];
@@ -39,7 +38,6 @@ export function evaluateQuestion(question, studentAnswer) {
     return { status: isCorrect ? 'correct' : 'incorrect', isAutoGraded: true, isCorrect };
   }
 
-  // Fallback for unclassified or legacy question types
   return { status: 'pending_review', isAutoGraded: false, isCorrect: false };
 }
 
@@ -90,9 +88,7 @@ export function gradeAttempt(questions = [], studentAnswers = {}) {
 }
 
 /**
- * Evaluates a full submission including teacher manual overrides (used in Teacher Submissions Dashboard).
- * Note: Unlike gradeAttempt (where total = auto-gradable questions only), evaluateSubmission uses total = all questions
- * in the paper so every question (including text items) counts toward the final 100% scorecard grade when reviewed.
+ * Evaluates a full submission including teacher manual overrides.
  */
 export function evaluateSubmission(questions = [], studentAnswers = {}, manualGrades = {}) {
   let score = 0;
@@ -109,7 +105,6 @@ export function evaluateSubmission(questions = [], studentAnswers = {}, manualGr
     const autoEval = evaluateQuestion(q, studentAns);
     let status = autoEval.status;
 
-    // Teacher manual override takes precedence
     if (manualInfo && manualInfo.status) {
       status = manualInfo.status;
     }

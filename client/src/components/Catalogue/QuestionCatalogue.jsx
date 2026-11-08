@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import QuestionCard from './QuestionCard';
 import { computeNeedsReview } from '../../services/reviewEvaluator';
-import { Plus, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function QuestionCatalogue({
   testTitle,
@@ -16,15 +16,12 @@ export default function QuestionCatalogue({
 }) {
   const topRef = useRef(null);
 
-  // Auto-scroll refocus to Question 1 upon complete parse
   useEffect(() => {
     if (isJustParsed && topRef.current) {
       topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [isJustParsed]);
 
-  // Sort questions so flagged items (needsReview === true) float to top of list until resolved,
-  // preserving their original exam index so numbering stays consistent with print view.
   const sortedQuestions = questions
     .map((question, originalIdx) => ({ question, originalIdx }))
     .sort((a, b) => {
@@ -35,76 +32,101 @@ export default function QuestionCatalogue({
       return a.originalIdx - b.originalIdx;
     });
 
+  const flaggedCount = questions.filter(q => computeNeedsReview(q).needsReview).length;
+
   return (
     <div ref={topRef} className="space-y-6">
-      
-      {/* Parsing Completion Review Banner */}
+      {/* Post-Parse Status Banner */}
       {isJustParsed && (
-        <div className="bg-[#f0f9f0] border border-[#a5d6a7] rounded-2xl p-4 flex items-center justify-between shadow-xs animate-in slide-in-from-top-4 duration-300">
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#2e7d32] text-white flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-[#efe9df] text-[#3f6b4a] flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4" strokeWidth={1.5} />
             </div>
             <div>
-              <h4 className="font-serif font-bold text-base text-[#1b4d1e]">
-                {questions.length} Question{questions.length > 1 ? 's' : ''} Extracted & Typeset!
+              <h4 className="font-serif font-medium text-base text-[#1f1b16]">
+                {questions.length} {questions.length === 1 ? 'question' : 'questions'} typeset
               </h4>
-              <p className="text-xs text-[#2e7d32]">
-                Automatically refocused to Question #1. Please review each question and option carefully below.
+              <p className="text-xs text-[#5e554a]">
+                Click any text to edit in place, or click a formula to open the visual math toolbar.
               </p>
             </div>
           </div>
+          {flaggedCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#efe9df] border border-[#b8622e] text-xs font-medium text-[#b8622e] tabular-nums shrink-0">
+              <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>{flaggedCount} to review</span>
+            </span>
+          )}
         </div>
       )}
 
-      {/* Test Title Header */}
-      <div className="exam-paper rounded-2xl p-4 sm:p-8 space-y-2 sm:space-y-3">
-        <div className="flex flex-wrap items-center justify-between text-xs text-[#786f63] font-sans border-b border-[#e5dcd0] pb-2 gap-1">
-          <span className="font-semibold uppercase tracking-wider text-[11px] text-[#8c4a17]">
-            Test Paper Catalogue Title
-          </span>
-          <span className="hidden sm:inline text-[11px]">Google Forms Style Catalogue</span>
+      {/* Exam Paper Sheet Container */}
+      <div className="exam-paper rounded-xl overflow-hidden">
+        {/* Authentic Printed Exam Header with Signature Double Rule */}
+        <div className="p-6 sm:p-8 exam-rule-double bg-[#fdfbf7] space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#7b7266] font-sans">
+            <span>Examination paper title</span>
+            <div className="flex items-center gap-4 font-mono tabular-nums text-xs">
+              <span>{questions.length} {questions.length === 1 ? 'question' : 'questions'}</span>
+              <span>•</span>
+              <span>{questions.length * 4} marks</span>
+              {flaggedCount > 0 ? (
+                <>
+                  <span>•</span>
+                  <span className="text-[#b8622e] font-medium">{flaggedCount} needs review</span>
+                </>
+              ) : (
+                <>
+                  <span>•</span>
+                  <span className="text-[#3f6b4a] font-medium">Ready to publish</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <input
+            type="text"
+            value={testTitle || 'Mathematics Practice Assessment'}
+            onChange={(e) => onUpdateTestTitle(e.target.value)}
+            placeholder="Enter examination paper title"
+            className="w-full font-serif font-medium text-2xl sm:text-3xl text-[#1f1b16] bg-transparent border-b border-transparent hover:border-[#dcd5c4] focus:border-[#8c4a17] focus:outline-none py-1 leading-tight transition-calm"
+          />
+          <p className="text-xs text-[#5e554a] font-sans">
+            Click any question stem or option to edit inline. Click any math expression to open the visual equation builder.
+          </p>
         </div>
 
-        <input
-          type="text"
-          value={testTitle || 'Mathematics Practice Quiz'}
-          onChange={(e) => onUpdateTestTitle(e.target.value)}
-          placeholder="Enter test paper title..."
-          className="w-full font-serif font-bold text-xl sm:text-3xl text-[#1c1b18] bg-transparent border-b border-transparent hover:border-[#dcd0be] focus:border-[#8c4a17] focus:outline-none py-1 leading-snug transition-colors"
-        />
-        <p className="text-[11px] sm:text-xs text-[#736c62] font-sans leading-normal">
-          Click any text to edit inline. Click any math formula to open the visual equation editor.
-        </p>
-      </div>
+        {/* Continuous Ruled Question Blocks */}
+        <div className="divide-y divide-[#dcd5c4]">
+          {sortedQuestions.map(({ question, originalIdx }) => (
+            <QuestionCard
+              key={question.id || originalIdx}
+              question={question}
+              index={originalIdx}
+              onUpdateQuestion={onUpdateQuestion}
+              onDeleteQuestion={onDeleteQuestion}
+              onDuplicateQuestion={onDuplicateQuestion}
+              onSelectMathForEdit={(math) => onSelectMathForEdit(question.id, math)}
+            />
+          ))}
+        </div>
 
-      {/* Stacked Question Cards (Flagged Items Floating to Top, Preserving Exam Numbering) */}
-      <div className="space-y-6">
-        {sortedQuestions.map(({ question, originalIdx }) => (
-          <QuestionCard
-            key={question.id || originalIdx}
-            question={question}
-            index={originalIdx}
-            onUpdateQuestion={onUpdateQuestion}
-            onDeleteQuestion={onDeleteQuestion}
-            onDuplicateQuestion={onDuplicateQuestion}
-            onSelectMathForEdit={(math) => onSelectMathForEdit(question.id, math)}
-          />
-        ))}
+        {/* Add Question Footer */}
+        <div className="p-5 bg-[#faf7f0] border-t border-[#dcd5c4] flex items-center justify-between">
+          <span className="text-xs text-[#7b7266] font-mono tabular-nums">
+            Total: {questions.length} {questions.length === 1 ? 'item' : 'items'}
+          </span>
+          <button
+            type="button"
+            onClick={onAddQuestion}
+            className="flex items-center gap-1.5 px-4 h-9 rounded-lg bg-[#fdfbf7] hover:bg-[#efe9df] border border-[#dcd5c4] text-[#1f1b16] font-sans font-medium text-xs transition-calm active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+            <span>Add question</span>
+          </button>
+        </div>
       </div>
-
-      {/* Add New Question Button */}
-      <div className="pt-2 flex items-center justify-center">
-        <button
-          type="button"
-          onClick={onAddQuestion}
-          className="flex items-center gap-2 py-3 px-6 rounded-2xl bg-[#ffffff] hover:bg-[#faf7f2] border-2 border-dashed border-[#c9bea9] hover:border-[#8c4a17] text-[#2c2825] font-serif font-semibold text-sm shadow-xs hover:shadow-sm transition-all active:scale-95 group"
-        >
-          <Plus className="w-5 h-5 text-[#8c4a17] group-hover:scale-110 transition-transform" />
-          <span>+ Add New Question Card</span>
-        </button>
-      </div>
-
     </div>
   );
 }

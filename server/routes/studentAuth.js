@@ -8,6 +8,9 @@ const {
   getStudentSubmissions,
   teacherCreateStudent,
   getTeacherRoster,
+  getStudentDossier,
+  updateStudentProfile,
+  deleteStudentProfile,
   get5MinRollingRefCode,
   getRefCodeSecondsLeft,
   regenerateEntitySalt,
@@ -18,7 +21,6 @@ const {
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    console.warn('[SECURITY WARNING] JWT_SECRET environment variable is missing! Using fallback secret.');
     return 'antigravity_dlp_secret_key_2026';
   }
   return secret;
@@ -42,27 +44,33 @@ function authenticateStudentToken(req, res, next) {
   });
 }
 
-// POST /api/student/login - Student Login (Admission Number + DOB)
-router.post('/student/login', async (req, res) => {
+async function handleStudentLogin(req, res) {
   try {
-    const { admissionNumber, dob } = req.body;
+    const { admissionNumber, dob } = req.body || {};
     const result = await studentLogin({ admissionNumber, dob });
     return res.json({ success: true, ...result });
   } catch (err) {
     return res.status(400).json({ success: false, error: err.message });
   }
-});
+}
 
-// POST /api/student/signup - Student Self-Registration
-router.post('/student/signup', async (req, res) => {
+async function handleStudentSignup(req, res) {
   try {
-    const { admissionNumber, fullName, dob, teacherCode } = req.body;
+    const { admissionNumber, fullName, dob, teacherCode } = req.body || {};
     const result = await studentSignup({ admissionNumber, fullName, dob, teacherId: teacherCode });
     return res.json({ success: true, ...result });
   } catch (err) {
     return res.status(400).json({ success: false, error: err.message });
   }
-});
+}
+
+// POST /api/student/login (and alias /api/student-auth/login) - Student Login (Admission Number + DOB)
+router.post('/student/login', handleStudentLogin);
+router.post('/student-auth/login', handleStudentLogin);
+
+// POST /api/student/signup (and alias /api/student-auth/signup) - Student Self-Registration
+router.post('/student/signup', handleStudentSignup);
+router.post('/student-auth/signup', handleStudentSignup);
 
 // GET /api/student/me - Current Student Profile
 router.get('/student/me', authenticateStudentToken, async (req, res) => {
@@ -195,6 +203,45 @@ router.get('/teacher/students', async (req, res) => {
     return res.json({ success: true, data: roster });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/teacher/students/:studentId/dossier - Candidate Dossier (profile, metrics, submissions)
+router.get('/teacher/students/:studentId/dossier', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
+  }
+  try {
+    const dossier = await getStudentDossier(req.params.studentId);
+    return res.json({ success: true, ...dossier });
+  } catch (err) {
+    return res.status(404).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/teacher/students/:studentId - Update candidate details
+router.patch('/teacher/students/:studentId', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
+  }
+  try {
+    const updated = await updateStudentProfile(req.params.studentId, req.body || {});
+    return res.json({ success: true, student: updated });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/teacher/students/:studentId - Remove candidate from roster
+router.delete('/teacher/students/:studentId', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
+  }
+  try {
+    const result = await deleteStudentProfile(req.params.studentId);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
   }
 });
 

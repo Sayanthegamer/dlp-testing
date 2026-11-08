@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Bookmark, AlertCircle, EyeOff, LayoutGrid, X } from 'lucide-react';
+import { Check, LayoutGrid, X } from 'lucide-react';
 
 /**
- * NTA / Aakash / Allen CBT Style Question Palette Sidebar Component
- * Displays live question counts, status legends, and an interactive quick-jump grid.
+ * Exam-Native Question Palette Sidebar Component
+ * Uses Warm Paper tokens and clear tabular counters instead of jarring purple/rainbow shapes.
  */
 export default function QuestionPaletteSidebar({
   questions = [],
@@ -18,7 +17,6 @@ export default function QuestionPaletteSidebar({
 
   const totalQuestions = questions.length;
 
-  // Calculate live counts for the 5 NTA CBT question states
   let notVisitedCount = 0;
   let notAnsweredCount = 0;
   let answeredCount = 0;
@@ -45,120 +43,102 @@ export default function QuestionPaletteSidebar({
   const getStatusStyle = (status, hasAns, isCurrent) => {
     if (status === 'answered_marked_for_review' || (status === 'marked_for_review' && hasAns)) {
       return {
-        bg: 'bg-purple-700 text-white border-purple-800',
-        shape: 'rounded-full relative',
+        bg: 'bg-[#8c4a17] text-[#fdfbf7] border-[#8c4a17]',
         badge: true
       };
     }
     if (status === 'marked_for_review') {
       return {
-        bg: 'bg-purple-600 text-white border-purple-700',
-        shape: 'rounded-full',
+        bg: 'bg-[#efe9df] text-[#8c4a17] border-[#8c4a17]',
         badge: false
       };
     }
     if (status === 'answered' || hasAns) {
       return {
-        bg: 'bg-emerald-600 text-white border-emerald-700',
-        shape: 'rounded-tl-xl rounded-tr-sm rounded-br-xl rounded-bl-sm',
+        bg: 'bg-[#3f6b4a] text-[#fdfbf7] border-[#3f6b4a]',
         badge: false
       };
     }
     if (status === 'not_answered' || isCurrent) {
       return {
-        bg: 'bg-amber-600 text-white border-amber-700',
-        shape: 'rounded-tl-sm rounded-tr-xl rounded-br-sm rounded-bl-xl',
+        bg: 'bg-[#fdfbf7] text-[#b8622e] border-[#b8622e]',
         badge: false
       };
     }
-    // not_visited
     return {
-      bg: 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200',
-      shape: 'rounded-md',
+      bg: 'bg-[#f7f4ee] text-[#5e554a] border-[#dcd5c4] hover:bg-[#efe9df]',
       badge: false
     };
   };
 
   const paletteContent = (
-    <div className="flex flex-col h-full bg-white border border-[#DCD5C4] rounded-t-3xl sm:rounded-2xl shadow-xl overflow-hidden text-xs font-sans">
-      {/* Mobile Top Drag Handle Bar */}
-      <div className="sm:hidden w-full pt-2.5 pb-1 flex justify-center bg-[#F5EFDF]">
-        <div className="w-12 h-1 rounded-full bg-[#c8bead]" />
-      </div>
-
-      {/* Sidebar Header */}
-      <div className="p-3 sm:p-4 bg-[#F5EFDF] border-b border-[#DCD5C4] flex items-center justify-between">
+    <div className="flex flex-col h-full bg-[#fdfbf7] border border-[#dcd5c4] rounded-t-2xl sm:rounded-xl overflow-hidden text-xs font-sans">
+      <div className="p-4 bg-[#efe9df] border-b border-[#dcd5c4] flex items-center justify-between">
         <div>
-          <h4 className="font-serif font-bold text-sm text-[#232323]">Question Palette</h4>
-          <p className="text-[11px] text-[#786f63]">Click any question number to jump directly</p>
+          <h4 className="font-serif font-medium text-sm text-[#1f1b16]">Question palette</h4>
+          <p className="text-[11px] text-[#5e554a]">Select a number to jump directly</p>
         </div>
         <button
           type="button"
           onClick={() => setIsOpenMobile(false)}
-          className="sm:hidden p-1.5 rounded-lg bg-white border border-[#DCD5C4] text-gray-600"
+          className="sm:hidden p-1.5 rounded-md bg-[#fdfbf7] border border-[#dcd5c4] text-[#5e554a]"
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4" strokeWidth={1.5} />
         </button>
       </div>
 
-      {/* CBT Legend Box */}
-      <div className="p-3 sm:p-4 bg-[#FAF7F0] border-b border-[#DCD5C4] space-y-2.5">
-        <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-[#3c3730]">
-          {/* Not Visited */}
+      {/* Legend */}
+      <div className="p-4 bg-[#f7f4ee] border-b border-[#dcd5c4] space-y-2 font-mono tabular-nums text-[11px] text-[#5e554a]">
+        <div className="grid grid-cols-2 gap-2">
           <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-md bg-gray-100 border border-gray-300 text-gray-700 font-bold flex items-center justify-center shrink-0">
-              {notVisitedCount}
-            </span>
-            <span className="truncate">Not Visited</span>
-          </div>
-
-          {/* Not Answered */}
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-tl-sm rounded-tr-xl rounded-br-sm rounded-bl-xl bg-amber-600 border border-amber-700 text-white font-bold flex items-center justify-center shrink-0">
-              {notAnsweredCount}
-            </span>
-            <span className="truncate">Not Answered</span>
-          </div>
-
-          {/* Answered */}
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-tl-xl rounded-tr-sm rounded-br-xl rounded-bl-sm bg-emerald-600 border border-emerald-700 text-white font-bold flex items-center justify-center shrink-0">
+            <span className="w-6 h-6 rounded-md bg-[#3f6b4a] text-[#fdfbf7] font-medium flex items-center justify-center shrink-0">
               {answeredCount}
             </span>
-            <span className="truncate">Answered</span>
+            <span className="font-sans truncate">Answered</span>
           </div>
 
-          {/* Marked for Review */}
           <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-purple-600 border border-purple-700 text-white font-bold flex items-center justify-center shrink-0">
+            <span className="w-6 h-6 rounded-md bg-[#fdfbf7] border border-[#b8622e] text-[#b8622e] font-medium flex items-center justify-center shrink-0">
+              {notAnsweredCount}
+            </span>
+            <span className="font-sans truncate">Unanswered</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="w-6 h-6 rounded-md bg-[#efe9df] border border-[#8c4a17] text-[#8c4a17] font-medium flex items-center justify-center shrink-0">
               {markedForReviewCount}
             </span>
-            <span className="truncate">Marked Review</span>
+            <span className="font-sans truncate">Marked</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="w-6 h-6 rounded-md bg-[#f7f4ee] border border-[#dcd5c4] text-[#5e554a] font-medium flex items-center justify-center shrink-0">
+              {notVisitedCount}
+            </span>
+            <span className="font-sans truncate">Not visited</span>
           </div>
         </div>
 
-        {/* Answered & Marked for Review (Evaluated) */}
-        <div className="flex items-center gap-2 pt-1 border-t border-[#e8dfcf] text-[11px] font-medium text-[#3c3730]">
-          <span className="w-6 h-6 rounded-full bg-purple-700 border border-purple-800 text-white font-bold flex items-center justify-center shrink-0 relative">
+        <div className="flex items-center gap-2 pt-2 border-t border-[#dcd5c4]">
+          <span className="w-6 h-6 rounded-md bg-[#8c4a17] text-[#fdfbf7] font-medium flex items-center justify-center shrink-0 relative">
             {answeredAndMarkedCount}
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white flex items-center justify-center">
-              <Check className="w-1.5 h-1.5 text-white" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#3f6b4a] border border-[#fdfbf7] flex items-center justify-center">
+              <Check className="w-1.5 h-1.5 text-[#fdfbf7]" strokeWidth={2} />
             </span>
           </span>
-          <span className="leading-tight text-[10.5px]">
-            Answered & Marked for Review <span className="text-emerald-700 font-semibold">(Will be evaluated)</span>
+          <span className="font-sans text-[11px] text-[#5e554a]">
+            Answered and marked (evaluated)
           </span>
         </div>
       </div>
 
-      {/* Numbered Question Grid */}
-      <div className="flex-1 p-3 sm:p-4 overflow-y-auto max-h-[360px] sm:max-h-none">
-        <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
+      {/* Numbered Grid */}
+      <div className="flex-1 p-4 overflow-y-auto max-h-[340px] sm:max-h-none">
+        <div className="grid grid-cols-5 gap-2">
           {questions.map((q, idx) => {
             const isCurrent = idx === currentIndex;
             const status = questionStatuses[q.id] || (isCurrent ? 'not_answered' : 'not_visited');
             const hasAns = answers[q.id] !== undefined && answers[q.id] !== null && answers[q.id] !== '';
-
             const style = getStatusStyle(status, hasAns, isCurrent);
 
             return (
@@ -169,15 +149,15 @@ export default function QuestionPaletteSidebar({
                   onSelectQuestion(idx);
                   setIsOpenMobile(false);
                 }}
-                className={`w-9 h-9 sm:w-10 sm:h-10 text-xs font-bold font-mono transition-all flex items-center justify-center border shadow-xs ${style.bg} ${style.shape} ${
-                  isCurrent ? 'ring-2 ring-offset-1 ring-[#8c4a17] scale-105 z-10' : ''
+                className={`h-9 rounded-md text-xs font-mono tabular-nums font-medium transition-calm flex items-center justify-center border relative ${style.bg} ${
+                  isCurrent ? 'ring-2 ring-offset-1 ring-[#1f1b16]' : ''
                 }`}
-                title={`Question ${idx + 1}: ${status.replace(/_/g, ' ')}`}
+                title={`Question ${idx + 1}`}
               >
-                {String(idx + 1).padStart(2, '0')}
+                {idx + 1}
                 {style.badge && (
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border border-white flex items-center justify-center">
-                    <Check className="w-2 h-2 text-white" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#3f6b4a] border border-[#fdfbf7] flex items-center justify-center">
+                    <Check className="w-2 h-2 text-[#fdfbf7]" strokeWidth={2} />
                   </span>
                 )}
               </button>
@@ -186,14 +166,13 @@ export default function QuestionPaletteSidebar({
         </div>
       </div>
 
-      {/* Submit Exam Button Footer */}
-      <div className="p-3 sm:p-4 bg-[#F5EFDF] border-t border-[#DCD5C4]">
+      <div className="p-4 bg-[#efe9df] border-t border-[#dcd5c4]">
         <button
           type="button"
           onClick={onSubmitExam}
-          className="w-full py-2.5 sm:py-3 rounded-xl bg-[#232323] hover:bg-[#3a3a3a] text-white font-serif font-bold text-xs sm:text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+          className="w-full h-10 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center"
         >
-          <span>Submit Examination</span>
+          <span>Review and submit paper</span>
         </button>
       </div>
     </div>
@@ -201,48 +180,33 @@ export default function QuestionPaletteSidebar({
 
   return (
     <>
-      {/* Mobile Drawer Trigger Bar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-white border-t border-[#DCD5C4] z-40 flex items-center justify-between shadow-lg">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-[#fdfbf7] border-t border-[#dcd5c4] z-40 flex items-center justify-between">
         <button
           type="button"
           onClick={() => setIsOpenMobile(true)}
-          className="flex items-center gap-2 text-xs font-bold text-[#232323] bg-[#FAF7F0] border border-[#DCD5C4] px-3 py-2 rounded-xl"
+          className="flex items-center gap-2 text-xs font-medium text-[#1f1b16] bg-[#efe9df] border border-[#dcd5c4] px-3 h-9 rounded-lg tabular-nums"
         >
-          <LayoutGrid className="w-4 h-4 text-[#8c4a17]" />
-          <span>Question Palette ({answeredCount + answeredAndMarkedCount}/{totalQuestions})</span>
+          <LayoutGrid className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
+          <span>Palette ({answeredCount + answeredAndMarkedCount}/{totalQuestions})</span>
         </button>
         <button
           type="button"
           onClick={onSubmitExam}
-          className="px-4 py-2 bg-[#232323] text-white rounded-xl text-xs font-bold font-serif"
+          className="px-4 h-9 bg-[#1f1b16] text-[#fdfbf7] rounded-lg text-xs font-medium"
         >
-          Submit Test
+          Submit paper
         </button>
       </div>
 
-      {/* Mobile Overlay Modal */}
-      <AnimatePresence>
-        {isOpenMobile && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-end justify-center p-2 sm:hidden"
-          >
-            <motion.div
-              initial={{ y: 100 }}
-              animate={{ y: 0 }}
-              exit={{ y: 100 }}
-              className="w-full max-h-[85vh] h-full"
-            >
-              {paletteContent}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isOpenMobile && (
+        <div className="fixed inset-0 bg-[#161513]/60 z-50 flex items-end justify-center p-2 sm:hidden">
+          <div className="w-full max-h-[82vh] h-full">
+            {paletteContent}
+          </div>
+        </div>
+      )}
 
-      {/* Desktop Sidebar (Fixed Right Column) */}
-      <aside className="hidden sm:block w-72 shrink-0 sticky top-6 self-start">
+      <aside className="hidden sm:block w-68 shrink-0 sticky top-6 self-start">
         {paletteContent}
       </aside>
     </>
