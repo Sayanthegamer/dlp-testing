@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase, isConfigured } = require('../services/supabaseClient');
-const { getTeacherAccessCode, safeCompareStrings } = require('../services/authService');
+const { getTeacherAccessCode, isValidTeacherAccessCode, safeCompareStrings } = require('../services/authService');
 
 /**
  * POST /api/auth/signup
@@ -14,7 +14,7 @@ router.post('/signup', async (req, res) => {
     return res.status(400).json({ error: 'Email, password, and access code are required.' });
   }
 
-  if (!safeCompareStrings(accessCode, getTeacherAccessCode())) {
+  if (!isValidTeacherAccessCode(accessCode)) {
     return res.status(401).json({ error: 'Invalid access code.' });
   }
 
@@ -82,7 +82,7 @@ async function handleTeacherLogin(req, res) {
 
   if (!isConfigured()) {
     if (
-      safeCompareStrings(password, getTeacherAccessCode()) ||
+      isValidTeacherAccessCode(password) ||
       safeCompareStrings(password, 'teacher123') ||
       safeCompareStrings(password, 'admin')
     ) {

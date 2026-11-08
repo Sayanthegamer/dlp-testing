@@ -1,8 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../index';
+import { isValidTeacherAccessCode } from '../services/authService';
 
 describe('Teacher Auth API Integration', () => {
+  describe('isValidTeacherAccessCode unit validation', () => {
+    it('should accept TEACHER_ACCESS_CODE', () => {
+      process.env.TEACHER_ACCESS_CODE = 'my_custom_teacher_code';
+      expect(isValidTeacherAccessCode('my_custom_teacher_code')).toBe(true);
+    });
+
+    it('should accept APP_PASSWORD even when TEACHER_ACCESS_CODE is different', () => {
+      process.env.TEACHER_ACCESS_CODE = 'code_A';
+      process.env.APP_PASSWORD = 'code_B';
+      expect(isValidTeacherAccessCode('code_B')).toBe(true);
+      expect(isValidTeacherAccessCode('code_A')).toBe(true);
+    });
+
+    it('should reject random strings or Supabase secret keys', () => {
+      process.env.TEACHER_ACCESS_CODE = 'correct_code';
+      expect(isValidTeacherAccessCode('sb_secret_supabase_admin_key_12345')).toBe(false);
+      expect(isValidTeacherAccessCode('wrong')).toBe(false);
+      expect(isValidTeacherAccessCode('')).toBe(false);
+    });
+  });
+
   it('should handle login teacher with email and password', async () => {
     const res = await request(app)
       .post('/api/auth/login')

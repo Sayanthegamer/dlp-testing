@@ -15,6 +15,21 @@ function safeCompareStrings(inputStr, expectedStr) {
 }
 
 /**
+ * Validates whether the given string matches any valid teacher access code
+ * (checks TEACHER_ACCESS_CODE, APP_PASSWORD, and the local default fallback).
+ */
+function isValidTeacherAccessCode(inputStr) {
+  if (!inputStr) return false;
+  const candidates = [
+    process.env.TEACHER_ACCESS_CODE,
+    process.env.APP_PASSWORD,
+    'dlp_teacher_secret_passcode_2026',
+  ].filter(Boolean);
+
+  return candidates.some(expected => safeCompareStrings(inputStr, expected));
+}
+
+/**
  * Secure Teacher Authorization verification helper.
  * Validates request Bearer JWT token against Supabase Auth, or x-app-password / dev tokens in local mode.
  */
@@ -29,7 +44,7 @@ async function verifyTeacherAuth(req) {
   if (
     cleanHeader === 'legacy-app-password-token' ||
     cleanHeader === 'dev-fallback-token' ||
-    safeCompareStrings(cleanHeader, getTeacherAccessCode())
+    isValidTeacherAccessCode(cleanHeader)
   ) {
     req.user = { id: 'local-dev-user' };
     req.accessToken = cleanHeader;
@@ -53,4 +68,10 @@ async function verifyTeacherAuth(req) {
   return false;
 }
 
-module.exports = { verifyTeacherAuth, getTeacherAccessCode, safeCompareStrings, TEACHER_ACCESS_CODE };
+module.exports = {
+  verifyTeacherAuth,
+  getTeacherAccessCode,
+  isValidTeacherAccessCode,
+  safeCompareStrings,
+  TEACHER_ACCESS_CODE,
+};

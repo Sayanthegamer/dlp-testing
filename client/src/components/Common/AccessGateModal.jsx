@@ -152,18 +152,22 @@ export default function AccessGateModal({ onAuthenticated }) {
 
           {authMode === 'signup' && (
             <div>
-              <label className="block text-xs font-medium text-[#5e554a] mb-1.5">Access code</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-[#5e554a]">Teacher access code</label>
+                <span className="text-[10px] text-[#7b7266]">From Vercel / .env</span>
+              </div>
               <div className="relative">
                 <input
                   type="password"
                   value={accessCode}
                   onChange={(e) => setAccessCode(e.target.value)}
-                  placeholder="Shared teacher passcode"
+                  placeholder="TEACHER_ACCESS_CODE"
                   required
                   className="w-full pl-9 pr-3.5 h-10 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                 />
                 <ShieldCheck className="w-4 h-4 text-[#7b7266] absolute left-3 top-3" strokeWidth={1.5} />
               </div>
+              <p className="text-[10px] text-[#7b7266] mt-1">Enter your institution passcode (TEACHER_ACCESS_CODE or APP_PASSWORD), not your Supabase API key.</p>
             </div>
           )}
 
