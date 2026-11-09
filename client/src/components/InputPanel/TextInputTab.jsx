@@ -25,9 +25,9 @@ export default function TextInputTab({ onSubmitText, isLoading, onLoadDocxSample
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-[#5e554a] mb-1.5 flex items-center justify-between">
+          <label className="block text-xs font-medium text-[#5e554a] mb-1.5 flex flex-wrap items-center justify-between gap-1">
             <span>Informal math text</span>
-            <span className="text-xs text-[#7b7266]">Plain English converted to typeset math</span>
+            <span className="text-[11px] sm:text-xs text-[#7b7266]">Plain English converted to typeset math</span>
           </label>
 
           <textarea

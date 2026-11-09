@@ -67,23 +67,23 @@ export default function WelcomeRoleGate({
       </header>
 
       {/* Main Role Chooser Cards */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-10 sm:py-14 flex flex-col justify-center">
-        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12 space-y-3">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-12 flex flex-col justify-center">
+        <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-12 space-y-2.5">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#efe9df] border border-[#dcd5c4] text-[#8c4a17] text-xs font-medium">
             <Sparkles className="w-3.5 h-3.5" strokeWidth={1.5} />
             <span>Welcome to the Examination Platform</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-serif font-medium text-[#1f1b16] tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-serif font-medium text-[#1f1b16] tracking-tight">
             Select your portal to begin
           </h1>
-          <p className="text-sm text-[#5e554a]">
+          <p className="text-xs sm:text-sm text-[#5e554a]">
             Unified assessment ecosystem designed for precision math typesetting, verified LaTeX formulas, and frictionless student evaluations.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-4xl mx-auto w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8 max-w-4xl mx-auto w-full">
           {/* Card 1: Student / Candidate */}
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col justify-between transition-calm hover:shadow-md hover:border-[#bdae97]">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-8 shadow-sm flex flex-col justify-between transition-calm hover:shadow-md hover:border-[#bdae97]">
             <div className="space-y-6">
               <div className="flex items-start justify-between">
                 <div className="w-12 h-12 rounded-xl bg-[#eef3f0] border border-[#cbe0d3] text-[#2b5a38] flex items-center justify-center shadow-2xs">
@@ -153,7 +153,7 @@ export default function WelcomeRoleGate({
 
             {/* Action buttons */}
             <div className="pt-6 mt-6 border-t border-[#dcd5c4] space-y-2.5">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => onSelectStudent({ tab: 'login' })}
@@ -186,7 +186,7 @@ export default function WelcomeRoleGate({
           </div>
 
           {/* Card 2: Teacher / Instructor */}
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col justify-between transition-calm hover:shadow-md hover:border-[#bdae97]">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-8 shadow-sm flex flex-col justify-between transition-calm hover:shadow-md hover:border-[#bdae97]">
             <div className="space-y-6">
               <div className="flex items-start justify-between">
                 <div className="w-12 h-12 rounded-xl bg-[#f8efe6] border border-[#e8d2be] text-[#8c4a17] flex items-center justify-center shadow-2xs">
@@ -241,7 +241,7 @@ export default function WelcomeRoleGate({
 
             {/* Action buttons */}
             <div className="pt-6 mt-6 border-t border-[#dcd5c4] space-y-2.5">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => onSelectTeacher({ mode: 'login' })}

@@ -29,6 +29,12 @@
     background-color: #f7f4ee;
     color: #1f1b16;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button, input, select, textarea {
+    touch-action: manipulation;
   }
 
   * {
@@ -37,6 +43,7 @@
 
   html {
     @apply font-sans;
+    overflow-x: hidden;
   }
 }
 
@@ -52,10 +59,27 @@
   border-bottom: 3px double #dcd5c4;
 }
 
-/* KaTeX inline overrides for calm reading */
+/* KaTeX inline overrides and mobile overflow immunity */
 .katex {
   font-size: 1.04em !important;
   color: inherit;
+  max-width: 100%;
+}
+
+.katex-html {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  scrollbar-width: thin;
+}
+
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+  scrollbar-width: thin;
 }
 
 /* Tabular figures for all numbers, timers, passcodes, and scores */

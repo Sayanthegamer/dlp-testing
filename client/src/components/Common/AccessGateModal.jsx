@@ -60,8 +60,8 @@ export default function AccessGateModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#161513] flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full mb-3 flex items-center justify-between text-xs">
+    <div className="fixed inset-0 z-50 bg-[#161513] flex flex-col items-center justify-center p-4 overflow-y-auto py-6 sm:py-8">
+      <div className="max-w-md w-full mb-3 flex items-center justify-between text-xs my-auto">
         {onBackToPortalChooser && (
           <button
             type="button"
@@ -84,7 +84,7 @@ export default function AccessGateModal({
         )}
       </div>
 
-      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-md w-full space-y-6">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-8 max-w-md w-full space-y-6 my-auto">
         <div className="space-y-2">
           <div className="w-10 h-10 rounded-lg bg-[#1f1b16] text-[#fdfbf7] flex items-center justify-center">
             <Lock className="w-5 h-5" strokeWidth={1.5} />

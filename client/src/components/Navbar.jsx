@@ -177,7 +177,7 @@ export default function Navbar({
       </header>
 
       {/* Mobile Bottom Action Bar (< sm) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#fdfbf7] border-t border-[#dcd5c4] px-3 py-2 flex items-center justify-around font-sans print:hidden">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#fdfbf7] border-t border-[#dcd5c4] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around font-sans print:hidden shadow-lg">
         <button
           type="button"
           onClick={onScrollToInput}

@@ -283,9 +283,9 @@ export default function StudentRosterTab() {
   return (
     <div className="space-y-6">
       {/* Top Roster Header & Permanent Class Code / Invite Link */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 print:hidden">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-4 sm:p-6 print:hidden">
         <div className="space-y-1">
-          <div className="flex items-center gap-2.5 font-serif font-medium text-xl text-[#1f1b16]">
+          <div className="flex items-center gap-2.5 font-serif font-medium text-lg sm:text-xl text-[#1f1b16]">
             <Users className="w-5 h-5 text-[#5e554a]" strokeWidth={1.5} />
             <h2>Student roster, dossiers, and classroom codes</h2>
           </div>
@@ -295,8 +295,8 @@ export default function StudentRosterTab() {
         </div>
 
         {/* Permanent Classroom Code & 1-Click Invite Link */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg px-4 py-2 flex items-center gap-3 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+          <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg px-3.5 sm:px-4 py-2 flex items-center gap-3 shadow-2xs">
             <div>
               <div className="flex items-center gap-1 text-[11px] text-[#5e554a]">
                 <KeyRound className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
@@ -328,11 +328,11 @@ export default function StudentRosterTab() {
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setShowClaimModal(true)}
-            className="px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
+            className="flex-1 sm:flex-none px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center justify-center gap-1.5"
           >
             <UserCheck className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
             <span>Add by Roll No.</span>
@@ -344,7 +344,7 @@ export default function StudentRosterTab() {
               setAdmNum(generateAdmissionNumber());
               setShowAddModal(true);
             }}
-            className="px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
+            className="flex-1 sm:flex-none px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center justify-center gap-1.5"
           >
             <UserPlus className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
             <span>Enroll student</span>
@@ -357,7 +357,7 @@ export default function StudentRosterTab() {
               setShowPrintModal(true);
             }}
             disabled={roster.length === 0}
-            className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm flex items-center gap-1.5 disabled:opacity-50"
+            className="w-full sm:w-auto px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] text-xs font-medium transition-calm flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             <Printer className="w-4 h-4" strokeWidth={1.5} />
             <span className="tabular-nums">Print admit cards ({roster.length})</span>
@@ -365,8 +365,8 @@ export default function StudentRosterTab() {
         </div>
       </div>
 
-      {/* Roster Table */}
-      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 space-y-4 font-sans print:hidden">
+      {/* Roster Table & Mobile Card List */}
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-4 sm:p-6 space-y-4 font-sans print:hidden">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="relative max-w-xs w-full">
             <input
@@ -400,68 +400,120 @@ export default function StudentRosterTab() {
             <p className="text-xs text-[#5e554a]">Click Enroll student to register candidates and print QR hall tickets</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-[#dcd5c4] text-[#5e554a] font-medium">
-                  <th className="pb-3 px-3 w-12">#</th>
-                  <th className="pb-3 px-3">Roll number</th>
-                  <th className="pb-3 px-3">Candidate name</th>
-                  <th className="pb-3 px-3">Date of birth</th>
-                  <th className="pb-3 px-3">Enrolled</th>
-                  <th className="pb-3 px-3 text-right">Dossier &amp; admit card</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#efe9df]">
-                {filteredRoster.map((st, idx) => (
-                  <tr key={st.id || idx} className="hover:bg-[#f7f4ee] transition-calm">
-                    <td className="py-3 px-3 font-mono tabular-nums text-[#7b7266]">
-                      {idx + 1}
-                    </td>
-                    <td className="py-3 px-3 font-mono tabular-nums font-medium text-[#1f1b16]">
-                      {st.admission_number || st.admissionNumber}
-                    </td>
-                    <td className="py-3 px-3 font-serif font-medium text-sm text-[#1f1b16]">
+          <>
+            {/* Mobile Cards View (< md) */}
+            <div className="md:hidden divide-y divide-[#efe9df]">
+              {filteredRoster.map((st, idx) => (
+                <div key={st.id || idx} className="py-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
                       <button
                         type="button"
                         onClick={() => handleOpenDossier(st)}
-                        className="hover:text-[#8c4a17] hover:underline text-left"
+                        className="font-serif font-medium text-base text-[#1f1b16] hover:text-[#8c4a17] hover:underline text-left block"
                       >
                         {st.full_name || st.fullName}
                       </button>
-                    </td>
-                    <td className="py-3 px-3 font-mono tabular-nums text-[#5e554a]">
-                      {st.dob}
-                    </td>
-                    <td className="py-3 px-3 text-[#7b7266] font-mono tabular-nums">
-                      {st.created_at ? new Date(st.created_at).toLocaleDateString() : 'Active'}
-                    </td>
-                    <td className="py-3 px-3 text-right space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDossier(st)}
-                        className="px-3 h-7 rounded-md bg-[#f7f4ee] border border-[#dcd5c4] hover:border-[#8c4a17] text-[#1f1b16] text-xs font-medium transition-calm inline-flex items-center gap-1.5"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
-                        <span>Dossier</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedPrintRoster([st]);
-                          setShowPrintModal(true);
-                        }}
-                        className="px-3 h-7 rounded-md bg-[#efe9df] hover:bg-[#1f1b16] text-[#1f1b16] hover:text-[#fdfbf7] text-xs font-medium transition-calm inline-flex items-center gap-1.5"
-                      >
-                        <Printer className="w-3.5 h-3.5" strokeWidth={1.5} />
-                        <span>Hall ticket</span>
-                      </button>
-                    </td>
+                      <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-[#5e554a] mt-0.5">
+                        <span className="font-medium text-[#1f1b16]">{st.admission_number || st.admissionNumber}</span>
+                        <span>•</span>
+                        <span>DOB: {st.dob}</span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono text-[#7b7266] tabular-nums shrink-0">
+                      #{idx + 1}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDossier(st)}
+                      className="flex-1 h-8 rounded-lg bg-[#f7f4ee] border border-[#dcd5c4] hover:border-[#8c4a17] text-[#1f1b16] text-xs font-medium transition-calm inline-flex items-center justify-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
+                      <span>Dossier</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPrintRoster([st]);
+                        setShowPrintModal(true);
+                      }}
+                      className="flex-1 h-8 rounded-lg bg-[#efe9df] hover:bg-[#1f1b16] text-[#1f1b16] hover:text-[#fdfbf7] text-xs font-medium transition-calm inline-flex items-center justify-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      <span>Hall ticket</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[#dcd5c4] text-[#5e554a] font-medium">
+                    <th className="pb-3 px-3 w-12">#</th>
+                    <th className="pb-3 px-3">Roll number</th>
+                    <th className="pb-3 px-3">Candidate name</th>
+                    <th className="pb-3 px-3">Date of birth</th>
+                    <th className="pb-3 px-3">Enrolled</th>
+                    <th className="pb-3 px-3 text-right">Dossier &amp; admit card</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#efe9df]">
+                  {filteredRoster.map((st, idx) => (
+                    <tr key={st.id || idx} className="hover:bg-[#f7f4ee] transition-calm">
+                      <td className="py-3 px-3 font-mono tabular-nums text-[#7b7266]">
+                        {idx + 1}
+                      </td>
+                      <td className="py-3 px-3 font-mono tabular-nums font-medium text-[#1f1b16]">
+                        {st.admission_number || st.admissionNumber}
+                      </td>
+                      <td className="py-3 px-3 font-serif font-medium text-sm text-[#1f1b16]">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDossier(st)}
+                          className="hover:text-[#8c4a17] hover:underline text-left"
+                        >
+                          {st.full_name || st.fullName}
+                        </button>
+                      </td>
+                      <td className="py-3 px-3 font-mono tabular-nums text-[#5e554a]">
+                        {st.dob}
+                      </td>
+                      <td className="py-3 px-3 text-[#7b7266] font-mono tabular-nums">
+                        {st.created_at ? new Date(st.created_at).toLocaleDateString() : 'Active'}
+                      </td>
+                      <td className="py-3 px-3 text-right space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDossier(st)}
+                          className="px-3 h-7 rounded-md bg-[#f7f4ee] border border-[#dcd5c4] hover:border-[#8c4a17] text-[#1f1b16] text-xs font-medium transition-calm inline-flex items-center gap-1.5"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
+                          <span>Dossier</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPrintRoster([st]);
+                            setShowPrintModal(true);
+                          }}
+                          className="px-3 h-7 rounded-md bg-[#efe9df] hover:bg-[#1f1b16] text-[#1f1b16] hover:text-[#fdfbf7] text-xs font-medium transition-calm inline-flex items-center gap-1.5"
+                        >
+                          <Printer className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          <span>Hall ticket</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

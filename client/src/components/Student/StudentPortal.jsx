@@ -158,7 +158,7 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
     <div className="min-h-screen bg-[#f7f4ee] text-[#1f1b16] p-4 sm:p-6 font-sans">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Candidate Header Card */}
-        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-[#1f1b16] text-[#fdfbf7] flex items-center justify-center font-serif font-medium text-lg shrink-0">
               {student.full_name ? student.full_name.charAt(0).toUpperCase() : 'C'}
@@ -406,8 +406,8 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
 
       {/* Digital QR Hall Ticket Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-sm w-full shadow-xl text-center space-y-5">
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto py-6 sm:py-8">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-sm w-full shadow-xl text-center space-y-5 my-auto">
             <div className="exam-rule-double pb-3">
               <span className="text-xs text-[#5e554a] block">Distance Learning Assessment</span>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16] mt-0.5">Candidate Hall Ticket</h3>
@@ -436,8 +436,8 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
 
       {/* Join Classroom Modal */}
       {showLinkModal && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto py-6 sm:py-8">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans my-auto">
             <div>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
                 Join Instructor Classroom

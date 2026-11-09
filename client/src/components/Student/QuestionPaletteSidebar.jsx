@@ -180,7 +180,7 @@ export default function QuestionPaletteSidebar({
 
   return (
     <>
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-[#fdfbf7] border-t border-[#dcd5c4] z-40 flex items-center justify-between">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[#fdfbf7] border-t border-[#dcd5c4] z-40 flex items-center justify-between shadow-lg">
         <button
           type="button"
           onClick={() => setIsOpenMobile(true)}

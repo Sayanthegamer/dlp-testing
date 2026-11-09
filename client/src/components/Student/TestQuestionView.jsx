@@ -253,9 +253,9 @@ export default function TestQuestionView({
             </div>
 
             {/* Question Paper Sheet */}
-            <div className="exam-paper rounded-xl p-6 sm:p-8 space-y-6">
+            <div className="exam-paper rounded-xl p-4 sm:p-8 space-y-5 sm:space-y-6">
               {question.passageText && (
-                <div className="p-4 rounded-lg bg-[#f7f4ee] border border-[#dcd5c4] space-y-1.5">
+                <div className="p-3.5 sm:p-4 rounded-lg bg-[#f7f4ee] border border-[#dcd5c4] space-y-1.5">
                   <div className="flex items-center gap-2 font-serif font-medium text-xs text-[#5e554a]">
                     <BookOpen className="w-3.5 h-3.5 text-[#7b7266] shrink-0" strokeWidth={1.5} />
                     <span>{question.passageTitle || 'Comprehension passage'}</span>
@@ -267,12 +267,12 @@ export default function TestQuestionView({
               )}
 
               {/* Question Stem with Left Margin Q# */}
-              <div className="flex items-start gap-4">
-                <span className="font-serif font-medium text-xl text-[#1f1b16] tabular-nums shrink-0 pt-0.5">
+              <div className="flex items-start gap-2.5 sm:gap-4">
+                <span className="font-serif font-medium text-lg sm:text-xl text-[#1f1b16] tabular-nums shrink-0 pt-0.5">
                   Q{currentIndex + 1}.
                 </span>
-                <div className="flex-1 space-y-3">
-                  <div className="font-serif text-lg sm:text-xl text-[#1f1b16] leading-relaxed">
+                <div className="flex-1 space-y-3 min-w-0">
+                  <div className="font-serif text-base sm:text-xl text-[#1f1b16] leading-relaxed">
                     <MathRenderer text={questionText} readOnly={true} />
                   </div>
                   <DiagramBlock diagrams={question.diagrams} diagramImages={question.diagramImages} />
@@ -281,7 +281,7 @@ export default function TestQuestionView({
 
               {/* MCQ / Match the Following Options */}
               {(type === 'mcq' || type === 'match_following') && (
-                <div className="space-y-3 pt-2 pl-0 sm:pl-10">
+                <div className="space-y-3 pt-2 pl-0 sm:pl-9">
                   <span className="text-xs font-medium text-[#5e554a] block">
                     Select one option
                   </span>
@@ -375,40 +375,40 @@ export default function TestQuestionView({
                 type="button"
                 onClick={handleSaveAndNext}
                 disabled={cheatingFlagged}
-                className="px-3 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                className="px-2 sm:px-3 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-sans font-medium text-[11px] sm:text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span>Save and next</span>
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
+                <span className="truncate">Save &amp; next</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleClearResponse}
                 disabled={cheatingFlagged || !hasAnswer}
-                className="px-3 h-9 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] hover:bg-[#efe9df] disabled:opacity-40 text-[#1f1b16] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                className="px-2 sm:px-3 h-9 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] hover:bg-[#efe9df] disabled:opacity-40 text-[#1f1b16] font-sans font-medium text-[11px] sm:text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
-                <span>Clear response</span>
+                <RotateCcw className="w-3.5 h-3.5 text-[#7b7266] shrink-0" strokeWidth={1.5} />
+                <span className="truncate">Clear</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleMarkForReviewAndNext}
                 disabled={cheatingFlagged}
-                className="px-3 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                className="px-2 sm:px-3 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] font-sans font-medium text-[11px] sm:text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
               >
-                <Bookmark className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
-                <span>Mark and next</span>
+                <Bookmark className="w-3.5 h-3.5 text-[#8c4a17] shrink-0" strokeWidth={1.5} />
+                <span className="truncate">Mark &amp; next</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSaveAndMarkForReview}
                 disabled={cheatingFlagged}
-                className="px-3 h-9 rounded-lg bg-[#efe9df] border border-[#8c4a17] hover:bg-[#e5dec9] text-[#8c4a17] font-sans font-medium text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                className="px-2 sm:px-3 h-9 rounded-lg bg-[#efe9df] border border-[#8c4a17] hover:bg-[#e5dec9] text-[#8c4a17] font-sans font-medium text-[11px] sm:text-xs transition-calm active:scale-[0.98] flex items-center justify-center gap-1.5"
               >
-                <Bookmark className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span>Save and mark</span>
+                <Bookmark className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
+                <span className="truncate">Save &amp; mark</span>
               </button>
             </div>
 
