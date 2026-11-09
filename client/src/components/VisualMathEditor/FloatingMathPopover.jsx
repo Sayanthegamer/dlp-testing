@@ -40,8 +40,8 @@ export default function FloatingMathPopover({ activeMath, onSave, onClose }) {
   const cleanPreview = (previewLatex || '').replace(/<\/?math>/gi, '').trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#161513]/60 overflow-y-auto">
-      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-6 max-w-lg w-full space-y-4 relative shadow-lg my-auto max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#161513]/60 overflow-y-auto modal-backdrop-animated">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-6 max-w-lg w-full space-y-4 relative shadow-lg my-auto max-h-[92vh] overflow-y-auto popover-animated">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#dcd5c4] pb-3">
           <div className="flex items-center gap-2.5">

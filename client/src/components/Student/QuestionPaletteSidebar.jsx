@@ -199,8 +199,8 @@ export default function QuestionPaletteSidebar({
       </div>
 
       {isOpenMobile && (
-        <div className="fixed inset-0 bg-[#161513]/60 z-50 flex items-end justify-center p-2 sm:hidden">
-          <div className="w-full max-h-[82vh] h-full">
+        <div className="fixed inset-0 bg-[#161513]/60 z-50 flex items-end justify-center p-2 sm:hidden modal-backdrop-animated">
+          <div className="w-full max-h-[82vh] h-full modal-card-animated">
             {paletteContent}
           </div>
         </div>

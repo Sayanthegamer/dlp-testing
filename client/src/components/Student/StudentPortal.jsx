@@ -406,8 +406,8 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
 
       {/* Digital QR Hall Ticket Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto py-6 sm:py-8">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-sm w-full shadow-xl text-center space-y-5 my-auto">
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto py-6 sm:py-8 modal-backdrop-animated">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-sm w-full shadow-xl text-center space-y-5 my-auto modal-card-animated">
             <div className="exam-rule-double pb-3">
               <span className="text-xs text-[#5e554a] block">Distance Learning Assessment</span>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16] mt-0.5">Candidate Hall Ticket</h3>
@@ -436,8 +436,8 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
 
       {/* Join Classroom Modal */}
       {showLinkModal && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto py-6 sm:py-8">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans my-auto">
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto py-6 sm:py-8 modal-backdrop-animated">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans my-auto modal-card-animated">
             <div>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
                 Join Instructor Classroom

@@ -251,8 +251,8 @@ export default function DiagramAdjustModal({ question, onUpdateQuestion, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#161513]/75 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 bg-[#161513]/75 flex items-center justify-center p-3 sm:p-4 overflow-y-auto modal-backdrop-animated">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden my-auto modal-card-animated">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#dcd5c4] px-5 py-4 shrink-0 bg-[#fdfbf7]">
           <div className="flex items-center gap-3">

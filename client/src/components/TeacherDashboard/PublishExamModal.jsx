@@ -84,8 +84,8 @@ export default function PublishExamModal({ examId, testTitle, questionsCount, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#161513]/60 overflow-y-auto">
-      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-xl space-y-5 font-sans text-[#1f1b16] my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#161513]/60 overflow-y-auto modal-backdrop-animated">
+      <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl max-w-lg w-full p-5 sm:p-8 shadow-xl space-y-5 font-sans text-[#1f1b16] my-auto modal-card-animated">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-[#dcd5c4] pb-4">
           <div className="flex items-center gap-3">

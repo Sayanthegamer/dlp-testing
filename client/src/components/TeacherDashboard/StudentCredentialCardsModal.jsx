@@ -14,8 +14,8 @@ export default function StudentCredentialCardsModal({ roster = [], onClose }) {
   };
 
   const modalContent = (
-    <div className="credential-cards-portal fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="credential-modal-card bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-5xl w-full shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+    <div className="credential-cards-portal fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto modal-backdrop-animated">
+      <div className="credential-modal-card bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-5xl w-full shadow-xl space-y-6 max-h-[90vh] overflow-y-auto modal-card-animated">
         {/* Controls (Hidden on print) */}
         <div className="modal-controls-bar flex items-center justify-between border-b border-[#dcd5c4] pb-4 print:hidden">
           <div className="flex items-center gap-2.5 font-serif font-medium text-xl text-[#1f1b16]">

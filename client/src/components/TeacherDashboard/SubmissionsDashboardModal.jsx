@@ -115,8 +115,8 @@ export default function SubmissionsDashboardModal({ onClose }) {
   const unreviewedCount = submissions.filter(s => s.status === 'pending_review').length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-[#161513]/60 overflow-y-auto">
-      <div className="bg-[#f7f4ee] border-0 sm:border border-[#dcd5c4] rounded-none sm:rounded-2xl max-w-5xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-xl overflow-hidden font-sans text-[#1f1b16]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-[#161513]/60 overflow-y-auto modal-backdrop-animated">
+      <div className="bg-[#f7f4ee] border-0 sm:border border-[#dcd5c4] rounded-none sm:rounded-2xl max-w-5xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-xl overflow-hidden font-sans text-[#1f1b16] modal-card-animated">
         {/* Header Bar */}
         <div className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-[#dcd5c4] bg-[#fdfbf7] gap-4">
           <div className="flex items-center gap-3">

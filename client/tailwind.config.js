@@ -71,7 +71,11 @@ export default {
         sm: '6px',
       },
       transitionTimingFunction: {
-        'unslop': 'cubic-bezier(0.22, 1, 0.36, 1)',
+        'unslop': 'cubic-bezier(0.23, 1, 0.32, 1)',
+        'ease-out-custom': 'cubic-bezier(0.23, 1, 0.32, 1)',
+        'ease-in-out-custom': 'cubic-bezier(0.77, 0, 0.175, 1)',
+        'ease-drawer': 'cubic-bezier(0.32, 0.72, 0, 1)',
+        'spring-gentle': 'cubic-bezier(0.175, 0.885, 0.32, 1.15)',
       }
     },
   },

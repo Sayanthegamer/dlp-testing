@@ -519,8 +519,8 @@ export default function StudentRosterTab() {
 
       {/* Candidate Academic Dossier Modal */}
       {activeDossier && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/65 flex items-center justify-center p-4 overflow-y-auto print:hidden">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-3xl w-full shadow-xl space-y-6 max-h-[90vh] overflow-y-auto font-sans">
+        <div className="fixed inset-0 z-50 bg-[#161513]/65 flex items-center justify-center p-4 overflow-y-auto print:hidden modal-backdrop-animated">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-3xl w-full shadow-xl space-y-6 max-h-[90vh] overflow-y-auto font-sans modal-card-animated">
             <div className="exam-rule-double pb-4 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b7266] block">
@@ -747,8 +747,8 @@ export default function StudentRosterTab() {
 
       {/* Enroll Student Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto modal-backdrop-animated">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans my-auto modal-card-animated">
             <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
               Enroll candidate profile
             </h3>
@@ -825,8 +825,8 @@ export default function StudentRosterTab() {
 
       {/* Add by Roll No. / Existing Student Modal */}
       {showClaimModal && (
-        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
+        <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4 overflow-y-auto modal-backdrop-animated">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans my-auto modal-card-animated">
             <div>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
                 Add Student to Classroom Roster

@@ -124,7 +124,7 @@ export default function StudentAuthModal({
     : '';
 
   return (
-    <div className="min-h-screen bg-[#f7f4ee] flex flex-col justify-center items-center p-4 overflow-y-auto py-6 sm:py-8 font-sans selection:bg-[#ecdcc9]">
+    <div className="min-h-screen bg-[#f7f4ee] flex flex-col justify-center items-center p-4 overflow-y-auto py-6 sm:py-8 font-sans selection:bg-[#ecdcc9] modal-backdrop-animated">
       <div className="max-w-md w-full space-y-4 my-auto">
         {/* Top Portal Switcher Bar */}
         <div className="flex items-center justify-between text-xs px-1">
@@ -153,7 +153,7 @@ export default function StudentAuthModal({
 
         {/* If registration just completed: display Hall Ticket & permanent Roll Number */}
         {registeredStudent ? (
-          <div className="bg-[#fdfbf7] border border-[#3f6b4a] rounded-2xl p-5 sm:p-8 shadow-sm space-y-6">
+          <div className="bg-[#fdfbf7] border border-[#3f6b4a] rounded-2xl p-5 sm:p-8 shadow-sm space-y-6 modal-card-animated">
             <div className="space-y-2">
               <div className="w-10 h-10 rounded-lg bg-[#f4f8f5] border border-[#cbe0d3] text-[#2b5a38] flex items-center justify-center">
                 <CheckCircle2 className="w-5 h-5" strokeWidth={1.5} />
@@ -208,7 +208,7 @@ export default function StudentAuthModal({
             </button>
           </div>
         ) : (
-          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-8 shadow-sm space-y-6">
+          <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-5 sm:p-8 shadow-sm space-y-6 modal-card-animated">
             <div className="space-y-2">
               <div className="w-10 h-10 rounded-lg bg-[#efe9df] border border-[#dcd5c4] text-[#1f1b16] flex items-center justify-center">
                 <Contact className="w-5 h-5" strokeWidth={1.5} />

@@ -13,8 +13,8 @@ export default function PrintViewModal({ testTitle, questions, onClose }) {
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
   const modalContent = (
-    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-[#161513]/60 overflow-y-auto print:p-0 print:bg-white print:static print:block">
-      <div className="print-modal-container bg-[#fdfbf7] border-0 sm:border border-[#dcd5c4] rounded-none sm:rounded-2xl max-w-4xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-xl overflow-hidden font-sans print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible relative">
+    <div className="print-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-[#161513]/60 overflow-y-auto print:p-0 print:bg-white print:static print:block modal-backdrop-animated">
+      <div className="print-modal-container bg-[#fdfbf7] border-0 sm:border border-[#dcd5c4] rounded-none sm:rounded-2xl max-w-4xl w-full h-dvh sm:h-auto sm:max-h-[90vh] flex flex-col shadow-xl overflow-hidden font-sans print:bg-white print:border-none print:shadow-none print:rounded-none print:max-w-none print:max-h-none print:overflow-visible relative modal-card-animated">
         {/* Sticky Modal Header Bar (Hidden on print) */}
         <div className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 h-14 border-b border-[#dcd5c4] bg-[#efe9df] print:hidden gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
