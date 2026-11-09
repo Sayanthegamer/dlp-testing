@@ -1,10 +1,20 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const { verifyTeacherAuth } = require('../server/services/authService');
 
 const app = express();
+
+// Rate Limiters for Serverless Protection against Bot Floods & Abuse
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many authentication attempts. Please try again after 15 minutes.' }
+});
 
 // CORS — same policy as server/index.js
 const allowedOrigins = [
@@ -59,7 +69,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 2. Safe Mount Helper using literal require callbacks so Vercel's NFT AST tracer bundles the files
+// 2. Apply Anti-Abuse Rate Limiting on Public Authentication Routes
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/teacher-login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
+app.use('/api/student/login', authLimiter);
+app.use('/api/student/signup', authLimiter);
+app.use('/api/student-auth/login', authLimiter);
+app.use('/api/student-auth/signup', authLimiter);
+
+// 3. Safe Mount Helper using literal require callbacks so Vercel's NFT AST tracer bundles the files
 function safeMount(pathPrefix, loadFn, ...middleware) {
   try {
     const router = loadFn();

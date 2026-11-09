@@ -59,7 +59,21 @@ async function handleStudentLogin(req, res) {
 
 async function handleStudentSignup(req, res) {
   try {
-    const { admissionNumber, fullName, dob, teacherCode, classCode } = req.body || {};
+    const { admissionNumber, fullName, dob, teacherCode, classCode, hp_confirm, website, renderedAt } = req.body || {};
+
+    // 1. Invisible Bot Honeypot Trap: Automated bots populate hidden form fields
+    if (hp_confirm || website) {
+      return res.status(400).json({ success: false, error: 'Registration request flagged as automated spam.' });
+    }
+
+    // 2. Automated Rapid-Fire Trap: Submitting registration within < 800ms of form render indicates automated script
+    if (renderedAt && typeof renderedAt === 'number') {
+      const elapsedMs = Date.now() - renderedAt;
+      if (elapsedMs < 800) {
+        return res.status(400).json({ success: false, error: 'Submission rejected: completed suspiciously fast.' });
+      }
+    }
+
     const result = await studentSignup({
       admissionNumber,
       fullName,

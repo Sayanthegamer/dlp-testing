@@ -35,6 +35,8 @@ export default function StudentAuthModal({
   const [loading, setLoading] = useState(false);
   const [registeredStudent, setRegisteredStudent] = useState(null);
   const [copiedRoll, setCopiedRoll] = useState(false);
+  const [renderedAt] = useState(() => Date.now());
+  const [honeypot, setHoneypot] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -95,7 +97,8 @@ export default function StudentAuthModal({
         admissionNumber.trim(),
         fullName.trim(),
         dob,
-        classCode ? classCode.trim() : ''
+        classCode ? classCode.trim() : '',
+        { hp_confirm: honeypot, renderedAt }
       );
       if (res && res.student) {
         setRegisteredStudent(res.student);
@@ -297,6 +300,18 @@ export default function StudentAuthModal({
               </form>
             ) : (
               <form onSubmit={handleSignup} className="space-y-4 text-xs">
+                {/* Anti-Bot Invisible Honeypot Trap */}
+                <div style={{ position: 'absolute', opacity: 0, zIndex: -1, pointerEvents: 'none', height: 0, width: 0, overflow: 'hidden' }} aria-hidden="true">
+                  <input
+                    type="text"
+                    name="hp_confirm"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                  />
+                </div>
+
                 <div>
                   <label className="block font-medium text-[#5e554a] mb-1.5">
                     Full Name <span className="text-[#8c4a17]">*</span>

@@ -333,6 +333,21 @@ async function studentSignup({ admissionNumber, fullName, dob, classCode, teache
     throw new Error('Full Name and Date of Birth are required.');
   }
 
+  const cleanName = String(fullName).trim();
+  if (cleanName.length < 2 || cleanName.length > 70) {
+    throw new Error('Full Name must be between 2 and 70 characters.');
+  }
+  if (/https?:\/\/|www\.|<[^>]*>|telegram|whatsapp|\.ru|\.xyz/i.test(cleanName)) {
+    throw new Error('Invalid name: promotional content and links are prohibited.');
+  }
+
+  const cleanDob = formatDob(dob);
+  const birthYear = parseInt(cleanDob.split('-')[0], 10);
+  const currentYear = new Date().getFullYear();
+  if (isNaN(birthYear) || birthYear < 1940 || birthYear > currentYear - 3) {
+    throw new Error('Please enter a valid Date of Birth.');
+  }
+
   const cleanTeacherInput = (classCode || teacherId || '').trim();
   let resolvedTeacherId = null;
   let resolvedClassCode = null;
@@ -344,14 +359,18 @@ async function studentSignup({ admissionNumber, fullName, dob, classCode, teache
       : `CLASS-${cleanTeacherInput.toUpperCase()}`;
   }
 
+  // Institutional Closed-Registration Mode: if REQUIRE_CLASS_CODE_FOR_SIGNUP is active,
+  // public self-registration without a valid teacher's class code is rejected.
+  const requireClassCode = process.env.REQUIRE_CLASS_CODE_FOR_SIGNUP === 'true';
+  if (requireClassCode && !resolvedTeacherId) {
+    throw new Error('A valid Classroom Code (CLASS-XXXXXX) is required to register.');
+  }
+
   const rawAdm = admissionNumber ? String(admissionNumber).trim() : generateAdmissionNumber();
   let cleanAdm = rawAdm.replace(/[^A-Z0-9_\-]/gi, '').toUpperCase();
   if (!cleanAdm) {
     cleanAdm = generateAdmissionNumber();
   }
-
-  const cleanDob = formatDob(dob);
-  const cleanName = String(fullName).trim();
 
   const newStudent = {
     id: `stu_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,

@@ -356,11 +356,18 @@ export async function loginStudent(admissionNumber, dob) {
   return data;
 }
 
-export async function signupStudent(admissionNumber, fullName, dob, classCode) {
+export async function signupStudent(admissionNumber, fullName, dob, classCode, extra = {}) {
   const response = await fetch('/api/student/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ admissionNumber, fullName, dob, classCode, teacherCode: classCode })
+    body: JSON.stringify({
+      admissionNumber,
+      fullName,
+      dob,
+      classCode,
+      teacherCode: classCode,
+      ...extra
+    })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
