@@ -14,7 +14,10 @@ import {
   Trash2,
   X,
   ShieldAlert,
-  Award
+  Award,
+  Share2,
+  Copy,
+  Check
 } from 'lucide-react';
 import {
   fetchTeacherRoster,
@@ -25,7 +28,8 @@ import {
   teacherAddExistingStudent,
   fetchStudentDossier,
   updateStudentProfile,
-  deleteStudentFromRoster
+  deleteStudentFromRoster,
+  fetchTeacherClassCode
 } from '../../services/apiService';
 import StudentCredentialCardsModal from './StudentCredentialCardsModal';
 import ResultPrintModal from '../Student/ResultPrintModal';
@@ -52,6 +56,9 @@ export default function StudentRosterTab() {
 
   const [teacherRefCode, setTeacherRefCode] = useState('');
   const [codeTimer, setCodeTimer] = useState(300);
+  const [classCode, setClassCode] = useState('CLASS-DEMO26');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const [admNum, setAdmNum] = useState('');
   const [fullName, setFullName] = useState('');
@@ -69,7 +76,34 @@ export default function StudentRosterTab() {
   useEffect(() => {
     loadRoster();
     loadTeacherCode();
+    loadTeacherClassCode();
   }, []);
+
+  const loadTeacherClassCode = async () => {
+    try {
+      const res = await fetchTeacherClassCode();
+      if (res && res.classCode) {
+        setClassCode(res.classCode);
+      }
+    } catch (_) {}
+  };
+
+  const handleCopyClassCode = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(classCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/?mode=student&tab=signup&classCode=${encodeURIComponent(classCode)}`;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -206,7 +240,7 @@ export default function StudentRosterTab() {
   const handleClaimStudent = async (e) => {
     e.preventDefault();
     if (!claimAdmNum.trim() && !claimStudentRefCode.trim()) {
-      setClaimError('Enter an admission number or 5-minute student reference code');
+      setClaimError('Enter a Roll Number, Candidate Name, or 5-minute student code');
       return;
     }
     setClaimError('');
@@ -214,7 +248,11 @@ export default function StudentRosterTab() {
     setClaiming(true);
 
     try {
-      const res = await teacherAddExistingStudent(claimAdmNum.trim(), claimStudentRefCode.trim());
+      const res = await teacherAddExistingStudent(
+        claimAdmNum.trim(),
+        claimStudentRefCode.trim(),
+        claimAdmNum.trim()
+      );
       if (res && res.success) {
         setClaimSuccess(`Added ${res.student.full_name || res.student.admission_number} to your roster`);
         setClaimAdmNum('');
@@ -222,7 +260,7 @@ export default function StudentRosterTab() {
         loadRoster();
       }
     } catch (err) {
-      setClaimError(err.message || 'Invalid admission number or student reference code');
+      setClaimError(err.message || 'No student found matching that Roll Number or Name');
     } finally {
       setClaiming(false);
     }
@@ -244,42 +282,50 @@ export default function StudentRosterTab() {
 
   return (
     <div className="space-y-6">
-      {/* Top Roster Header & Rolling Reference Code */}
+      {/* Top Roster Header & Permanent Class Code / Invite Link */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl p-6 print:hidden">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 font-serif font-medium text-xl text-[#1f1b16]">
             <Users className="w-5 h-5 text-[#5e554a]" strokeWidth={1.5} />
-            <h2>Student roster, dossiers, and admit cards</h2>
+            <h2>Student roster, dossiers, and classroom codes</h2>
           </div>
           <p className="text-xs text-[#5e554a] font-sans">
-            Enroll candidates, inspect academic dossiers, print QR admit cards, or link existing students via 5-minute rolling codes
+            Share your permanent classroom code or invite link, enroll students by Roll No., or print QR admit cards
           </p>
         </div>
 
-        {/* Teacher Rolling Link Code */}
-        <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg px-4 py-2.5 flex items-center gap-4">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-[#5e554a]">
-              <KeyRound className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
-              <span>Teacher link code</span>
+        {/* Permanent Classroom Code & 1-Click Invite Link */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="bg-[#f7f4ee] border border-[#dcd5c4] rounded-lg px-4 py-2 flex items-center gap-3 shadow-2xs">
+            <div>
+              <div className="flex items-center gap-1 text-[11px] text-[#5e554a]">
+                <KeyRound className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
+                <span>Classroom Code</span>
+              </div>
+              <div className="font-mono tabular-nums font-bold text-sm text-[#1f1b16] tracking-wider">
+                {classCode}
+              </div>
             </div>
-            <div className="font-mono tabular-nums font-medium text-base text-[#1f1b16] tracking-wider">
-              {teacherRefCode || 'TCH-••••••'}
-            </div>
-          </div>
-          <div className="text-right border-l border-[#dcd5c4] pl-3">
-            <span className="text-xs font-mono tabular-nums text-[#5e554a] flex items-center justify-end gap-1">
-              <Clock className="w-3 h-3 text-[#7b7266]" strokeWidth={1.5} />
-              {formatSec(codeTimer)}
-            </span>
             <button
               type="button"
-              onClick={handleRegenerateCode}
-              className="text-[11px] font-medium text-[#8c4a17] hover:underline block mt-0.5"
+              onClick={handleCopyClassCode}
+              className="text-xs text-[#8c4a17] hover:underline font-medium flex items-center gap-1 ml-1"
+              title="Copy Classroom Code"
             >
-              Rotate
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-[#2b5a38]" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedCode ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={handleCopyInviteLink}
+            className="px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
+            title="Copy student invite link with class code pre-filled"
+          >
+            {copiedLink ? <Check className="w-4 h-4 text-[#2b5a38]" /> : <Share2 className="w-4 h-4 text-[#8c4a17]" strokeWidth={1.5} />}
+            <span>{copiedLink ? 'Invite Link Copied!' : 'Copy student invite link'}</span>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -289,7 +335,7 @@ export default function StudentRosterTab() {
             className="px-3.5 h-9 rounded-lg bg-[#efe9df] border border-[#dcd5c4] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm flex items-center gap-1.5"
           >
             <UserCheck className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
-            <span>Link existing student</span>
+            <span>Add by Roll No.</span>
           </button>
 
           <button
@@ -725,16 +771,16 @@ export default function StudentRosterTab() {
         </div>
       )}
 
-      {/* Link Existing Student Modal */}
+      {/* Add by Roll No. / Existing Student Modal */}
       {showClaimModal && (
         <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
           <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
             <div>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
-                Link existing student
+                Add Student to Classroom Roster
               </h3>
               <p className="text-xs text-[#5e554a] mt-0.5">
-                Link a registered student to your roster using their admission number and 5-minute reference code
+                Type any candidate's Roll Number (<span className="font-mono">DLP-26-XXXXX</span>) or Full Name to enroll them into your classroom instantly.
               </p>
             </div>
 
@@ -743,26 +789,30 @@ export default function StudentRosterTab() {
 
             <form onSubmit={handleClaimStudent} className="space-y-3 text-xs">
               <div>
-                <label className="block font-medium text-[#5e554a] mb-1">Student admission number</label>
+                <label className="block font-medium text-[#5e554a] mb-1">
+                  Candidate Roll Number or Full Name <span className="text-[#8c4a17]">*</span>
+                </label>
                 <input
                   type="text"
                   value={claimAdmNum}
                   onChange={(e) => setClaimAdmNum(e.target.value.toUpperCase())}
-                  placeholder="DLP-26-8K9P2"
-                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#1f1b16]"
+                  placeholder="DLP-26-XXXXX or Rahul Sharma"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
                   required
+                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="block font-medium text-[#5e554a] mb-1">Student 5-minute reference code</label>
+                <label className="block font-medium text-[#5e554a] mb-1">
+                  5-minute Student Reference Code <span className="text-[10px] text-[#7b7266] font-normal">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   value={claimStudentRefCode}
                   onChange={(e) => setClaimStudentRefCode(e.target.value.toUpperCase())}
-                  placeholder="STU-7X4W9N"
-                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#8c4a17]"
-                  required
+                  placeholder="STU-XXXXXX (Optional)"
+                  className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#8c4a17] focus:outline-none focus:border-[#8c4a17]"
                 />
               </div>
 
@@ -779,7 +829,7 @@ export default function StudentRosterTab() {
                   disabled={claiming}
                   className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium"
                 >
-                  {claiming ? 'Linking' : 'Add to roster'}
+                  {claiming ? 'Adding...' : 'Add to Roster'}
                 </button>
               </div>
             </form>

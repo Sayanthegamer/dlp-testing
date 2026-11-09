@@ -12,6 +12,7 @@ const {
   readSubmissionsLocal,
   writeSubmissionsLocal,
 } = require('../services/localStoreService');
+const { autoEnrollStudentWithExamTeacher } = require('../services/studentAuthService');
 
 /**
  * PUBLIC Student Endpoint: POST /api/submissions
@@ -206,6 +207,14 @@ router.post('/submissions', async (req, res) => {
       if (insertError) {
         return res.status(500).json({ error: `Failed to save submission to Supabase: ${insertError.message}` });
       }
+
+      // Auto-enroll student with exam's teacher
+      const activeStudentId = verifiedStudentId || studentId;
+      if (activeStudentId && targetExamId && !isDevDemo) {
+        try {
+          await autoEnrollStudentWithExamTeacher({ studentId: activeStudentId, examId: targetExamId, source: 'live_exam' });
+        } catch (_) {}
+      }
     } catch (dbErr) {
       return res.status(500).json({ error: `Database error saving submission: ${dbErr.message}` });
     }
@@ -255,6 +264,13 @@ router.post('/submissions', async (req, res) => {
     const list = readSubmissionsLocal();
     list.unshift(submissionObj);
     writeSubmissionsLocal(list);
+
+    // Auto-enroll in local dev mode if examId provided
+    if (studentId && rawExamId && !isDevDemo) {
+      try {
+        await autoEnrollStudentWithExamTeacher({ studentId, examId: rawExamId, source: 'live_exam' });
+      } catch (_) {}
+    }
 
     return res.json({
       success: true,

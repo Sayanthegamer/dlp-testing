@@ -356,11 +356,11 @@ export async function loginStudent(admissionNumber, dob) {
   return data;
 }
 
-export async function signupStudent(admissionNumber, fullName, dob, teacherCode) {
+export async function signupStudent(admissionNumber, fullName, dob, classCode) {
   const response = await fetch('/api/student/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ admissionNumber, fullName, dob, teacherCode })
+    body: JSON.stringify({ admissionNumber, fullName, dob, classCode, teacherCode: classCode })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
@@ -488,15 +488,42 @@ export async function regenerateTeacherRollingRefCode() {
   return await response.json();
 }
 
-export async function teacherAddExistingStudent(admissionNumber, studentRefCode) {
-  const response = await authenticatedFetch('/api/teacher/add-existing-student', {
+export async function fetchTeacherClassCode() {
+  const response = await authenticatedFetch('/api/teacher/class-code', {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) return { success: false, classCode: 'CLASS-DEMO26' };
+  return await response.json();
+}
+
+export async function studentJoinClass(classCode) {
+  const token = localStorage.getItem('student_auth_token');
+  if (!token) throw new Error('Student authentication token missing. Please log in.');
+  const response = await fetch('/api/student/join-class', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ admissionNumber, studentRefCode })
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ classCode })
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to add existing student to roster.');
+    throw new Error(err.error || 'Failed to join classroom.');
+  }
+  return await response.json();
+}
+
+export async function teacherAddExistingStudent(admissionNumber, studentRefCode, fullName) {
+  const response = await authenticatedFetch('/api/teacher/add-existing-student', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ admissionNumber, studentRefCode, fullName })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to add student to roster.');
   }
   return await response.json();
 }

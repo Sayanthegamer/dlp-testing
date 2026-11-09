@@ -26,3 +26,4 @@ server/data/debug_*
 server/data/students.json
 server/data/submissions.json
 server/data/exams.json
+server/data/teacher_students.json

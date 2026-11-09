@@ -73,6 +73,32 @@ const writeSubmissionsLocal = (data) => writeLocalCollection('submissions.json',
 const readLocalStudents = () => readLocalCollection('students.json');
 const writeLocalStudents = (data) => writeLocalCollection('students.json', data);
 
+const readTeacherStudentsLocal = () => readLocalCollection('teacher_students.json');
+const writeTeacherStudentsLocal = (data) => writeLocalCollection('teacher_students.json', data);
+
+function enrollTeacherStudentLocal({ teacherId, studentId, classCode = null, enrollmentSource = 'class_code' }) {
+  if (!teacherId || !studentId) return null;
+  const list = readTeacherStudentsLocal();
+  const existing = list.find(r => r.teacher_id === teacherId && r.student_id === studentId);
+  if (existing) {
+    existing.class_code = classCode || existing.class_code;
+    existing.enrollment_source = enrollmentSource || existing.enrollment_source;
+    writeTeacherStudentsLocal(list);
+    return existing;
+  }
+  const newRecord = {
+    id: `ts_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    teacher_id: teacherId,
+    student_id: studentId,
+    class_code: classCode,
+    enrollment_source: enrollmentSource,
+    enrolled_at: new Date().toISOString()
+  };
+  list.push(newRecord);
+  writeTeacherStudentsLocal(list);
+  return newRecord;
+}
+
 module.exports = {
   readLocalCollection,
   writeLocalCollection,
@@ -81,5 +107,8 @@ module.exports = {
   readSubmissionsLocal,
   writeSubmissionsLocal,
   readLocalStudents,
-  writeLocalStudents
+  writeLocalStudents,
+  readTeacherStudentsLocal,
+  writeTeacherStudentsLocal,
+  enrollTeacherStudentLocal
 };

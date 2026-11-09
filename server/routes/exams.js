@@ -15,6 +15,7 @@ const {
   writeExamsLocal,
   readSubmissionsLocal,
 } = require('../services/localStoreService');
+const { autoEnrollStudentWithExamTeacher } = require('../services/studentAuthService');
 
 // In-memory active rolling sessions cache (6-hour TTL so 3-hour exams never expire mid-session)
 const activeRollingSessions = new Map();
@@ -779,6 +780,14 @@ router.post('/exams/student-access', async (req, res) => {
 
       const snapshot = parseSnapshot(data.snapshot_data) || data.snapshot_data;
 
+      // Auto-enroll registered student with the exam's teacher
+      const candStudentId = req.body.studentId || req.body.student_id;
+      if (candStudentId && targetExamId) {
+        try {
+          await autoEnrollStudentWithExamTeacher({ studentId: candStudentId, examId: targetExamId, source: 'live_exam' });
+        } catch (_) {}
+      }
+
       return res.json({
         success: true,
         exam: snapshot,
@@ -853,6 +862,14 @@ router.post('/exams/student-access', async (req, res) => {
         success: false,
         error: 'This exam has been closed by the instructor.',
       });
+    }
+
+    // Auto-enroll registered student with the exam's teacher in local mode
+    const candStudentId = req.body.studentId || req.body.student_id;
+    if (candStudentId && targetExamId) {
+      try {
+        await autoEnrollStudentWithExamTeacher({ studentId: candStudentId, examId: targetExamId, source: 'live_exam' });
+      } catch (_) {}
     }
 
     return res.json({

@@ -19,7 +19,8 @@ import {
   logoutStudent,
   fetchStudentRollingRefCode,
   regenerateStudentRollingRefCode,
-  studentLinkToTeacher
+  studentLinkToTeacher,
+  studentJoinClass
 } from '../../services/apiService';
 import MathRenderer from '../PreviewPanel/MathRenderer';
 
@@ -105,8 +106,9 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
 
   const handleLinkTeacherSubmit = async (e) => {
     e.preventDefault();
-    if (!teacherInputCode.trim()) {
-      setLinkError('Enter your teacher reference code');
+    const cleanCode = teacherInputCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setLinkError('Enter your classroom code or teacher code');
       return;
     }
     setLinkError('');
@@ -114,13 +116,27 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
     setLinking(true);
 
     try {
-      const res = await studentLinkToTeacher(teacherInputCode.trim());
+      if (cleanCode.startsWith('CLASS-') || !cleanCode.startsWith('TCH-')) {
+        try {
+          const classRes = await studentJoinClass(cleanCode.startsWith('CLASS-') ? cleanCode : `CLASS-${cleanCode}`);
+          if (classRes && classRes.success) {
+            setLinkSuccess('Successfully enrolled into classroom!');
+            setTeacherInputCode('');
+            setLinking(false);
+            return;
+          }
+        } catch (cErr) {
+          if (cleanCode.startsWith('CLASS-')) throw cErr;
+        }
+      }
+
+      const res = await studentLinkToTeacher(cleanCode);
       if (res && res.success) {
-        setLinkSuccess('Linked your profile to your instructor roster');
+        setLinkSuccess('Linked your profile to your instructor roster!');
         setTeacherInputCode('');
       }
     } catch (err) {
-      setLinkError(err.message || 'Could not link teacher. Code may be expired.');
+      setLinkError(err.message || 'Could not join classroom. Check the code and try again.');
     } finally {
       setLinking(false);
     }
@@ -194,8 +210,8 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
               onClick={() => setShowLinkModal(true)}
               className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-[#efe9df] hover:bg-[#e5dec9] text-[#1f1b16] text-xs font-medium transition-calm border border-[#dcd5c4]"
             >
-              <Link2 className="w-4 h-4 text-[#5e554a]" strokeWidth={1.5} />
-              <span>Link teacher</span>
+              <Link2 className="w-4 h-4 text-[#8c4a17]" strokeWidth={1.5} />
+              <span>Join class (CLASS code)</span>
             </button>
 
             <button
@@ -418,16 +434,16 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
         </div>
       )}
 
-      {/* Link Teacher Modal */}
+      {/* Join Classroom Modal */}
       {showLinkModal && (
         <div className="fixed inset-0 z-50 bg-[#161513]/60 flex items-center justify-center p-4">
           <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 font-sans">
             <div>
               <h3 className="text-lg font-serif font-medium text-[#1f1b16]">
-                Link to instructor roster
+                Join Instructor Classroom
               </h3>
               <p className="text-xs text-[#5e554a] mt-0.5">
-                Enter your instructor's 5-minute reference code to link your candidate profile
+                Enter your instructor's permanent Classroom Code (<span className="font-mono">CLASS-XXXXXX</span>) to enroll in their roster
               </p>
             </div>
 
@@ -436,12 +452,12 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
 
             <form onSubmit={handleLinkTeacherSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-medium text-[#5e554a] mb-1">Teacher reference code</label>
+                <label className="block font-medium text-[#5e554a] mb-1">Classroom Code / Teacher Code</label>
                 <input
                   type="text"
                   value={teacherInputCode}
                   onChange={(e) => setTeacherInputCode(e.target.value.toUpperCase())}
-                  placeholder="TCH-8K9P2M"
+                  placeholder="CLASS-XXXXXX"
                   className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#8c4a17]"
                   required
                 />
@@ -460,7 +476,7 @@ export default function StudentPortal({ student, onJoinExam, onPreviewCurrentPap
                   disabled={linking}
                   className="px-4 h-9 rounded-lg bg-[#1f1b16] hover:bg-[#332d25] text-[#fdfbf7] font-medium"
                 >
-                  {linking ? 'Linking' : 'Link profile'}
+                  {linking ? 'Enrolling...' : 'Join Classroom'}
                 </button>
               </div>
             </form>

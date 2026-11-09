@@ -15,7 +15,10 @@ const {
   getRefCodeSecondsLeft,
   regenerateEntitySalt,
   studentLinkToTeacher,
-  teacherAddExistingStudent
+  teacherAddExistingStudent,
+  computeTeacherClassCode,
+  studentJoinClass,
+  enrollStudentInClassroom
 } = require('../services/studentAuthService');
 
 function getJwtSecret() {
@@ -56,8 +59,28 @@ async function handleStudentLogin(req, res) {
 
 async function handleStudentSignup(req, res) {
   try {
-    const { admissionNumber, fullName, dob, teacherCode } = req.body || {};
-    const result = await studentSignup({ admissionNumber, fullName, dob, teacherId: teacherCode });
+    const { admissionNumber, fullName, dob, teacherCode, classCode } = req.body || {};
+    const result = await studentSignup({
+      admissionNumber,
+      fullName,
+      dob,
+      classCode: classCode || teacherCode,
+      teacherId: teacherCode
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+}
+
+async function handleStudentJoinClass(req, res) {
+  try {
+    const studentId = req.student?.studentId || req.body.studentId;
+    const { classCode } = req.body || {};
+    if (!studentId || !classCode) {
+      return res.status(400).json({ success: false, error: 'Student ID and Class Code are required' });
+    }
+    const result = await studentJoinClass({ studentId, classCode });
     return res.json({ success: true, ...result });
   } catch (err) {
     return res.status(400).json({ success: false, error: err.message });
@@ -71,6 +94,10 @@ router.post('/student-auth/login', handleStudentLogin);
 // POST /api/student/signup (and alias /api/student-auth/signup) - Student Self-Registration
 router.post('/student/signup', handleStudentSignup);
 router.post('/student-auth/signup', handleStudentSignup);
+
+// POST /api/student/join-class (and alias /api/student-auth/join-class) - Join a classroom via CLASS-XXXXXX code
+router.post('/student/join-class', authenticateStudentToken, handleStudentJoinClass);
+router.post('/student-auth/join-class', handleStudentJoinClass);
 
 // GET /api/student/me - Current Student Profile
 router.get('/student/me', authenticateStudentToken, async (req, res) => {
@@ -131,6 +158,23 @@ router.post('/student/link-teacher', authenticateStudentToken, async (req, res) 
   }
 });
 
+// GET /api/teacher/class-code - Permanent Classroom Code & Shareable Invite Link
+router.get('/teacher/class-code', async (req, res) => {
+  if (!(await verifyTeacherAuth(req))) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
+  }
+  try {
+    const teacherId = req.user?.id || 'teacher_general';
+    const classCode = computeTeacherClassCode(teacherId);
+    const host = req.get('host') || 'localhost:5173';
+    const protocol = req.protocol || 'http';
+    const inviteLink = `${protocol}://${host}/?mode=student&tab=signup&classCode=${classCode}`;
+    return res.json({ success: true, classCode, inviteLink });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/teacher/rolling-ref-code - Teacher's 5-Min Rolling Link Code
 router.get('/teacher/rolling-ref-code', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -162,15 +206,15 @@ router.post('/teacher/rolling-ref-code/regenerate', async (req, res) => {
   }
 });
 
-// POST /api/teacher/add-existing-student - Teacher claims existing student via Admission No + Student Ref Code
+// POST /api/teacher/add-existing-student - Teacher claims/enrolls existing student via Roll No, Name, or Ref Code
 router.post('/teacher/add-existing-student', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
     return res.status(401).json({ success: false, error: 'Unauthorized: Teacher credentials required' });
   }
   try {
     const teacherId = req.user?.id || 'teacher_general';
-    const { admissionNumber, studentRefCode } = req.body;
-    const result = await teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode });
+    const { admissionNumber, studentRefCode, fullName } = req.body;
+    const result = await teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode, fullName });
     return res.json({ success: true, ...result });
   } catch (err) {
     return res.status(400).json({ success: false, error: err.message });

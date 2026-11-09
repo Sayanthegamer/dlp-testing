@@ -10,6 +10,10 @@ const {
   readLocalStudents,
   writeLocalStudents,
   readSubmissionsLocal,
+  readTeacherStudentsLocal,
+  writeTeacherStudentsLocal,
+  enrollTeacherStudentLocal,
+  readExamsLocal
 } = require('./localStoreService');
 
 function getJwtSecret() {
@@ -121,48 +125,223 @@ function generateAdmissionNumber(prefix = 'DLP') {
 }
 
 /**
- * Register a new student profile with Admission Number, Full Name, & DOB
+ * Generates a permanent 6-character CLASS-XXXXXX code for any teacher ID.
  */
-async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
-  if (!fullName || !dob) {
-    throw new Error('Full Name and Date of Birth are required.');
-  }
+function computeTeacherClassCode(teacherId) {
+  if (!teacherId) return 'CLASS-DEMO26';
+  const clean = String(teacherId).trim();
+  if (clean === 'local-dev-user' || clean === 'dev-fallback-token') return 'CLASS-DEMO26';
+  if (clean === 'teacher_general') return 'CLASS-GEN026';
 
-  const cleanTeacherCode = teacherId ? String(teacherId).trim() : '';
-  if (!cleanTeacherCode) {
-    throw new Error('A valid Teacher Code or Access Passcode is required for student registration.');
+  const hash = crypto.createHash('sha256').update(clean).digest('hex').toUpperCase();
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    const sub = hash.substring(i * 4, i * 4 + 4);
+    const num = parseInt(sub, 16);
+    code += chars.charAt(num % chars.length);
+  }
+  return `CLASS-${code}`;
+}
+
+/**
+ * Resolves a teacher ID from an entered CLASS-XXXXXX code, email, or passcode.
+ */
+async function resolveTeacherFromClassCode(rawCode) {
+  if (!rawCode) return null;
+  const clean = String(rawCode).trim();
+  const upper = clean.toUpperCase();
+
+  if (upper === 'CLASS-DEMO26' || upper === 'DEMO26' || upper === 'LOCAL-DEV-USER') {
+    return 'local-dev-user';
+  }
+  if (upper === 'CLASS-GEN026' || upper === 'GEN026' || upper === 'TEACHER_GENERAL') {
+    return 'teacher_general';
   }
 
   const validAccessCode =
     process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
-  let resolvedTeacherId = null;
+  if (clean === validAccessCode || clean === process.env.APP_PASSWORD || clean === 'admin') {
+    return 'teacher_general';
+  }
 
   const sb = getSupabaseClient();
+  if (sb) {
+    if (isValidUuid(clean)) {
+      return await resolveVerifiedTeacherUuid(sb, clean);
+    }
 
-  if (
-    cleanTeacherCode === validAccessCode ||
-    cleanTeacherCode === process.env.APP_PASSWORD ||
-    cleanTeacherCode === 'dlp_teacher_secret_passcode_2026' ||
-    cleanTeacherCode === 'admin' ||
-    cleanTeacherCode === 'local-dev-user' ||
-    cleanTeacherCode === 'teacher_general'
-  ) {
-    resolvedTeacherId = sb ? null : 'teacher_general';
-  } else if (sb) {
     try {
-      if (isValidUuid(cleanTeacherCode)) {
-        resolvedTeacherId = await resolveVerifiedTeacherUuid(sb, cleanTeacherCode);
-      } else {
-        const { data: teacher } = await sb
-          .from('teachers')
-          .select('id')
-          .eq('email', cleanTeacherCode.toLowerCase())
-          .maybeSingle();
-        if (teacher?.id) resolvedTeacherId = teacher.id;
+      // 1. Direct match on teacher email
+      const { data: teacherByEmail } = await sb
+        .from('teachers')
+        .select('id')
+        .eq('email', clean.toLowerCase())
+        .maybeSingle();
+      if (teacherByEmail?.id) return teacherByEmail.id;
+
+      // 2. Lookup in teacher_students junction table if class_code was recorded
+      const { data: existingClass } = await sb
+        .from('teacher_students')
+        .select('teacher_id')
+        .eq('class_code', upper.startsWith('CLASS-') ? upper : `CLASS-${upper}`)
+        .limit(1)
+        .maybeSingle();
+      if (existingClass?.teacher_id) return existingClass.teacher_id;
+
+      // 3. Scan registered teachers to match deterministic hash
+      const { data: allTeachers } = await sb.from('teachers').select('id');
+      if (Array.isArray(allTeachers)) {
+        for (const t of allTeachers) {
+          const expectedCode = computeTeacherClassCode(t.id);
+          if (expectedCode === upper || expectedCode.replace('CLASS-', '') === upper.replace('CLASS-', '')) {
+            return t.id;
+          }
+        }
       }
     } catch (_) {}
+  }
+
+  // Local fallback
+  const localJunction = readTeacherStudentsLocal();
+  const foundJunction = localJunction.find(
+    r => (r.class_code && r.class_code.toUpperCase() === upper) ||
+         (r.class_code && r.class_code.toUpperCase().replace('CLASS-', '') === upper.replace('CLASS-', ''))
+  );
+  if (foundJunction) return foundJunction.teacher_id;
+
+  if (computeTeacherClassCode('teacher_general') === upper) return 'teacher_general';
+  if (computeTeacherClassCode('local-dev-user') === upper) return 'local-dev-user';
+
+  return clean;
+}
+
+/**
+ * Enrolls a student into a teacher's classroom (multi-tenant teacher_students junction table).
+ */
+async function enrollStudentInClassroom({ teacherId, studentId, classCode = null, source = 'class_code' }) {
+  if (!studentId) return null;
+  const effectiveTeacherId = teacherId || 'teacher_general';
+  const effectiveClassCode = classCode || computeTeacherClassCode(effectiveTeacherId);
+  const sb = getSupabaseClient();
+
+  if (sb) {
+    const verifiedTeacherUuid = await resolveVerifiedTeacherUuid(sb, effectiveTeacherId);
+    if (verifiedTeacherUuid) {
+      try {
+        await sb.from('teacher_students').upsert(
+          {
+            teacher_id: verifiedTeacherUuid,
+            student_id: studentId,
+            class_code: effectiveClassCode,
+            enrollment_source: source,
+            enrolled_at: new Date().toISOString()
+          },
+          { onConflict: 'teacher_id,student_id' }
+        );
+      } catch (err) {
+        console.warn('[teacher_students upsert warning]:', err.message);
+      }
+
+      // Also ensure student's primary teacher_id is populated if null
+      try {
+        await sb
+          .from('students')
+          .update({ teacher_id: verifiedTeacherUuid })
+          .eq('id', studentId)
+          .is('teacher_id', null);
+      } catch (_) {}
+    }
+    return { success: true, teacherId: verifiedTeacherUuid || effectiveTeacherId, classCode: effectiveClassCode };
+  }
+
+  // Local storage fallback
+  enrollTeacherStudentLocal({
+    teacherId: effectiveTeacherId,
+    studentId,
+    classCode: effectiveClassCode,
+    enrollmentSource: source
+  });
+
+  const localList = readLocalStudents();
+  const found = localList.find(s => s.id === studentId || s.admission_number === studentId);
+  if (found && !found.teacher_id) {
+    found.teacher_id = effectiveTeacherId;
+    writeLocalStudents(localList);
+  }
+
+  return { success: true, teacherId: effectiveTeacherId, classCode: effectiveClassCode };
+}
+
+/**
+ * Automatically enrolls a student with the teacher who owns an exam session upon entering code or submitting.
+ */
+async function autoEnrollStudentWithExamTeacher({ studentId, examId, source = 'live_exam' }) {
+  if (!studentId || !examId) return null;
+  const sb = getSupabaseClient();
+  let teacherId = null;
+
+  if (sb) {
+    try {
+      const { data: exam } = await sb
+        .from('exams')
+        .select('teacher_id')
+        .eq('id', examId)
+        .maybeSingle();
+      if (exam?.teacher_id) teacherId = exam.teacher_id;
+    } catch (_) {}
   } else {
-    resolvedTeacherId = cleanTeacherCode;
+    const list = readExamsLocal();
+    const foundExam = list.find(e => e.id === examId);
+    if (foundExam?.teacherId || foundExam?.teacher_id) {
+      teacherId = foundExam.teacherId || foundExam.teacher_id;
+    }
+  }
+
+  if (teacherId) {
+    return await enrollStudentInClassroom({ teacherId, studentId, source });
+  }
+  return null;
+}
+
+/**
+ * Student connects to a classroom anytime using a permanent CLASS-XXXXXX code.
+ */
+async function studentJoinClass({ studentId, classCode }) {
+  if (!studentId || !classCode) {
+    throw new Error('Student ID and Class Code are required.');
+  }
+  const cleanCode = String(classCode).trim().toUpperCase();
+  const teacherId = await resolveTeacherFromClassCode(cleanCode);
+  if (!teacherId) {
+    throw new Error(`Invalid or unrecognized Class Code: ${cleanCode}`);
+  }
+  return await enrollStudentInClassroom({
+    teacherId,
+    studentId,
+    classCode: cleanCode,
+    source: 'class_code'
+  });
+}
+
+/**
+ * Register a new student profile with Admission Number, Full Name, & DOB.
+ * Teacher / Class Code is now completely OPTIONAL.
+ */
+async function studentSignup({ admissionNumber, fullName, dob, classCode, teacherId }) {
+  if (!fullName || !dob) {
+    throw new Error('Full Name and Date of Birth are required.');
+  }
+
+  const cleanTeacherInput = (classCode || teacherId || '').trim();
+  let resolvedTeacherId = null;
+  let resolvedClassCode = null;
+
+  if (cleanTeacherInput) {
+    resolvedTeacherId = await resolveTeacherFromClassCode(cleanTeacherInput);
+    resolvedClassCode = cleanTeacherInput.toUpperCase().startsWith('CLASS-')
+      ? cleanTeacherInput.toUpperCase()
+      : `CLASS-${cleanTeacherInput.toUpperCase()}`;
   }
 
   const rawAdm = admissionNumber ? String(admissionNumber).trim() : generateAdmissionNumber();
@@ -179,13 +358,12 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     admission_number: cleanAdm,
     full_name: cleanName,
     dob: cleanDob,
-    teacher_id: sb
-      ? isValidUuid(resolvedTeacherId)
-        ? resolvedTeacherId
-        : null
-      : resolvedTeacherId || 'teacher_general',
+    teacher_id: resolvedTeacherId || null,
     created_at: new Date().toISOString(),
   };
+
+  const sb = getSupabaseClient();
+  let registeredStudent = null;
 
   if (sb) {
     let { data, error } = await sb
@@ -194,7 +372,7 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
       .select()
       .single();
 
-    // Retry with teacher_id: null if teacher_id foreign key fails
+    // Retry with teacher_id: null if foreign key fails
     if (error && error.code === '23503' && newStudent.teacher_id) {
       const retryRes = await sb
         .from('students')
@@ -211,22 +389,33 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     if (error) {
       throw new Error(`Failed to register student in Supabase: ${error.message}`);
     }
+    registeredStudent = data;
+  } else {
+    const localList = readLocalStudents();
+    const existing = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
+    if (existing) {
+      throw new Error(`Admission Number "${cleanAdm}" is already registered. Please log in.`);
+    }
 
-    const token = generateStudentToken(data);
-    return { student: data, token };
+    localList.unshift(newStudent);
+    writeLocalStudents(localList);
+    registeredStudent = newStudent;
   }
 
-  const localList = readLocalStudents();
-  const existing = localList.find(s => s.admission_number.toUpperCase() === cleanAdm);
-  if (existing) {
-    throw new Error(`Admission Number "${cleanAdm}" is already registered. Please log in.`);
+  // If a class code or teacher was resolved, enroll in teacher_students junction
+  if (resolvedTeacherId && registeredStudent) {
+    try {
+      await enrollStudentInClassroom({
+        teacherId: resolvedTeacherId,
+        studentId: registeredStudent.id,
+        classCode: resolvedClassCode,
+        source: 'class_code'
+      });
+    } catch (_) {}
   }
 
-  localList.unshift(newStudent);
-  writeLocalStudents(localList);
-
-  const token = generateStudentToken(newStudent);
-  return { student: newStudent, token };
+  const token = generateStudentToken(registeredStudent);
+  return { student: registeredStudent, token };
 }
 
 /**
@@ -281,30 +470,74 @@ async function teacherCreateStudent({ teacherId, admissionNumber, fullName, dob 
 
 /**
  * Get all students enrolled under a specific teacher profile.
- * Safely handles UUID vs non-UUID teacher IDs on Supabase PostgreSQL.
+ * Supports multi-tenant classrooms via teacher_students junction table and students.teacher_id.
  */
 async function getTeacherRoster(teacherId) {
+  const effectiveTeacherId = teacherId || 'teacher_general';
   const sb = getSupabaseClient();
   if (sb) {
     try {
+      const studentMap = new Map();
+
+      // 1. Fetch students from teacher_students junction table
+      if (isValidUuid(effectiveTeacherId)) {
+        const { data: junctionRows } = await sb
+          .from('teacher_students')
+          .select('student_id, enrolled_at, enrollment_source, class_code, students(*)')
+          .eq('teacher_id', effectiveTeacherId);
+
+        if (Array.isArray(junctionRows)) {
+          for (const row of junctionRows) {
+            if (row.students) {
+              studentMap.set(row.students.id, {
+                ...row.students,
+                enrolled_at: row.enrolled_at,
+                enrollment_source: row.enrollment_source,
+                class_code: row.class_code,
+              });
+            }
+          }
+        }
+      }
+
+      // 2. Also union with students table where teacher_id matches or is null (shared roster)
       let query = sb.from('students').select('*').order('created_at', { ascending: false });
-      if (isValidUuid(teacherId)) {
-        query = query.or(`teacher_id.eq.${teacherId},teacher_id.is.null`);
+      if (isValidUuid(effectiveTeacherId)) {
+        query = query.or(`teacher_id.eq.${effectiveTeacherId},teacher_id.is.null`);
       }
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
-        return data;
+        for (const s of data) {
+          if (!studentMap.has(s.id)) {
+            studentMap.set(s.id, s);
+          }
+        }
       }
+
+      return Array.from(studentMap.values());
     } catch (err) {
       console.warn('[Supabase Roster Query Warning]:', err.message);
     }
     return [];
   }
 
-  const effectiveTeacherId = teacherId || 'teacher_general';
+  // Local fallback
+  const junctionLocal = readTeacherStudentsLocal();
   const localList = readLocalStudents();
+  const enrolledStudentIds = new Set(
+    junctionLocal
+      .filter(
+        r =>
+          r.teacher_id === effectiveTeacherId ||
+          r.teacher_id === 'local-dev-user' ||
+          r.teacher_id === 'teacher_general'
+      )
+      .map(r => r.student_id)
+  );
+
   return localList.filter(
     s =>
+      enrolledStudentIds.has(s.id) ||
       !s.teacher_id ||
       s.teacher_id === effectiveTeacherId ||
       s.teacher_id === 'local-dev-user' ||
@@ -619,17 +852,19 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   return { success: true, teacherId: matchedTeacherId };
 }
 
-async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode }) {
+async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRefCode, fullName }) {
   const rawAdm = admissionNumber ? String(admissionNumber).trim() : '';
   const rawCode = studentRefCode ? String(studentRefCode).trim() : '';
+  const rawName = fullName ? String(fullName).trim() : '';
 
-  if (!rawAdm && !rawCode) {
-    throw new Error('Please enter an Admission Number, Candidate Name, or 5-Minute Student Ref Code.');
+  if (!rawAdm && !rawCode && !rawName) {
+    throw new Error('Please enter a Roll Number, Candidate Name, or 5-Minute Student Ref Code.');
   }
 
   const cleanAdm = rawAdm.toUpperCase();
   const strippedAdm = rawAdm.replace(/[^A-Z0-9]/gi, '').toUpperCase();
   const cleanCode = rawCode.toUpperCase();
+  const cleanNameQuery = (rawName || rawAdm).toLowerCase();
 
   let candidatePool = [];
   const sb = getSupabaseClient();
@@ -646,6 +881,7 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
 
   let targetStudent = null;
 
+  // 1. Try 5-min rolling ref code
   const targetCode = cleanCode.startsWith('STU-')
     ? cleanCode
     : cleanAdm.startsWith('STU-')
@@ -660,54 +896,42 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
     }
   }
 
+  // 2. Try Roll Number (exact, prefix, or stripped match)
   if (!targetStudent && (cleanAdm || strippedAdm)) {
     targetStudent = candidatePool.find(s => {
       const sAdm = (s.admission_number || s.admissionNumber || '').toUpperCase();
       const sId = (s.id || '').toUpperCase();
-      const sName = (s.full_name || s.fullName || '').toUpperCase();
       const sStripped = sAdm.replace(/[^A-Z0-9]/gi, '');
       return (
         sAdm === cleanAdm ||
         sId === cleanAdm ||
         (strippedAdm && sStripped === strippedAdm) ||
-        (cleanAdm && sName.includes(cleanAdm)) ||
-        (cleanAdm && sAdm.includes(cleanAdm))
+        (cleanAdm.length >= 4 && sAdm.includes(cleanAdm))
       );
     });
   }
 
+  // 3. Try Candidate Name
+  if (!targetStudent && cleanNameQuery) {
+    targetStudent = candidatePool.find(s => {
+      const sName = (s.full_name || s.fullName || '').toLowerCase();
+      return sName === cleanNameQuery || (cleanNameQuery.length >= 3 && sName.includes(cleanNameQuery));
+    });
+  }
+
   if (!targetStudent) {
-    throw new Error(`No student found matching "${rawAdm || rawCode}". Please verify candidate registration.`);
+    throw new Error(`No student found matching "${rawAdm || rawCode || rawName}". Please verify registration.`);
   }
 
   const effectiveTeacherId = teacherId || 'teacher_general';
-  if (sb) {
-    const dbTeacherId = await resolveVerifiedTeacherUuid(sb, effectiveTeacherId);
-    await sb
-      .from('students')
-      .update({ teacher_id: dbTeacherId, updated_at: new Date().toISOString() })
-      .or(`id.eq.${targetStudent.id},admission_number.eq.${targetStudent.admission_number}`);
-    targetStudent.teacher_id = dbTeacherId;
-    return { success: true, student: targetStudent };
-  }
 
-  const localList = readLocalStudents();
-  const foundLocal = localList.find(
-    s =>
-      s.id === targetStudent.id ||
-      (s.admission_number &&
-        s.admission_number.toUpperCase() === (targetStudent.admission_number || '').toUpperCase())
-  );
-  if (foundLocal) {
-    foundLocal.teacher_id = effectiveTeacherId;
-    writeLocalStudents(localList);
-  } else {
-    targetStudent.teacher_id = effectiveTeacherId;
-    localList.unshift(targetStudent);
-    writeLocalStudents(localList);
-  }
+  // Multi-tenant enrollment into teacher_students
+  await enrollStudentInClassroom({
+    teacherId: effectiveTeacherId,
+    studentId: targetStudent.id,
+    source: 'manual_lookup',
+  });
 
-  targetStudent.teacher_id = effectiveTeacherId;
   return { success: true, student: targetStudent };
 }
 
@@ -727,4 +951,9 @@ module.exports = {
   regenerateEntitySalt,
   studentLinkToTeacher,
   teacherAddExistingStudent,
+  computeTeacherClassCode,
+  resolveTeacherFromClassCode,
+  enrollStudentInClassroom,
+  autoEnrollStudentWithExamTeacher,
+  studentJoinClass,
 };

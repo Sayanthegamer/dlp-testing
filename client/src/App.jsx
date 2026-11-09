@@ -6,6 +6,7 @@ import FloatingMathPopover from './components/VisualMathEditor/FloatingMathPopov
 import PrintViewModal from './components/Common/PrintViewModal';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import AccessGateModal from './components/Common/AccessGateModal';
+import WelcomeRoleGate from './components/Common/WelcomeRoleGate';
 import StudentAuthModal from './components/Student/StudentAuthModal';
 import StudentPortal from './components/Student/StudentPortal';
 import StudentErrorBoundary from './components/Student/StudentErrorBoundary';
@@ -91,10 +92,26 @@ export default function App() {
   const [notice, setNotice] = useState(null); // { type: 'error' | 'info', title: string, details?: string[] }
 
   const searchParams = new URLSearchParams(window.location.search);
-  const isStudentUrl = searchParams.get('mode') === 'student';
+  const isStudentUrl = searchParams.get('mode') === 'student' || Boolean(searchParams.get('classCode')) || Boolean(searchParams.get('adm'));
+  const isTeacherUrl = searchParams.get('mode') === 'teacher';
+  const urlClassCode = searchParams.get('classCode') || '';
+  const urlTab = searchParams.get('tab') || 'login';
+
+  const [studentAuthInitialTab, setStudentAuthInitialTab] = useState(() => urlTab);
+  const [studentAuthClassCode, setStudentAuthClassCode] = useState(() => urlClassCode);
+  const [teacherAuthInitialMode, setTeacherAuthInitialMode] = useState('login');
+
   const [targetTestId, setTargetTestId] = useState(() => searchParams.get('testId') || searchParams.get('examId') || '');
 
-  const [viewMode, setViewMode] = useState(() => isStudentUrl ? 'student_portal' : 'teacher');
+  const [viewMode, setViewMode] = useState(() => {
+    if (isStudentUrl) return 'student_portal';
+    if (isTeacherUrl) return 'teacher';
+    const teacherToken = localStorage.getItem('teacher_auth_token');
+    if (teacherToken) return 'teacher';
+    const savedStudent = getStoredStudentProfile();
+    if (savedStudent) return 'student_portal';
+    return 'role_gate'; // Default landing page: Role Chooser & Onboarding Gate
+  });
   const [studentUser, setStudentUser] = useState(() => getStoredStudentProfile());
   const [isDevDemo, setIsDevDemo] = useState(false);
 
@@ -403,17 +420,54 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
+  // RENDER: WELCOME ROLE GATE (Portal Chooser for first-time visitors)
+  // -------------------------------------------------------------
+  if (viewMode === 'role_gate') {
+    return (
+      <WelcomeRoleGate
+        onSelectStudent={({ tab = 'login', classCode = '' } = {}) => {
+          setStudentAuthInitialTab(tab);
+          setStudentAuthClassCode(classCode);
+          setViewMode('student_portal');
+        }}
+        onSelectTeacher={({ mode = 'login' } = {}) => {
+          setTeacherAuthInitialMode(mode);
+          setViewMode('teacher');
+        }}
+        onLaunchStudentDemo={() => {
+          setIsDevDemo(true);
+          setStudentUser({
+            id: 'dev_demo_candidate',
+            admission_number: 'DLP-26-DEMO',
+            full_name: 'Arjun Sen',
+            dob: '2008-05-14'
+          });
+          setViewMode('student_portal');
+        }}
+        onLaunchTeacherDemo={() => {
+          localStorage.setItem('teacher_auth_token', 'dev-fallback-token');
+          setIsAuthenticated(true);
+          setViewMode('teacher');
+        }}
+      />
+    );
+  }
+
+  // -------------------------------------------------------------
   // RENDER: STUDENT PORTAL MODE
   // -------------------------------------------------------------
   if (viewMode === 'student_portal') {
     if (!studentUser && !isDevDemo) {
       return (
         <StudentAuthModal
+          initialTab={studentAuthInitialTab}
+          initialClassCode={studentAuthClassCode}
           onStudentAuthenticated={(stu) => {
             setStudentUser(stu);
             setIsDevDemo(false);
           }}
           onBackToTeacher={() => setViewMode('teacher')}
+          onBackToPortalChooser={() => setViewMode('role_gate')}
           onLaunchDevDemo={() => {
             setIsDevDemo(true);
             setStudentUser({
@@ -546,14 +600,23 @@ export default function App() {
         )}
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 flex justify-between items-center">
-          <button
-            type="button"
-            onClick={() => setViewMode('teacher')}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] text-xs font-medium text-[#5e554a] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
-            <span>Return to teacher studio</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode('role_gate')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] text-xs font-medium text-[#5e554a] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-[#7b7266]" strokeWidth={1.5} />
+              <span>Portal Chooser</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('teacher')}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-[#fdfbf7] border border-[#dcd5c4] text-xs font-medium text-[#5e554a] hover:text-[#1f1b16] hover:bg-[#efe9df] transition-calm"
+            >
+              <span>Teacher Studio</span>
+            </button>
+          </div>
         </div>
 
         {notice && (
@@ -584,6 +647,7 @@ export default function App() {
             logoutStudent();
             setStudentUser(null);
             setIsDevDemo(false);
+            setViewMode('role_gate');
           }}
         />
       </div>
@@ -595,9 +659,12 @@ export default function App() {
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <div className="min-h-dvh bg-[#161513] flex items-center justify-center p-4 font-sans">
-        <AccessGateModal onAuthenticated={() => setIsAuthenticated(true)} />
-      </div>
+      <AccessGateModal
+        initialMode={teacherAuthInitialMode}
+        onAuthenticated={() => setIsAuthenticated(true)}
+        onBackToPortalChooser={() => setViewMode('role_gate')}
+        onSwitchToStudentPortal={() => setViewMode('student_portal')}
+      />
     );
   }
 
@@ -614,6 +681,7 @@ export default function App() {
         onLogout={() => {
           logoutTeacher();
           setIsAuthenticated(false);
+          setViewMode('role_gate');
         }}
         onScrollToInput={() => {
           const drawer = document.getElementById('input-drawer-container');

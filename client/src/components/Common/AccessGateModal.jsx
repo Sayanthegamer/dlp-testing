@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
-import { Lock, KeyRound, ArrowRight, ShieldAlert, User, Mail, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Lock, KeyRound, ArrowRight, ShieldAlert, User, Mail, ShieldCheck, CheckCircle2, ArrowLeft, GraduationCap } from 'lucide-react';
 import { loginTeacher, signupTeacher } from '../../services/apiService';
 
-export default function AccessGateModal({ onAuthenticated }) {
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+export default function AccessGateModal({
+  onAuthenticated,
+  initialMode = 'login',
+  onBackToPortalChooser,
+  onSwitchToStudentPortal,
+}) {
+  const [authMode, setAuthMode] = useState(initialMode); // 'login' or 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -55,7 +60,30 @@ export default function AccessGateModal({ onAuthenticated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#161513] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-[#161513] flex flex-col items-center justify-center p-4">
+      <div className="max-w-md w-full mb-3 flex items-center justify-between text-xs">
+        {onBackToPortalChooser && (
+          <button
+            type="button"
+            onClick={onBackToPortalChooser}
+            className="inline-flex items-center gap-1.5 text-[#dcd5c4] hover:text-[#fdfbf7] font-medium transition-calm"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
+            <span>Portal Chooser</span>
+          </button>
+        )}
+        {onSwitchToStudentPortal && (
+          <button
+            type="button"
+            onClick={onSwitchToStudentPortal}
+            className="inline-flex items-center gap-1.5 text-[#e5b382] hover:text-[#f3caa1] font-medium transition-calm ml-auto"
+          >
+            <GraduationCap className="w-3.5 h-3.5" strokeWidth={1.5} />
+            <span>Switch to Student Portal</span>
+          </button>
+        )}
+      </div>
+
       <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-2xl p-6 sm:p-8 max-w-md w-full space-y-6">
         <div className="space-y-2">
           <div className="w-10 h-10 rounded-lg bg-[#1f1b16] text-[#fdfbf7] flex items-center justify-center">

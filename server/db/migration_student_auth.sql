@@ -100,3 +100,36 @@ CREATE POLICY "Public student read for active exams"
 DROP POLICY IF EXISTS "Students can view own submissions" ON submissions;
 CREATE POLICY "Students can view own submissions"
     ON submissions FOR SELECT USING (TRUE);
+
+-- 7. Multi-Tenant Teacher-Student Classroom Junction Table
+CREATE TABLE IF NOT EXISTS teacher_students (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    teacher_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    class_code TEXT,
+    enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    enrollment_source TEXT DEFAULT 'class_code', -- 'class_code', 'invite_link', 'live_exam', 'manual_lookup'
+    UNIQUE(teacher_id, student_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_teacher_students_teacher ON teacher_students(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_students_student ON teacher_students(student_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_students_class_code ON teacher_students(class_code);
+
+GRANT ALL ON TABLE teacher_students TO anon, authenticated, service_role;
+ALTER TABLE teacher_students ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public teacher_students select" ON teacher_students;
+CREATE POLICY "Public teacher_students select"
+    ON teacher_students FOR SELECT
+    USING (TRUE);
+
+DROP POLICY IF EXISTS "Public teacher_students insert" ON teacher_students;
+CREATE POLICY "Public teacher_students insert"
+    ON teacher_students FOR INSERT
+    WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Teachers can delete enrolled student junction" ON teacher_students;
+CREATE POLICY "Teachers can delete enrolled student junction"
+    ON teacher_students FOR DELETE
+    USING (auth.uid() = teacher_id OR auth.role() = 'authenticated');
