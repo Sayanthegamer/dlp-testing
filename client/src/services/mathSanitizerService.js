@@ -4,30 +4,42 @@
 
 const GREEK_NAMES =
   'alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|varphi|chi|psi|omega|Omega|Delta|Theta|Lambda|Gamma|Sigma|Phi|Psi';
-const OP_NAMES =
-  'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|oint|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|neq|leq|geq|approx|equiv|propto|partial|nabla|forall|exists|in|notin|subset|subseteq|cup|cap|therefore|angle|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow';
 
-// Detect likely-broken LaTeX: bare commands without backslash glued to numbers or other terms (e.g. "frac3pilambdar8", "sqrt3", "fracx5", "fracN_pN_s")
+// Note: Plain English prepositions like "in" or "to" are intentionally excluded from bare-word
+// auto-prefixing so phrases like "High resistance in parallel" are never corrupted into "\in parallel".
+const OP_NAMES =
+  'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|oint|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|neq|leq|geq|approx|equiv|propto|partial|nabla|forall|exists|notin|subset|subseteq|cup|cap|therefore|angle|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow';
+
 export const BARE_COMMAND_RUN_REGEX =
-  /(?<!\\)\b(frac|sqrt|pi|lambda|theta|alpha|beta|gamma|delta|sigma|omega)\s*([0-9a-zA-Z\{\}\+\-\*\/\^\._]+)/i;
+  /(?<!\\)\b(frac|sqrt|pi|lambda|theta|alpha|beta|gamma|delta|sigma|omega)([0-9a-zA-Z\{\}\+\-\*\/\^\._]+)/i;
 
 /**
- * Checks if text contains malformed bare LaTeX command runs missing leading backslashes
- * or double-backslash command breaks (e.g. \\text, \\frac).
+ * Checks if text contains malformed bare LaTeX command runs missing leading backslashes,
+ * double-backslash command breaks (e.g. \\text, \\frac), or math-mode symbols trapped inside \text{...}.
  * @param {string} text
  * @returns {boolean} true if malformed bare command run detected
  */
 export function hasBareCommandRun(text) {
   if (typeof text !== 'string' || !text.trim()) return false;
 
-  const mathMatches = text.match(/<math>(.*?)<\/math>/gi) || [text];
+  const mathMatches = text.match(/<math>([\s\S]*?)<\/math>/gi);
+  if (!mathMatches || mathMatches.length === 0) {
+    return /\\(?:in|Gamma|Alpha|Beta|Delta|Omega|frac|sqrt|text)\b/.test(text);
+  }
 
   for (const span of mathMatches) {
     const cleanSpan = span.replace(/<\/?math>/gi, '').trim();
     if (BARE_COMMAND_RUN_REGEX.test(cleanSpan)) {
       return true;
     }
-    if (/\\{2,}(?:text|mathrm|frac|sqrt|pi|times|cdot|ce|pu|alpha|beta|gamma|delta|theta|lambda|mu|sigma|omega|Omega)\b/.test(cleanSpan)) {
+    if (
+      /\\{2,}(?:text|mathrm|frac|sqrt|pi|times|cdot|ce|pu|alpha|beta|gamma|delta|theta|lambda|mu|sigma|omega|Omega)\b/.test(
+        cleanSpan
+      )
+    ) {
+      return true;
+    }
+    if (/\\text\{[^{}]*(?:\\[a-zA-Z]+|[\^_])[^{}]*\}/.test(cleanSpan)) {
       return true;
     }
   }
@@ -46,7 +58,6 @@ export function convertMathMLToKaTeX(text) {
 
   let cleaned = text;
 
-  // 1. If an explicit LaTeX annotation tag exists (<annotation encoding="application/x-tex">LATEX</annotation>), extract it
   cleaned = cleaned.replace(
     /<annotation\s+encoding=["']application\/x-tex["']\s*>([\s\S]*?)<\/annotation>/gi,
     (match, latex) => {
@@ -54,7 +65,6 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 2. Convert MathML Value + Unit combinations:
   cleaned = cleaned.replace(
     /<mn>([\d\.]+)\s*<\/mn>\s*(?:<mo>.*?<\/mo>\s*)?<mi\s+mathvariant=["']normal["']\s*>([a-zA-Z\Omega]+)<\/mi>/gi,
     (match, val, unit) => {
@@ -62,7 +72,6 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 3. Convert fractions: <mfrac>(.*?)</mfrac>
   cleaned = cleaned.replace(
     /<mfrac>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/mfrac>/gi,
     (match, num, den) => {
@@ -72,7 +81,6 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 4. Convert superscripts: <msup>(.*?)(.*?)</msup>
   cleaned = cleaned.replace(
     /<msup>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/msup>/gi,
     (match, base, exp) => {
@@ -82,7 +90,6 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 5. Convert subscripts: <msub>(.*?)(.*?)</msub>
   cleaned = cleaned.replace(
     /<msub>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/msub>/gi,
     (match, base, sub) => {
@@ -92,7 +99,6 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 6. Convert square roots: <msqrt>(.*?)</msqrt>
   cleaned = cleaned.replace(
     /<msqrt>\s*(?:<mrow>)?([\s\S]*?)(?:<\/mrow>)?\s*<\/msqrt>/gi,
     (match, inner) => {
@@ -101,7 +107,6 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 7. Convert upright text/unit identifiers: <mi mathvariant="normal">TEXT</mi> -> \mathrm{TEXT}
   cleaned = cleaned.replace(
     /<mi\s+mathvariant=["']normal["']\s*>([\s\S]*?)<\/mi>/gi,
     (match, inner) => {
@@ -109,23 +114,18 @@ export function convertMathMLToKaTeX(text) {
     }
   );
 
-  // 8. Convert simple numbers: <mn>NUM</mn> -> NUM
   cleaned = cleaned.replace(/<mn>([\s\S]*?)<\/mn>/gi, '$1');
 
-  // 9. Convert simple variables/identifiers: <mi>VAR</mi> -> <math>VAR</math>
   cleaned = cleaned.replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, varName) => {
     const trimmed = varName.trim();
     return trimmed ? `<math>${trimmed}</math>` : '';
   });
 
-  // 10. Convert operators: <mo>OP</mo> -> OP
   cleaned = cleaned.replace(/<mo>([\s\S]*?)<\/mo>/gi, '$1');
 
-  // 11. Clean up structural containers
   cleaned = cleaned.replace(/<\/?(?:mrow|semantics|annotation|style)\b[^>]*>/gi, '');
   cleaned = cleaned.replace(/<math\b[^>]*>/gi, '<math>').replace(/<\/math>/gi, '</math>');
 
-  // 12. Collapse duplicate consecutive math tags
   cleaned = cleaned.replace(/<\/math>\s*<math>/gi, ' ');
 
   return cleaned;
@@ -182,8 +182,66 @@ function repairControlCharEscapes(str) {
 }
 
 /**
+ * Repairs `\text{...}` and `\textrm{...}` blocks inside a math span so they never crash KaTeX.
+ */
+export function sanitizeTextBlocksInMath(span) {
+  if (!span || typeof span !== 'string') return span;
+
+  return span.replace(/\\text(?:rm)?\{([^{}]*)\}/g, (fullMatch, rawBody) => {
+    let body = rawBody.replace(
+      /\\(times|sec|min|max|in|to|and|or|for|if|is|of|volt|volts|amp|amps|ohm|ohms|watt|watts|joule|joules|meter|meters|cm|mm|km|kg|gm|hr|hrs|hour|hours|day|days)\b/gi,
+      '$1'
+    );
+
+    body = body.replace(/\\degree\b/g, '^\\circ');
+
+    if (!/[\\^_]/.test(body)) {
+      return `\\text{${body}}`;
+    }
+
+    const hasLeadingSpace = /^\s/.test(body);
+    let mathUnit = body.trim();
+
+    mathUnit = mathUnit.replace(/^\^\s*\\circ\s*([a-zA-Z]*)/, (_, unitAfter) => {
+      return unitAfter ? `{}^{\\circ}\\mathrm{${unitAfter}}` : `{}^{\\circ}`;
+    });
+
+    const cmdTokens = [];
+    mathUnit = mathUnit.replace(/\\[a-zA-Z]+/g, (cmd) => {
+      const idx = cmdTokens.length;
+      cmdTokens.push(cmd);
+      return `@@CMD${idx}@@`;
+    });
+
+    mathUnit = mathUnit.replace(/\b([a-zA-Z]+)\b/g, (match) => {
+      if (match.startsWith('CMD')) return match;
+      return `\\mathrm{${match}}`;
+    });
+
+    mathUnit = mathUnit.replace(/@@CMD(\d+)@@/g, (_, idx) => cmdTokens[Number(idx)]);
+
+    mathUnit = mathUnit.replace(/\s+/g, '\\,');
+
+    return (hasLeadingSpace ? '\\,' : '') + mathUnit;
+  });
+}
+
+export function cleanLeakedBackslashesInPlainText(plainSegment) {
+  if (!plainSegment || typeof plainSegment !== 'string') return plainSegment;
+  return plainSegment
+    .replace(
+      /\\+(in|to|times|sec|min|max|pm|mp|bar|hat|vec|sum|int|lim|log|ln|sin|cos|tan|cot|csc|and|or|if|for|is|of)\b/g,
+      '$1'
+    )
+    .replace(
+      /\\+(Gamma|Alpha|Beta|Delta|Theta|Lambda|Sigma|Phi|Psi|Omega|gamma|alpha|beta|delta|theta|lambda|sigma|omega)\b/g,
+      '$1'
+    );
+}
+
+/**
  * Auto-repairs missing LaTeX backslashes, over-escaped double backslashes (\\text, \\frac),
- * corrupted `\text{ \times}` spans, fake XML tags, & brackets in math expressions.
+ * `\text{ \Omega}` text-mode crashes, `\text{ \times}` spans, fake XML tags, & brackets in math expressions.
  * @param {string} text
  * @returns {string} Repaired LaTeX text
  */
@@ -239,10 +297,9 @@ export function repairMissingMathBackslashes(text) {
 
     span = span.replace(/\\{2,}(?=[a-zA-Z])/g, '\\');
 
-    span = span.replace(/\\text\{([^{}]*)\}/g, (_, textBody) => {
-      const cleanedTextBody = textBody.replace(/\\(times|sec|min|max|in|to|pm|mp|div|cdot)\b/g, '$1');
-      return `\\text{${cleanedTextBody}}`;
-    });
+    span = sanitizeTextBlocksInMath(span);
+
+    span = span.replace(/(?<![a-zA-Z0-9\}\)])\^\s*\\circ\b/g, '{}^{\\circ}');
 
     const protectedBlocks = [];
     span = span.replace(/\\(?:text|mathrm|ce|pu)\{[^{}]*\}/g, (match) => {
@@ -267,7 +324,32 @@ export function repairMissingMathBackslashes(text) {
   };
 
   if (cleaned.includes('<math>')) {
-    return cleaned.replace(/<math>([\s\S]*?)<\/math>/gi, (m, inner) => `<math>${replaceInSpan(inner)}</math>`);
+    const parts = [];
+    const mathRegex = /<math>([\s\S]*?)<\/math>/gi;
+    let lastIdx = 0;
+    let m;
+    while ((m = mathRegex.exec(cleaned)) !== null) {
+      if (m.index > lastIdx) {
+        parts.push(cleanLeakedBackslashesInPlainText(cleaned.substring(lastIdx, m.index)));
+      }
+      parts.push(`<math>${replaceInSpan(m[1])}</math>`);
+      lastIdx = mathRegex.lastIndex;
+    }
+    if (lastIdx < cleaned.length) {
+      parts.push(cleanLeakedBackslashesInPlainText(cleaned.substring(lastIdx)));
+    }
+    return parts.join('');
+  }
+
+  const looksLikePlainEnglishSentence =
+    !BARE_COMMAND_RUN_REGEX.test(cleaned) &&
+    !/\\(?:frac|sqrt|text|mathrm|pu|ce|Omega|omega|mu|pi|alpha|beta|gamma|delta|theta|lambda|sigma|times|cdot|pm|int|sum|lim)\b/.test(
+      cleaned
+    ) &&
+    !/[\^_{}=]/.test(cleaned);
+
+  if (looksLikePlainEnglishSentence) {
+    return cleanLeakedBackslashesInPlainText(cleaned);
   }
 
   return replaceInSpan(cleaned);

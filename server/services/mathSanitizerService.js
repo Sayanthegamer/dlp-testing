@@ -5,30 +5,45 @@
 
 const GREEK_NAMES =
   'alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|varphi|chi|psi|omega|Omega|Delta|Theta|Lambda|Gamma|Sigma|Phi|Psi';
+
+// Note: Plain English prepositions like "in" or "to" are intentionally excluded from bare-word
+// auto-prefixing so phrases like "High resistance in parallel" are never corrupted into "\in parallel".
 const OP_NAMES =
-  'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|oint|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|neq|leq|geq|approx|equiv|propto|partial|nabla|forall|exists|in|notin|subset|subseteq|cup|cap|therefore|angle|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow';
+  'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|oint|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|neq|leq|geq|approx|equiv|propto|partial|nabla|forall|exists|notin|subset|subseteq|cup|cap|therefore|angle|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow';
 
 // Detect likely-broken LaTeX: bare commands without backslash glued to numbers or other terms (e.g. "frac3pilambdar8", "sqrt3", "fracx5", "fracN_pN_s")
 const BARE_COMMAND_RUN_REGEX =
-  /(?<!\\)\b(frac|sqrt|pi|lambda|theta|alpha|beta|gamma|delta|sigma|omega)\s*([0-9a-zA-Z\{\}\+\-\*\/\^\._]+)/i;
+  /(?<!\\)\b(frac|sqrt|pi|lambda|theta|alpha|beta|gamma|delta|sigma|omega)([0-9a-zA-Z\{\}\+\-\*\/\^\._]+)/i;
 
 /**
- * Checks if text contains malformed bare LaTeX command runs missing leading backslashes
- * or double-backslash command breaks (e.g. \\text, \\frac).
+ * Checks if text contains malformed bare LaTeX command runs missing leading backslashes,
+ * double-backslash command breaks (e.g. \\text, \\frac), or math-mode symbols trapped inside \text{...}.
  * @param {string} text
  * @returns {boolean} true if malformed bare command run detected
  */
 function hasBareCommandRun(text) {
   if (typeof text !== 'string' || !text.trim()) return false;
 
-  const mathMatches = text.match(/<math>(.*?)<\/math>/gi) || [text];
+  const mathMatches = text.match(/<math>([\s\S]*?)<\/math>/gi);
+  if (!mathMatches || mathMatches.length === 0) {
+    // Outside <math>, flag if raw LaTeX escapes like \in or \Gamma leaked into plain text
+    return /\\(?:in|Gamma|Alpha|Beta|Delta|Omega|frac|sqrt|text)\b/.test(text);
+  }
 
   for (const span of mathMatches) {
     const cleanSpan = span.replace(/<\/?math>/gi, '').trim();
     if (BARE_COMMAND_RUN_REGEX.test(cleanSpan)) {
       return true;
     }
-    if (/\\{2,}(?:text|mathrm|frac|sqrt|pi|times|cdot|ce|pu|alpha|beta|gamma|delta|theta|lambda|mu|sigma|omega|Omega)\b/.test(cleanSpan)) {
+    if (
+      /\\{2,}(?:text|mathrm|frac|sqrt|pi|times|cdot|ce|pu|alpha|beta|gamma|delta|theta|lambda|mu|sigma|omega|Omega)\b/.test(
+        cleanSpan
+      )
+    ) {
+      return true;
+    }
+    // Math-only symbols (\Omega, \mu, ^, _) inside \text{...} fail in KaTeX text mode
+    if (/\\text\{[^{}]*(?:\\[a-zA-Z]+|[\^_])[^{}]*\}/.test(cleanSpan)) {
       return true;
     }
   }
@@ -134,47 +149,34 @@ function convertMathMLToKaTeX(text) {
 
 /**
  * Repairs bare or partially-braced `frac` expressions into valid 2-argument `\frac{num}{den}`.
- * Examples:
- * - `fracN_pN_s` or `\fracN_pN_s` -> `\frac{N_p}{N_s}`
- * - `frac{N_p}{N_s}` or `\\frac{N_p}{N_s}` -> `\frac{N_p}{N_s}`
- * - `frac12` -> `\frac{1}{2}`
- * - `fracx5` -> `\frac{x}{5}`
- * - `\frac{N_pN_s}` (single brace group containing two subscripted tokens) -> `\frac{N_p}{N_s}`
  */
 function repairFractionSyntax(str) {
   if (!str || typeof str !== 'string') return str;
   let out = str;
 
-  // 1. Ensure any `frac` followed immediately by `{` has a leading backslash
   out = out.replace(/(?<!\\)\bfrac(?=\{)/g, '\\frac');
 
-  // 2. Repair `\frac{A_1B_2}` (where a single brace group has two distinct subscript/superscript tokens and no second `{...}` group)
   out = out.replace(
     /\\frac\{([a-zA-Z]_[a-zA-Z0-9]+|[a-zA-Z]\^[a-zA-Z0-9]+)\s*([a-zA-Z]_[a-zA-Z0-9]+|[a-zA-Z]\^[a-zA-Z0-9]+)\}(?!\s*\{)/g,
     '\\frac{$1}{$2}'
   );
 
-  // 3. Repair `\frac` or bare `frac` followed by two subscripted/superscripted tokens without braces (e.g. `fracN_pN_s`, `\fracN_pN_s`, `fracV_1V_2`)
   out = out.replace(
     /\\?\bfrac\s*([a-zA-Z]_(?:\{[^{}]+\}|[a-zA-Z0-9]+)|[a-zA-Z]\^(?:\{[^{}]+\}|[a-zA-Z0-9]+))\s*([a-zA-Z]_(?:\{[^{}]+\}|[a-zA-Z0-9]+)|[a-zA-Z]\^(?:\{[^{}]+\}|[a-zA-Z0-9]+))/g,
     '\\frac{$1}{$2}'
   );
 
-  // 4. Repair `\frac{num}den` (where first argument is braced and second is a bare token)
   out = out.replace(
     /\\frac\{([^{}]+)\}\s*([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)?)(?!\s*\{)/g,
     '\\frac{$1}{$2}'
   );
 
-  // 5. Repair bare `frac` followed by simple tokens (e.g. `frac12` -> `\frac{1}{2}`, `fracx5` -> `\frac{x}{5}`, `frac3pilambdar8` -> `\frac{3\pi\lambda r}{8}`)
   out = out.replace(/(?<!\\)\bfrac([a-zA-Z0-9_\\\+\-\*\/\^\.\s]+)/g, (match, body) => {
     const trimmed = body.trim();
     if (!trimmed) return match;
-    // Two single characters/digits like `12` or `x5` or `ab`
     if (/^[a-zA-Z0-9]{2}$/.test(trimmed)) {
       return `\\frac{${trimmed[0]}}{${trimmed[1]}}`;
     }
-    // Leading expression followed by trailing digit(s) like `3\pi\lambda r8`
     const trailingNum = trimmed.match(/^(.+?[a-zA-Z\}])\s*(\d+)$/);
     if (trailingNum) {
       return `\\frac{${trailingNum[1].trim()}}{${trailingNum[2]}}`;
@@ -192,21 +194,96 @@ function repairFractionSyntax(str) {
 function repairControlCharEscapes(str) {
   if (!str || typeof str !== 'string') return str;
   return str
-    // \t (0x09) commands: \text, \textbf, \textit, \textrm, \times, \theta, \vartheta, \tau, \tan, \tanh, \to, \top, \triangle, \tilde, \tfrac, \tiny
     .replace(/\x09(ext(?:bf|it|rm)?|imes|heta|au|anh?|o\b|op\b|riangle|ilde|frac|iny)/g, '\\t$1')
-    // \f (0x0C) commands: \frac, \forall, \flat, \frown
     .replace(/\x0C(rac|orall|lat|rown)/g, '\\f$1')
-    // \n (0x0A) commands: \nCr, \nPr, \neq, \neg, \nu, \nabla, \not, \ni, \newline, \normalsize, \nmid, \nparallel, \nsim
     .replace(/\x0A(Cr|Pr|eq|eg|u\b|abla|otsubset|ot\b|i\b|ewline|ormalsize|mid|parallel|sim)/g, '\\n$1')
-    // \r (0x0D) commands: \rho, \right, \rightarrow, \Rightarrow, \rangle, \rceil, \rfloor
     .replace(/\x0D(ho|ight(?:arrow|harpoondown|harpoonup|leftarrows|leftharpoons)?|angle|ceil|floor)/g, '\\r$1')
-    // \b (0x08) commands: \beta, \bar, \binom, \begin, \big, \bullet, \box, \bot, \backslash, \bmod, \because
     .replace(/\x08(eta|ar|inom|egin|ig(?:ger|g|l|r|m)?|ullet|ox|ot\b|ackslash|bmod|ecause)/g, '\\b$1');
 }
 
 /**
+ * Repairs `\text{...}` and `\textrm{...}` blocks inside a math span so they never crash KaTeX.
+ *
+ * Why this is critical:
+ * In KaTeX, `\text{...}` switches to text mode where math-mode commands like `\Omega`, `\mu`,
+ * `\circ`, `\degree`, `\times`, `\pm`, `\cdot`, and superscripts/subscripts (`^`, `_`) throw:
+ * `KaTeX parse error: Can't use function '\Omega' in text mode` (e.g. `P = 10 \text{ \Omega}` or `20 \text{ \Omega}`).
+ */
+function sanitizeTextBlocksInMath(span) {
+  if (!span || typeof span !== 'string') return span;
+
+  return span.replace(/\\text(?:rm)?\{([^{}]*)\}/g, (fullMatch, rawBody) => {
+    // 1. Strip accidental backslashes before English words inside \text{...}
+    let body = rawBody.replace(
+      /\\(times|sec|min|max|in|to|and|or|for|if|is|of|volt|volts|amp|amps|ohm|ohms|watt|watts|joule|joules|meter|meters|cm|mm|km|kg|gm|hr|hrs|hour|hours|day|days)\b/gi,
+      '$1'
+    );
+
+    // 2. Replace \degree or ^\circ inside \text{...}
+    body = body.replace(/\\degree\b/g, '^\\circ');
+
+    // 3. If the body has NO LaTeX commands (`\...`), NO superscripts (`^`), and NO subscripts (`_`),
+    // it is pure plain text (e.g. `\text{ Volt}`, `\text{ times}`, `\text{ V/m}`), which is 100% valid in KaTeX!
+    if (!/[\\^_]/.test(body)) {
+      return `\\text{${body}}`;
+    }
+
+    // 4. Otherwise, the \text{...} block contains math-mode tokens (e.g. `\Omega`, `k\Omega`, `\mu F`, `^\circ C`, `m/s^2`).
+    // Convert it into math-mode Roman + symbol notation so KaTeX renders it without error!
+    const hasLeadingSpace = /^\s/.test(body);
+    let mathUnit = body.trim();
+
+    // Handle standalone^\circ at start of unit (e.g. `^\circ C` -> `{}^{\circ}\mathrm{C}`)
+    mathUnit = mathUnit.replace(/^\^\s*\\circ\s*([a-zA-Z]*)/, (_, unitAfter) => {
+      return unitAfter ? `{}^{\\circ}\\mathrm{${unitAfter}}` : `{}^{\\circ}`;
+    });
+
+    // Protect existing `\command` tokens while wrapping bare ASCII letter runs in `\mathrm{...}`
+    const cmdTokens = [];
+    mathUnit = mathUnit.replace(/\\[a-zA-Z]+/g, (cmd) => {
+      const idx = cmdTokens.length;
+      cmdTokens.push(cmd);
+      return `@@CMD${idx}@@`;
+    });
+
+    // Wrap consecutive ASCII letters (not part of @@CMD...) in \mathrm{...}
+    mathUnit = mathUnit.replace(/\b([a-zA-Z]+)\b/g, (match) => {
+      if (match.startsWith('CMD')) return match;
+      return `\\mathrm{${match}}`;
+    });
+
+    // Restore LaTeX commands (e.g. \Omega, \mu, \circ)
+    mathUnit = mathUnit.replace(/@@CMD(\d+)@@/g, (_, idx) => cmdTokens[Number(idx)]);
+
+    // Replace remaining spaces between unit tokens with thin spaces `\,`
+    mathUnit = mathUnit.replace(/\s+/g, '\\,');
+
+    return (hasLeadingSpace ? '\\,' : '') + mathUnit;
+  });
+}
+
+/**
+ * Cleans up accidental LaTeX backslashes leaked into plain English text OUTSIDE `<math>` tags
+ * (such as `"High resistance \in parallel"` -> `"High resistance in parallel"` or `"\Gamma rays"` -> `"Gamma rays"`).
+ */
+function cleanLeakedBackslashesInPlainText(plainSegment) {
+  if (!plainSegment || typeof plainSegment !== 'string') return plainSegment;
+  return plainSegment
+    // Fix `\in parallel`, `\in series`, `\in air`, `\to convert`, `\times`, etc. in plain English
+    .replace(
+      /\\+(in|to|times|sec|min|max|pm|mp|bar|hat|vec|sum|int|lim|log|ln|sin|cos|tan|cot|csc|and|or|if|for|is|of)\b/g,
+      '$1'
+    )
+    // Fix `\Gamma rays`, `\Alpha particles`, `\Beta decay`, `\Delta`, etc. in plain English
+    .replace(
+      /\\+(Gamma|Alpha|Beta|Delta|Theta|Lambda|Sigma|Phi|Psi|Omega|gamma|alpha|beta|delta|theta|lambda|sigma|omega)\b/g,
+      '$1'
+    );
+}
+
+/**
  * Auto-repairs missing LaTeX backslashes, over-escaped double backslashes (\\text, \\frac),
- * corrupted `\text{ \times}` spans, fake XML tags, & brackets in math expressions.
+ * `\text{ \Omega}` text-mode crashes, `\text{ \times}` spans, fake XML tags, & brackets in math expressions.
  * Strictly idempotent across multiple passes.
  * @param {string} text
  * @returns {string} Repaired LaTeX text
@@ -269,18 +346,16 @@ function repairMissingMathBackslashes(text) {
   const replaceInSpan = (inner) => {
     let span = repairControlCharEscapes(inner);
 
-    // Collapse any sequence of 2 or more backslashes before a command letter (e.g. \\text -> \text, \\\frac -> \frac, \\\\times -> \times)
+    // Collapse any sequence of 2 or more backslashes before a command letter (e.g. \\text -> \text, \\\frac -> \frac, \\\\Omega -> \Omega)
     span = span.replace(/\\{2,}(?=[a-zA-Z])/g, '\\');
 
-    // Fix corrupted math commands inside \text{...} (e.g. `\text{ \times}` -> `\text{ times}`, `\text{ \sec}` -> `\text{ sec}`)
-    // KaTeX throws a parse error if math-only operators like \times or \sec appear inside \text{...}
-    span = span.replace(/\\text\{([^{}]*)\}/g, (_, textBody) => {
-      const cleanedTextBody = textBody.replace(/\\(times|sec|min|max|in|to|pm|mp|div|cdot)\b/g, '$1');
-      return `\\text{${cleanedTextBody}}`;
-    });
+    // Sanitize \text{...} blocks so \text{ \Omega}, \text{ k\Omega}, \text{ \mu F}, \text{ \times} never crash KaTeX
+    span = sanitizeTextBlocksInMath(span);
+
+    // Ensure standalone ^\circ (not preceded by a variable/number/brace) has an empty base {}^\circ
+    span = span.replace(/(?<![a-zA-Z0-9\}\)])\^\s*\\circ\b/g, '{}^{\\circ}');
 
     // Protect \text{...}, \mathrm{...}, \ce{...}, and \pu{...} blocks before running bare-command regexes
-    // so English words inside \text{ times} or \text{ min} are NEVER turned into \text{ \times}
     const protectedBlocks = [];
     span = span.replace(/\\(?:text|mathrm|ce|pu)\{[^{}]*\}/g, (match) => {
       const idx = protectedBlocks.length;
@@ -312,7 +387,37 @@ function repairMissingMathBackslashes(text) {
   };
 
   if (cleaned.includes('<math>')) {
-    return cleaned.replace(/<math>([\s\S]*?)<\/math>/gi, (m, inner) => `<math>${replaceInSpan(inner)}</math>`);
+    // Process plain text segments outside <math>...</math> to strip leaked backslashes (\in parallel, \Gamma rays),
+    // and process inner <math>...</math> segments with replaceInSpan!
+    const parts = [];
+    const mathRegex = /<math>([\s\S]*?)<\/math>/gi;
+    let lastIdx = 0;
+    let m;
+    while ((m = mathRegex.exec(cleaned)) !== null) {
+      if (m.index > lastIdx) {
+        parts.push(cleanLeakedBackslashesInPlainText(cleaned.substring(lastIdx, m.index)));
+      }
+      parts.push(`<math>${replaceInSpan(m[1])}</math>`);
+      lastIdx = mathRegex.lastIndex;
+    }
+    if (lastIdx < cleaned.length) {
+      parts.push(cleanLeakedBackslashesInPlainText(cleaned.substring(lastIdx)));
+    }
+    return parts.join('');
+  }
+
+  // When called on a string WITHOUT <math> tags:
+  // Distinguish between plain English phrases (e.g. "High resistance in parallel", "Gamma rays", "Q1. (1) The circuit has 2R and X in series")
+  // vs raw inner math formulas passed directly by MathRenderer / reviewEvaluator / unit tests (e.g. "2R \Omega", "P = 10 \text{ \Omega}", "frac3pilambdar8").
+  const looksLikePlainEnglishSentence =
+    !BARE_COMMAND_RUN_REGEX.test(cleaned) &&
+    !/\\(?:frac|sqrt|text|mathrm|pu|ce|Omega|omega|mu|pi|alpha|beta|gamma|delta|theta|lambda|sigma|times|cdot|pm|int|sum|lim)\b/.test(
+      cleaned
+    ) &&
+    !/[\^_{}=]/.test(cleaned);
+
+  if (looksLikePlainEnglishSentence) {
+    return cleanLeakedBackslashesInPlainText(cleaned);
   }
 
   return replaceInSpan(cleaned);
@@ -323,5 +428,7 @@ module.exports = {
   repairMissingMathBackslashes,
   convertMathMLToKaTeX,
   repairFractionSyntax,
+  sanitizeTextBlocksInMath,
+  cleanLeakedBackslashesInPlainText,
   BARE_COMMAND_RUN_REGEX,
 };

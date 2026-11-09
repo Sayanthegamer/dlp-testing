@@ -1,12 +1,14 @@
 /**
  * Visual Math Helper: Enables visual formula manipulation for teachers without LaTeX.
  */
+import { repairMissingMathBackslashes } from './mathSanitizerService';
 
 // Convert LaTeX string to visual symbol tokens for visual editor display
 export function latexToVisualText(latex) {
   if (!latex) return '';
-  
-  let visual = latex;
+
+  // Pre-sanitize any broken \text{ \Omega}, \\text, or bare fractions first
+  let visual = repairMissingMathBackslashes(latex);
 
   // Replace matrices \begin{bmatrix} a & b \\ c & d \end{bmatrix} -> matrix(a, b; c, d)
   visual = visual.replace(/\\begin\{bmatrix\}(.*?)\\end\{bmatrix\}/gs, (_, body) => {
@@ -36,6 +38,9 @@ export function latexToVisualText(latex) {
   // Replace physics unit \pu{...} -> unit(...)
   visual = visual.replace(/\\pu\{([^}]+)\}/g, 'unit($1)');
 
+  // Unwrap \text{...} and \mathrm{...} for clean visual display
+  visual = visual.replace(/\\(?:text|mathrm)\{([^{}]*)\}/g, ' $1 ');
+
   // Replace combinatorics \nCr{n}{r} -> nCr(n, r)
   visual = visual.replace(/\\nCr\{([^}]+)\}\{([^}]+)\}/g, 'nCr($1, $2)');
   // Replace permutations \nPr{n}{r} -> nPr(n, r)
@@ -46,9 +51,10 @@ export function latexToVisualText(latex) {
   // Replace complex conjugate \bar{z} -> bar(z)
   visual = visual.replace(/\\bar\{([^}]+)\}/g, 'bar($1)');
   // Replace Re/Im/arg functions
-  visual = visual.replace(/\\text\{Re\}\(([^)]+)\)/g, 'Re($1)')
-                 .replace(/\\text\{Im\}\(([^)]+)\)/g, 'Im($1)')
-                 .replace(/\\text\{arg\}\(([^)]+)\)/g, 'arg($1)');
+  visual = visual
+    .replace(/\\text\{Re\}\(([^)]+)\)/g, 'Re($1)')
+    .replace(/\\text\{Im\}\(([^)]+)\)/g, 'Im($1)')
+    .replace(/\\text\{arg\}\(([^)]+)\)/g, 'arg($1)');
 
   // Replace vector \vec{A} -> vec(A)
   visual = visual.replace(/\\vec\{([^}]+)\}/g, 'vec($1)');
@@ -70,19 +76,39 @@ export function latexToVisualText(latex) {
   visual = visual.replace(/\\sqrt\{([^}]+)\}/g, '√($1)');
   // Replace nth root \sqrt[n]{a} -> ⁿ√(a)
   visual = visual.replace(/\\sqrt\[([^\]]+)\]\{([^}]+)\}/g, '$1√($2)');
+  // Replace degrees {}^{\circ} or ^\circ -> °
+  visual = visual.replace(/\{\}\^\{\\circ\}|\^\{\\circ\}|\^\\circ/g, '°');
   // Replace subscripts x_{n} -> x_n
   visual = visual.replace(/_\{([^}]+)\}/g, '_$1');
   // Replace superscripts x^{n} -> x^n
   visual = visual.replace(/\^\{([^}]+)\}/g, '^$1');
 
   // Replace blackboard bold sets
-  visual = visual.replace(/\\mathbb\{R\}/g, 'ℝ')
-                 .replace(/\\mathbb\{C\}/g, 'ℂ')
-                 .replace(/\\mathbb\{N\}/g, 'ℕ')
-                 .replace(/\\mathbb\{Z\}/g, 'ℤ');
-  
+  visual = visual
+    .replace(/\\mathbb\{R\}/g, 'ℝ')
+    .replace(/\\mathbb\{C\}/g, 'ℂ')
+    .replace(/\\mathbb\{N\}/g, 'ℕ')
+    .replace(/\\mathbb\{Z\}/g, 'ℤ');
+
   // Replace LaTeX command symbols with real math unicode
   const symbolMap = {
+    '\\Omega': 'Ω',
+    '\\omega': 'ω',
+    '\\Delta': 'Δ',
+    '\\delta': 'δ',
+    '\\Theta': 'Θ',
+    '\\theta': 'θ',
+    '\\Lambda': 'Λ',
+    '\\lambda': 'λ',
+    '\\Gamma': 'Γ',
+    '\\gamma': 'γ',
+    '\\Sigma': '∑',
+    '\\sigma': 'σ',
+    '\\Phi': 'Φ',
+    '\\phi': 'ϕ',
+    '\\varphi': 'ϕ',
+    '\\Psi': 'Ψ',
+    '\\psi': 'ψ',
     '\\pm': '±',
     '\\cdot': '⋅',
     '\\times': '×',
@@ -105,34 +131,25 @@ export function latexToVisualText(latex) {
     '\\therefore': '∴',
     '\\angle': '∠',
     '\\pi': 'π',
-    '\\theta': 'θ',
     '\\alpha': 'α',
     '\\beta': 'β',
-    '\\gamma': 'γ',
-    '\\delta': 'δ',
-    '\\lambda': 'λ',
-    '\\sigma': 'σ',
-    '\\omega': 'ω',
-    '\\phi': 'ϕ',
-    '\\varphi': 'ϕ',
     '\\mu': 'μ',
     '\\epsilon': 'ε',
     '\\varepsilon': 'ε',
     '\\infty': '∞',
-    '\\Delta': 'Δ',
     '\\approx': '≈',
     '\\rightarrow': '→',
     '\\to': '→',
     '\\,': ' ',
     '\\;': ' ',
-    '\\quad': ' '
+    '\\quad': ' ',
   };
 
   for (const [cmd, sym] of Object.entries(symbolMap)) {
     visual = visual.split(cmd).join(sym);
   }
 
-  return visual.trim();
+  return visual.replace(/\s+/g, ' ').trim();
 }
 
 // Convert teacher's visual editor inputs into valid LaTeX behind the scenes
@@ -156,9 +173,10 @@ export function visualTextToLatex(visual) {
   // Convert bar(z) -> \bar{z}
   latex = latex.replace(/bar\(([^)]+)\)/g, '\\bar{$1}');
   // Convert Re(z), Im(z), arg(z) -> \text{Re}(z), \text{Im}(z), \text{arg}(z)
-  latex = latex.replace(/Re\(([^)]+)\)/gi, '\\text{Re}($1)')
-               .replace(/Im\(([^)]+)\)/gi, '\\text{Im}($1)')
-               .replace(/arg\(([^)]+)\)/gi, '\\text{arg}($1)');
+  latex = latex
+    .replace(/Re\(([^)]+)\)/gi, '\\text{Re}($1)')
+    .replace(/Im\(([^)]+)\)/gi, '\\text{Im}($1)')
+    .replace(/arg\(([^)]+)\)/gi, '\\text{arg}($1)');
 
   // Convert matrix(a,b; c,d) -> \begin{bmatrix} a & b \\ c & d \end{bmatrix}
   latex = latex.replace(/matrix\(([^)]+)\)/gi, (_, body) => {
@@ -198,6 +216,21 @@ export function visualTextToLatex(visual) {
 
   // Map visual symbols back to LaTeX commands
   const reverseMap = {
+    'Ω': '\\Omega ',
+    'ω': '\\omega ',
+    'Δ': '\\Delta ',
+    'δ': '\\delta ',
+    'Θ': '\\Theta ',
+    'θ': '\\theta ',
+    'Λ': '\\Lambda ',
+    'λ': '\\lambda ',
+    'Γ': '\\Gamma ',
+    'γ': '\\gamma ',
+    'Φ': '\\Phi ',
+    'ϕ': '\\phi ',
+    'Ψ': '\\Psi ',
+    'ψ': '\\psi ',
+    '°': '^{\\circ}',
     '±': '\\pm ',
     '⋅': '\\cdot ',
     '×': '\\times ',
@@ -220,25 +253,18 @@ export function visualTextToLatex(visual) {
     '∴': '\\therefore ',
     '∠': '\\angle ',
     'π': '\\pi ',
-    'θ': '\\theta ',
     'α': '\\alpha ',
     'β': '\\beta ',
-    'γ': '\\gamma ',
-    'δ': '\\delta ',
-    'λ': '\\lambda ',
     'σ': '\\sigma ',
-    'ω': '\\omega ',
-    'ϕ': '\\phi ',
     'μ': '\\mu ',
     'ε': '\\epsilon ',
     '∞': '\\infty ',
-    'Δ': '\\Delta ',
     '≈': '\\approx ',
     '→': '\\rightarrow ',
     'ℝ': '\\mathbb{R}',
     'ℂ': '\\mathbb{C}',
     'ℕ': '\\mathbb{N}',
-    'ℤ': '\\mathbb{Z}'
+    'ℤ': '\\mathbb{Z}',
   };
 
   for (const [sym, cmd] of Object.entries(reverseMap)) {
@@ -256,16 +282,17 @@ export function visualTextToLatex(visual) {
     .replace(/√\(([^)]+)\)/g, '\\sqrt{$1}')
     .replace(/√([a-zA-Z0-9]+)/g, '\\sqrt{$1}');
 
-  return latex.trim();
+  // Run sanitizer so any manual `\text{ \Omega}` or `fracN_pN_s` entered by the user is repaired
+  return repairMissingMathBackslashes(`<math>${latex.trim()}</math>`)
+    .replace(/<\/?math>/gi, '')
+    .trim();
 }
-
 
 function parseFractionsBalanced(input) {
   let str = input;
   let changed = true;
   let iterations = 0;
 
-  // Loop to resolve fractions, starting with outer matching parens
   while (changed && iterations < 10) {
     changed = false;
     iterations++;
@@ -276,7 +303,7 @@ function parseFractionsBalanced(input) {
         let depth = 1;
         let slashIndex = -1;
         let j = i + 1;
-        
+
         while (j < str.length && depth > 0) {
           if (str[j] === '(') depth++;
           else if (str[j] === ')') depth--;

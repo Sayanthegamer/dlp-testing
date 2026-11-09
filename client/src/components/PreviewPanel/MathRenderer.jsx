@@ -23,7 +23,11 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
   }
 
   if (lastIndex < sanitizedText.length) {
-    parts.push({ type: 'text', content: sanitizedText.substring(lastIndex) });
+    parts.push({ type: 'text', content: sanitizedText.substring(lastIdxOrLast(lastIndex)) });
+  }
+
+  function lastIdxOrLast(idx) {
+    return idx;
   }
 
   return (
@@ -33,7 +37,9 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
           return <span key={idx}>{part.content}</span>;
         }
 
-        let cleanMathContent = repairMissingMathBackslashes(part.content.replace(/<\/?math>/gi, '')).trim();
+        let cleanMathContent = repairMissingMathBackslashes(`<math>${part.content.replace(/<\/?math>/gi, '')}</math>`)
+          .replace(/<\/?math>/gi, '')
+          .trim();
         if (!cleanMathContent) return null;
 
         cleanMathContent = cleanMathContent
@@ -66,7 +72,9 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
               "\\pu": "\\mathrm{#1}",
               "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
               "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
-              "\\vhat": "\\hat{\\mathbf{#1}}"
+              "\\vhat": "\\hat{\\mathbf{#1}}",
+              "\\degree": "{}^{\\circ}",
+              "\\angstrom": "\\text{\\AA}"
             }
           });
         } catch (_) {

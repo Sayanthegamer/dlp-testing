@@ -48,7 +48,8 @@ export function computeNeedsReview(question) {
     ...(Array.isArray(question.options) ? question.options : [])
   ].join(' ');
 
-  const mathMatches = fullTextToTest.match(/<math>(.*?)<\/math>/gi) || [];
+  const sanitizedFullText = repairMissingMathBackslashes(fullTextToTest);
+  const mathMatches = sanitizedFullText.match(/<math>([\s\S]*?)<\/math>/gi) || [];
   let katexHasError = false;
 
   const KATEX_EVAL_OPTIONS = {
@@ -59,7 +60,9 @@ export function computeNeedsReview(question) {
       "\\pu": "\\mathrm{#1}",
       "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
       "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
-      "\\vhat": "\\hat{\\mathbf{#1}}"
+      "\\vhat": "\\hat{\\mathbf{#1}}",
+      "\\degree": "{}^{\\circ}",
+      "\\angstrom": "\\text{\\AA}"
     }
   };
 
@@ -67,8 +70,10 @@ export function computeNeedsReview(question) {
     const rawFormula = match.replace(/<\/?math>/gi, '').trim();
     if (!rawFormula) continue;
 
-    const cleanFormula = repairMissingMathBackslashes(rawFormula)
-      .replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
+    const cleanFormula = repairMissingMathBackslashes(`<math>${rawFormula}</math>`)
+      .replace(/<\/?math>/gi, '')
+      .replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}')
+      .trim();
 
     try {
       katex.renderToString(cleanFormula, KATEX_EVAL_OPTIONS);
@@ -87,7 +92,7 @@ export function computeNeedsReview(question) {
     reasons.push('Verify structural diagram attachment');
   }
 
-  if (hasBareCommandRun(fullTextToTest)) {
+  if (hasBareCommandRun(sanitizedFullText)) {
     reasons.push('Formula formatting check needed');
   }
 

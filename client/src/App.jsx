@@ -27,7 +27,24 @@ import {
   logoutStudent
 } from './services/apiService';
 import { computeNeedsReview } from './services/reviewEvaluator';
+import { repairMissingMathBackslashes } from './services/mathSanitizerService';
 import { ArrowLeft, Terminal, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+
+function sanitizeQuestionsList(qList = []) {
+  if (!Array.isArray(qList)) return [];
+  return qList.map((q) => ({
+    ...q,
+    questionText:
+      typeof q.questionText === 'string'
+        ? repairMissingMathBackslashes(q.questionText)
+        : q.questionText,
+    options: Array.isArray(q.options)
+      ? q.options.map((opt) =>
+          typeof opt === 'string' ? repairMissingMathBackslashes(opt) : opt
+        )
+      : q.options,
+  }));
+}
 
 const INITIAL_CATALOGUE = {
   testTitle: "Higher Secondary Mathematics — Unit Assessment",
@@ -146,7 +163,7 @@ export default function App() {
     try {
       const parsed = await parseQuestionText(rawText);
       if (parsed.questions && parsed.questions.length > 0) {
-        setQuestions(parsed.questions);
+        setQuestions(sanitizeQuestionsList(parsed.questions));
         if (parsed.testTitle) setTestTitle(parsed.testTitle);
         setIsJustParsed(true);
       }
@@ -165,7 +182,7 @@ export default function App() {
     try {
       const parsed = await parseQuestionImage(payload, mediaType);
       if (parsed.questions && parsed.questions.length > 0) {
-        setQuestions(parsed.questions);
+        setQuestions(sanitizeQuestionsList(parsed.questions));
         if (parsed.testTitle) setTestTitle(parsed.testTitle);
         setIsJustParsed(true);
       }
@@ -184,7 +201,7 @@ export default function App() {
     try {
       const parsed = await parseDocxStructure(docxStatus);
       if (parsed.questions && parsed.questions.length > 0) {
-        setQuestions(parsed.questions);
+        setQuestions(sanitizeQuestionsList(parsed.questions));
         if (parsed.testTitle) setTestTitle(parsed.testTitle);
         setIsJustParsed(true);
       }
@@ -267,23 +284,26 @@ export default function App() {
     if (!activeMathEdit) return;
 
     const { questionId } = activeMathEdit;
+    const sanitizedOld = oldLatex
+      ? repairMissingMathBackslashes(`<math>${oldLatex}</math>`).replace(/<\/?math>/gi, '').trim()
+      : '';
+
     setQuestions(prev => prev.map(q => {
       if (q.id !== questionId) return q;
 
-      let updatedStem = q.questionText;
+      let updatedStem = repairMissingMathBackslashes(q.questionText || '');
       if (oldLatex) {
-        updatedStem = updatedStem.replace(
-          new RegExp(`<math>${escapeRegExp(oldLatex)}<\\/math>`, 'g'),
-          `<math>${newLatex}</math>`
-        );
+        updatedStem = updatedStem
+          .replace(new RegExp(`<math>\\s*${escapeRegExp(oldLatex)}\\s*<\\/math>`, 'g'), `<math>${newLatex}</math>`)
+          .replace(new RegExp(`<math>\\s*${escapeRegExp(sanitizedOld)}\\s*<\\/math>`, 'g'), `<math>${newLatex}</math>`);
       }
 
-      const updatedOptions = (q.options || []).map(opt => {
-        if (oldLatex && opt.includes(oldLatex)) {
-          return opt.replace(
-            new RegExp(`<math>${escapeRegExp(oldLatex)}<\\/math>`, 'g'),
-            `<math>${newLatex}</math>`
-          );
+      const updatedOptions = (q.options || []).map(rawOpt => {
+        const opt = repairMissingMathBackslashes(rawOpt || '');
+        if (oldLatex && (opt.includes(oldLatex) || (sanitizedOld && opt.includes(sanitizedOld)))) {
+          return opt
+            .replace(new RegExp(`<math>\\s*${escapeRegExp(oldLatex)}\\s*<\\/math>`, 'g'), `<math>${newLatex}</math>`)
+            .replace(new RegExp(`<math>\\s*${escapeRegExp(sanitizedOld)}\\s*<\\/math>`, 'g'), `<math>${newLatex}</math>`);
         }
         return opt;
       });
@@ -300,8 +320,11 @@ export default function App() {
   };
 
   const handlePublishExam = async () => {
+    const sanitizedQuestions = sanitizeQuestionsList(questions);
+    setQuestions(sanitizedQuestions);
+
     const unreviewedQuestions = [];
-    questions.forEach((q, idx) => {
+    sanitizedQuestions.forEach((q, idx) => {
       const evaluation = computeNeedsReview(q);
       if (evaluation.needsReview) {
         unreviewedQuestions.push(`Question ${idx + 1}: ${evaluation.reasons.join(', ')}`);
@@ -321,12 +344,12 @@ export default function App() {
     setIsLoading(true);
     setLoadingMessage('Publishing frozen exam snapshot');
     try {
-      const res = await publishExam({ testTitle, questions });
+      const res = await publishExam({ testTitle, questions: sanitizedQuestions });
       if (res && res.examId) {
         setPublishedExamInfo({
           examId: res.examId,
           testTitle: res.testTitle,
-          questionsCount: questions.length
+          questionsCount: sanitizedQuestions.length
         });
       }
     } catch (err) {
@@ -367,7 +390,7 @@ export default function App() {
         if (examObj.testTitle) setTestTitle(examObj.testTitle);
         const qList = Array.isArray(examObj.questions) ? examObj.questions : (examObj.snapshot_data?.questions || []);
         if (Array.isArray(qList) && qList.length > 0) {
-          setQuestions(qList);
+          setQuestions(sanitizeQuestionsList(qList));
         }
         if (examObj.id) setTargetTestId(examObj.id);
       }

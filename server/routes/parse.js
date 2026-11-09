@@ -48,15 +48,17 @@ CRITICAL RULES:
 2. NO LITERAL "\\n" IN STRINGS: Do not put literal "\\n" string characters inside JSON string values. Replace all line breaks with clean space separators.
 3. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
    - NEVER put plain English sentences, problem instructions, question numbers ("Question 1"), or option letters ("Option A") inside <math> tags.
-   - For options with plain English words like "4 times" or "16 times", write "<math>4</math> times" or "<math>4 \\text{ times}</math>" — NEVER write "\\\\text" (double LaTeX backslash) or "\\text{\\times}".
-4. LATEX BACKSLASHES: Inside <math>...</math>, use standard single LaTeX commands (\frac{num}{den}, \sqrt{x}, \pi, \alpha, \times, \text{...}, \pu{...}, \ce{...}). Never use double LaTeX backslashes (\\\\frac or \\\\text) inside <math> spans, as \\\\ is a line break in KaTeX.
+   - NEVER put LaTeX backslashes in plain English text outside <math> tags (write "High resistance in parallel" and "Gamma rays", NEVER "High resistance \\in parallel" or "\\Gamma rays").
+4. LATEX BACKSLASHES & UNITS: Inside <math>...</math>, use standard single LaTeX commands (\\frac{num}{den}, \\sqrt{x}, \\pi, \\alpha, \\times, \\Omega, \\mu).
+   - NEVER put math-mode symbols like \\Omega, \\mu, ^, or _ inside \\text{...} (because KaTeX throws a parse error on \\text{ \\Omega}). Instead write <math>P = 10\\,\\Omega</math>, <math>20\\,\\Omega</math>, or <math>\\pu{20 \\Omega}</math>.
+   - Never use double LaTeX backslashes (\\\\frac or \\\\text) inside <math> spans, as \\\\ is a line break in KaTeX.
 5. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and ALWAYS use explicit curly braces around BOTH numerator and denominator (<math>\\frac{N_p}{N_s}</math> — NEVER write bare fracN_pN_s) and radicals (<math>\\sqrt{expression}</math>).
 6. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg).
 7. CHEMISTRY & REACTION NOTATION: Wrap chemical formulas, balanced reactions, state symbols, ionic charges, and nuclear isotopes in <math>\\ce{...}</math> using mhchem syntax.
-8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> (e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{50 \\Omega}</math>, <math>\\pu{4 V/m}</math>).
+8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> or use math-mode units (e.g. <math>9.8\\,\\mathrm{m/s^2}</math>, <math>20\\,\\Omega</math>, <math>4\\,\\mathrm{V/m}</math>).
 9. PERMUTATIONS & COMBINATIONS: Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math>.
 10. QUESTION TYPES & ANSWERS:
-   - For MCQ: set "type": "mcq", ALWAYS populate "options" with all 4 option strings from the question, and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D) ONLY if explicitly stated in the source; otherwise set null.
+   - For MCQ: set "type": "mcq", ALWAYS populate "options" as a JSON array of 4 option strings (never leave "options": [] on an MCQ question; if options are split across columns or partially cut off, reconstruct the 4 standard options), and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D) ONLY if explicitly stated in the source; otherwise set null.
    - For Numerical: set "type": "short_answer_numeric", "options": [], and provide an estimated numeric float/integer "correctAnswer" and "acceptedRange": [min, max].
    - Match the Following: set "type": "match_following" with combination choices in "options".
 11. DIAGRAMS: Bounding boxes for visual diagrams belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex.
@@ -74,7 +76,6 @@ function isKeyValid(key) {
 
 /**
  * Deterministic Smart Demo Fallback Parser when no AI API keys are configured.
- * Converts informal math text, docx structures, or demo image uploads into valid typeset questions.
  */
 function buildSmartFallbackCatalogue({ type, rawText, docxStructure, candidateFigures }) {
   if (type === 'docx_structure' && docxStructure) {
@@ -250,10 +251,6 @@ async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 1) {
 /**
  * Repairs unescaped single backslashes inside JSON string values WITHOUT doubling
  * already-escaped `\\` pairs.
- *
- * Root Cause Fixed: Previously, `/\\(?=[a-zA-Z])/g` lacked a single-pass `\\\\` consumer,
- * so valid JSON `"\\text"` had its second backslash doubled to `"\\\text"`, triggering
- * fallback quadruple-escaping into `"\\\\text"` (`\\text` in KaTeX = newline + "text").
  */
 function repairJsonUnescapedBackslashes(str) {
   if (typeof str !== 'string') return str;
@@ -268,7 +265,6 @@ function repairJsonUnescapedBackslashes(str) {
     clean = clean.substring(firstBrace);
   }
 
-  // Restore literal control characters that may already be present in raw strings
   clean = clean
     .replace(/\x09(ext(?:bf|it|rm)?|imes|heta|au|anh?|o\b|op\b|riangle|ilde|frac|iny)/g, '\\\\t$1')
     .replace(/\x0C(rac|orall|lat|rown)/g, '\\\\f$1')
@@ -280,18 +276,14 @@ function repairJsonUnescapedBackslashes(str) {
     let inner = token.replace(
       /\\\\|\\(["\/])|\\u[0-9a-fA-F]{4}|\\([bfnrt])([a-zA-Z]*)|\\(?=[a-zA-Z\{\}\_\^\%\#\$\&\s])/g,
       (match, quoteOrSlash, ctrlChar, ctrlSuffix) => {
-        // 1. Already-escaped pair `\\` -> preserve as `\\` (never double it!)
         if (match === '\\\\') return '\\\\';
-        // 2. Standard JSON escapes `\"`, `\/`, `\uXXXX` -> preserve as is
         if (quoteOrSlash || match.startsWith('\\u')) return match;
-        // 3. `\b`, `\f`, `\n`, `\r`, `\t` followed by command letters (e.g. \frac, \text, \times, \theta, \nCr, \rho, \beta)
         if (ctrlChar) {
           if (ctrlSuffix && ctrlSuffix.length > 0) {
             return '\\\\' + ctrlChar + ctrlSuffix;
           }
           return match;
         }
-        // 4. Single unescaped backslash before a LaTeX command/symbol -> escape to `\\`
         return '\\\\';
       }
     );
@@ -374,36 +366,46 @@ function repairTruncatedJson(jsonStr) {
 }
 
 /**
- * Extracts inline options (e.g. `(A) ... (B) ... (C) ... (D) ...` or `(1) ... (2) ... (3) ... (4) ...`)
- * from `questionText` if the LLM left `options` empty on an MCQ question.
+ * Normalizes options from array, object (`{A: "...", B: "..."}`), or inline stem text.
  */
-function splitInlineOptionsIfMissing(questionText, existingOptions) {
-  if (Array.isArray(existingOptions) && existingOptions.length >= 2) {
-    return { stem: questionText, options: existingOptions };
+function normalizeRawOptionsAndStem(questionText, q) {
+  let rawOptions = q.options || q.choices || [];
+  if (rawOptions && !Array.isArray(rawOptions) && typeof rawOptions === 'object') {
+    rawOptions = Object.values(rawOptions);
   }
-  if (typeof questionText !== 'string') {
-    return { stem: questionText, options: existingOptions || [] };
-  }
-
-  // Match (A) ... (B) ... (C) ... (D) ... or A) ... B) ... C) ... D) ...
-  const letterPattern = /\s+(?:\([A-Da-d]\)|[A-Da-d][\)\.])\s+/g;
-  const matches = [...questionText.matchAll(letterPattern)];
-  if (matches.length >= 2) {
-    const firstIdx = matches[0].index;
-    const stem = questionText.substring(0, firstIdx).trim();
-    const extracted = [];
-    for (let i = 0; i < matches.length; i++) {
-      const start = matches[i].index + matches[i][0].length;
-      const end = i + 1 < matches.length ? matches[i + 1].index : questionText.length;
-      const optText = questionText.substring(start, end).trim();
-      if (optText) extracted.push(optText);
-    }
-    if (stem && extracted.length >= 2) {
-      return { stem, options: extracted };
-    }
+  if (!Array.isArray(rawOptions)) {
+    rawOptions = [];
   }
 
-  return { stem: questionText, options: existingOptions || [] };
+  if (rawOptions.length >= 2 || typeof questionText !== 'string') {
+    return { stem: questionText, options: rawOptions };
+  }
+
+  // Match inline (A) ... (B) ... (C) ... (D) ... or (a) ... (b) ... or (1) ... (2) ...
+  const inlinePatterns = [
+    /\s+(?:\([A-Da-d]\)|[A-Da-d][\)\.])\s+/g,
+    /\s+\([1-4]\)\s+/g,
+  ];
+
+  for (const pattern of inlinePatterns) {
+    const matches = [...questionText.matchAll(pattern)];
+    if (matches.length >= 2) {
+      const firstIdx = matches[0].index;
+      const stem = questionText.substring(0, firstIdx).trim();
+      const extracted = [];
+      for (let i = 0; i < matches.length; i++) {
+        const start = matches[i].index + matches[i][0].length;
+        const end = i + 1 < matches.length ? matches[i + 1].index : questionText.length;
+        const optText = questionText.substring(start, end).trim();
+        if (optText) extracted.push(optText);
+      }
+      if (stem && extracted.length >= 2) {
+        return { stem, options: extracted };
+      }
+    }
+  }
+
+  return { stem: questionText, options: rawOptions };
 }
 
 function extractAndParseJson(text) {
@@ -433,7 +435,6 @@ function extractAndParseJson(text) {
       parsed = JSON.parse(fixedTruncated);
     } catch (err2) {
       try {
-        // Only escape single unescaped backslashes `(?<!\\)\\(?!\\)` so existing `\\` are never quadrupled
         const safeFallback = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
           return match.replace(/\\\\|\\/g, (m) => (m === '\\\\' ? '\\\\' : '\\\\'));
         });
@@ -492,7 +493,7 @@ function extractAndParseJson(text) {
       rawQuestionText = originalRaw.trim();
     }
 
-    const splitResult = splitInlineOptionsIfMissing(rawQuestionText, q.options);
+    const splitResult = normalizeRawOptionsAndStem(rawQuestionText, q);
     rawQuestionText = splitResult.stem;
     const rawOptionsList = splitResult.options;
 
@@ -643,7 +644,6 @@ async function handleParseRequest(req, res, forcedType = null) {
 
   const candidateFigures = await extractCandidateFigures(effectiveMediaFiles);
 
-  // If no API keys are configured, run Smart Demo Fallback Mode so teachers can test offline
   if (providers.length === 0) {
     try {
       const fallbackData = buildSmartFallbackCatalogue({
@@ -672,7 +672,6 @@ async function handleParseRequest(req, res, forcedType = null) {
     }
   }
 
-  // Process 1 page per chunk so dense multi-question PDF pages never exceed model output token limits
   const chunkSize = 1;
   const mediaChunks =
     type === 'image' || type === 'media'
@@ -794,7 +793,6 @@ async function handleParseRequest(req, res, forcedType = null) {
   });
 }
 
-// Primary unified route + documented REST route aliases
 router.post('/parse-question', (req, res) => handleParseRequest(req, res));
 router.post('/parse-text', (req, res) => handleParseRequest(req, res, 'text'));
 router.post('/parse-image', (req, res) => handleParseRequest(req, res, 'media'));

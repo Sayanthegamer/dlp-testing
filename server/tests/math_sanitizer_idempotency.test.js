@@ -21,7 +21,15 @@ describe('Math Sanitizer Idempotency & Stability Suite', () => {
     '<math>(1\\\\text{ m}, 0, 2\\\\text{ m})</math>',
     '<math>4 \\\\text{ V/m}</math>',
     '<math>k = fracN_pN_s</math>',
-    '<math>k = \\\\frac{N_p}{N_s}</math>'
+    '<math>k = \\\\frac{N_p}{N_s}</math>',
+    '<math>P = 10 \\text{ \\Omega}</math>',
+    '<math>20 \\text{ \\Omega}</math>',
+    '<math>10 \\text{ k\\Omega}</math>',
+    '<math>5 \\text{ \\mu F}</math>',
+    'High resistance \\in parallel',
+    'Low resistance \\in series',
+    '\\Gamma rays',
+    'Gamma rays'
   ];
 
   testCases.forEach((sample, idx) => {
@@ -40,6 +48,22 @@ describe('Math Sanitizer Idempotency & Stability Suite', () => {
     expect(repairMissingMathBackslashes('<math>16 \\\\text{ times}</math>')).toBe('<math>16 \\text{ times}</math>');
     expect(repairMissingMathBackslashes('<math>V = 4x^2 \\\\text{ Volt}</math>')).toBe('<math>V = 4x^2 \\text{ Volt}</math>');
     expect(repairMissingMathBackslashes('<math>4 \\\\text{ V/m}</math>')).toBe('<math>4 \\text{ V/m}</math>');
+  });
+
+  it('should repair \\text{ \\Omega}, \\text{ k\\Omega}, and \\text{ \\mu F} out of text mode so KaTeX never throws', () => {
+    expect(repairMissingMathBackslashes('<math>P = 10 \\text{ \\Omega}</math>')).toBe('<math>P = 10 \\,\\Omega</math>');
+    expect(repairMissingMathBackslashes('<math>20 \\text{ \\Omega}</math>')).toBe('<math>20 \\,\\Omega</math>');
+    expect(repairMissingMathBackslashes('<math>10 \\text{ k\\Omega}</math>')).toBe('<math>10 \\,\\mathrm{k}\\Omega</math>');
+    expect(repairMissingMathBackslashes('<math>5 \\text{ \\mu F}</math>')).toBe('<math>5 \\,\\mu\\,\\mathrm{F}</math>');
+  });
+
+  it('should never inject \\in or \\Gamma into plain English phrases outside <math> tags, and should clean leaked ones', () => {
+    expect(repairMissingMathBackslashes('High resistance in parallel')).toBe('High resistance in parallel');
+    expect(repairMissingMathBackslashes('High resistance \\in parallel')).toBe('High resistance in parallel');
+    expect(repairMissingMathBackslashes('Low resistance \\in series')).toBe('Low resistance in series');
+    expect(repairMissingMathBackslashes('Gamma rays')).toBe('Gamma rays');
+    expect(repairMissingMathBackslashes('\\Gamma rays')).toBe('Gamma rays');
+    expect(repairMissingMathBackslashes('Q1. (1) The circuit has 2R and X in series')).toBe('Q1. (1) The circuit has 2R and X in series');
   });
 
   it('should repair bare fracN_pN_s and over-escaped \\\\frac{N_p}{N_s} into \\frac{N_p}{N_s}', () => {
