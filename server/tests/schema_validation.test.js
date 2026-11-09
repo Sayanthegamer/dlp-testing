@@ -128,14 +128,65 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(parsed.questions[0].questionText).toBe('Solve <math>x^2</math>');
   });
 
-  it('should double-escape LaTeX backslashes starting with f, n, r, b, t (\\frac, \\nCr, \\rho, \\beta, \\times) without throwing Bad escaped character', () => {
+  it('should double-escape LaTeX backslashes starting with f, n, r, b, t (\\frac, \\nCr, \\rho, \\beta, \\times, \\text) without throwing Bad escaped character', () => {
     const { extractAndParseJson } = require('../routes/parse.js');
-    const rawJsonWithSingleBackslashes = String.raw`{"testTitle": "LaTeX Exam", "questions": [{"id": "q1", "questionText": "Solve <math>\frac{a}{b} + \nCr{10}{3} + \rho + \beta + \times</math>", "type": "mcq", "options": ["1", "2"]}]}`;
+    const rawJsonWithSingleBackslashes = String.raw`{"testTitle": "LaTeX Exam", "questions": [{"id": "q1", "questionText": "Solve <math>\frac{a}{b} + \nCr{10}{3} + \rho + \beta + \times + \text{ Volt}</math>", "type": "mcq", "options": ["<math>4 \text{ times}</math>", "<math>8 \text{ V/m}</math>"]}]}`;
     const parsed = extractAndParseJson(rawJsonWithSingleBackslashes);
     expect(parsed).toBeDefined();
     expect(parsed.questions[0].questionText).toContain(String.raw`\frac{a}{b}`);
     expect(parsed.questions[0].questionText).toContain(String.raw`\nCr{10}{3}`);
     expect(parsed.questions[0].questionText).toContain(String.raw`\rho`);
+    expect(parsed.questions[0].questionText).toContain(String.raw`\text{ Volt}`);
+    expect(parsed.questions[0].options[0]).toBe(String.raw`<math>4 \text{ times}</math>`);
+    expect(parsed.questions[0].options[1]).toBe(String.raw`<math>8 \text{ V/m}</math>`);
+  });
+
+  it('should preserve properly escaped JSON backslashes (\\\\text, \\\\frac, \\\\sqrt) without doubling them into \\\\text in parsed output', () => {
+    const { extractAndParseJson } = require('../routes/parse.js');
+    const validGeminiJson = JSON.stringify({
+      testTitle: 'Physics Electrostatics',
+      questions: [
+        {
+          id: 'q4',
+          questionText: 'Electric potential at a point <math>(x, y, z)</math> is given by <math>V = 4x^2 \\text{ Volt}</math>. The magnitude of electric field intensity at the point <math>(1\\text{ m}, 0, 2\\text{ m})</math> is:',
+          type: 'mcq',
+          options: [
+            '<math>4 \\text{ V/m}</math>',
+            '<math>8 \\text{ V/m}</math>',
+            '<math>16 \\text{ V/m}</math>',
+            '<math>2 \\text{ V/m}</math>'
+          ],
+          correctAnswer: 1
+        },
+        {
+          id: 'q8',
+          questionText: 'Sixty-four small spherical mercury drops, each of radius <math>r</math> and charge <math>q</math>, coalesce to form a single big drop.',
+          type: 'mcq',
+          options: [
+            '<math>4 \\text{ times}</math>',
+            '<math>16 \\text{ times}</math>',
+            '<math>64 \\text{ times}</math>',
+            '<math>2 \\text{ times}</math>'
+          ],
+          correctAnswer: 0
+        },
+        {
+          id: 'q31',
+          questionText: 'In a step-up transformer, transformation ratio <math>k = \\frac{N_p}{N_s}</math> satisfies:',
+          type: 'mcq',
+          options: ['<math>k < 1</math>', '<math>k > 1</math>', '<math>k = 1</math>', '<math>k = 0</math>'],
+          correctAnswer: 0
+        }
+      ]
+    });
+
+    const parsed = extractAndParseJson(validGeminiJson);
+    expect(parsed.questions[0].questionText).toContain('\\text{ Volt}');
+    expect(parsed.questions[0].questionText).not.toContain('\\\\text');
+    expect(parsed.questions[0].options[0]).toBe('<math>4 \\text{ V/m}</math>');
+    expect(parsed.questions[1].options[0]).toBe('<math>4 \\text{ times}</math>');
+    expect(parsed.questions[2].questionText).toContain('\\frac{N_p}{N_s}');
+    expect(parsed.questions[2].questionText).not.toContain('\\\\frac');
   });
 
   it('should repair mangled <_p u > tags in stem and options into clean <math>\\pu{...}</math>', () => {
@@ -154,6 +205,3 @@ describe('Strict JSON Schema Invariant Validation', () => {
     expect(repairMissingMathBackslashes('2.5A </math>')).toBe('<math>2.5A</math>');
   });
 });
-
-
-

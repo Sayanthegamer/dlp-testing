@@ -1,11 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const { supabase, isConfigured } = require('../services/supabaseClient');
-const { getTeacherAccessCode, isValidTeacherAccessCode, safeCompareStrings } = require('../services/authService');
+const {
+  getAdminClient,
+  createAuthClient,
+   createUserClient,
+  ensureTeacherProfile,
+  isConfigured,
+  isValidUserJwt,
+} = require('../services/supabaseClient');
+const { isValidTeacherAccessCode, safeCompareStrings } = require('../services/authService');
 
 /**
  * POST /api/auth/signup
- * Register a new teacher account in Supabase Auth (requires accessCode)
+ * Register a new teacher account in Supabase Auth (requires accessCode).
+ * Uses a disposable Auth client so the singleton admin client is never polluted with user session state.
  */
 router.post('/signup', async (req, res) => {
   const { email, password, fullName, accessCode } = req.body || {};
@@ -27,30 +35,36 @@ router.post('/signup', async (req, res) => {
     });
   }
 
+  const authClient = createAuthClient() || getAdminClient();
+  if (!authClient) {
+    return res.status(500).json({ error: 'Supabase authentication client is not available.' });
+  }
+
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanName = fullName ? String(fullName).trim() : cleanEmail.split('@')[0];
+
+    const { data, error } = await authClient.auth.signUp({
+      email: cleanEmail,
       password,
       options: {
-        data: { full_name: fullName || '' },
+        data: { full_name: cleanName },
       },
     });
 
     if (error) throw error;
 
-    if (data.user) {
-      try {
-        const { error: upsertErr } = await supabase.from('teachers').upsert({
-          id: data.user.id,
-          email: data.user.email,
-          full_name: fullName || data.user.email.split('@')[0],
-        });
-        if (upsertErr) {
-          console.warn('[Teacher Profile Upsert Warning]:', upsertErr.message);
-        }
-      } catch (upsertCatch) {
-        console.warn('[Teacher Profile Upsert Exception]:', upsertCatch.message);
-      }
+    if (data?.user) {
+      const userClient = data.session?.access_token
+        ? createUserClient(data.session.access_token)
+        : null;
+      await ensureTeacherProfile(
+        {
+          ...data.user,
+          fullName: cleanName,
+        },
+        userClient
+      );
     }
 
     const requiresConfirmation = !data.session;
@@ -78,7 +92,8 @@ router.post('/signup', async (req, res) => {
 
 /**
  * POST /api/auth/login (and alias POST /api/auth/teacher-login)
- * Log in teacher via Supabase Auth (email + password)
+ * Log in teacher via Supabase Auth (email + password).
+ * Uses a disposable Auth client and syncs the teacher profile into `public.teachers`.
  */
 async function handleTeacherLogin(req, res) {
   const { email, password } = req.body || {};
@@ -103,13 +118,27 @@ async function handleTeacherLogin(req, res) {
     return res.status(401).json({ error: 'Invalid credentials.' });
   }
 
+  const authClient = createAuthClient() || getAdminClient();
+  if (!authClient) {
+    return res.status(500).json({ error: 'Supabase authentication client is not available.' });
+  }
+
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+    const cleanEmail = String(email).trim().toLowerCase();
+    const { data, error } = await authClient.auth.signInWithPassword({
+      email: cleanEmail,
       password,
     });
 
     if (error) throw error;
+
+    // Ensure the authenticated teacher exists in public.teachers so foreign keys never fail
+    if (data?.user) {
+      const userClient = data.session?.access_token
+        ? createUserClient(data.session.access_token)
+        : null;
+      await ensureTeacherProfile(data.user, userClient);
+    }
 
     return res.json({
       success: true,
@@ -143,7 +172,11 @@ router.get('/me', async (req, res) => {
     return res.status(401).json({ authenticated: false, error: 'No auth token provided' });
   }
 
-  if (token === 'legacy-app-password-token' || token === 'dev-fallback-token') {
+  if (
+    token === 'legacy-app-password-token' ||
+    token === 'dev-fallback-token' ||
+    isValidTeacherAccessCode(token)
+  ) {
     return res.json({
       authenticated: true,
       mode: 'fallback',
@@ -160,8 +193,15 @@ router.get('/me', async (req, res) => {
   }
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (!isValidUserJwt(token)) {
+      return res.status(401).json({ authenticated: false, error: 'Invalid user session token format.' });
+    }
+
+    const authClient = createAuthClient() || getAdminClient();
+    const { data: { user }, error } = await authClient.auth.getUser(token);
     if (error || !user) throw error || new Error('Invalid user session');
+
+    await ensureTeacherProfile(user, createUserClient(token));
 
     return res.json({
       authenticated: true,
@@ -187,7 +227,7 @@ router.post('/refresh', async (req, res) => {
     return res.status(400).json({ error: 'refresh_token is required.' });
   }
 
-  if (!isConfigured()) {
+  if (!isConfigured() || refresh_token === 'dev-refresh-token') {
     return res.json({
       success: true,
       token: 'dev-fallback-token',
@@ -196,12 +236,17 @@ router.post('/refresh', async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    const authClient = createAuthClient() || getAdminClient();
+    const { data, error } = await authClient.auth.refreshSession({ refresh_token });
 
     if (error) throw error;
 
     if (!data.session) {
       return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+
+    if (data.user) {
+      await ensureTeacherProfile(data.user, createUserClient(data.session.access_token));
     }
 
     return res.json({

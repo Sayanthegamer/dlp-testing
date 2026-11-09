@@ -1,17 +1,16 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { supabase, isConfigured } = require('./supabaseClient');
+const {
+  supabase,
+  getAdminClient,
+  isConfigured,
+  isValidUuid,
+} = require('./supabaseClient');
 const {
   readLocalStudents,
   writeLocalStudents,
-  readSubmissionsLocal
+  readSubmissionsLocal,
 } = require('./localStoreService');
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isValidUuid(val) {
-  return typeof val === 'string' && UUID_REGEX.test(val.trim());
-}
 
 function getJwtSecret() {
   return process.env.JWT_SECRET || 'antigravity_dlp_secret_key_2026';
@@ -21,7 +20,7 @@ function getSupabaseClient() {
   if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
     return null;
   }
-  return isConfigured() ? supabase : null;
+  return isConfigured() ? getAdminClient() || supabase : null;
 }
 
 function formatDob(rawDob) {
@@ -44,11 +43,28 @@ function generateStudentToken(student) {
       studentId: student.id,
       admissionNumber: student.admission_number,
       fullName: student.full_name,
-      role: 'student'
+      role: 'student',
     },
     getJwtSecret(),
     { expiresIn: '24h' }
   );
+}
+
+/**
+ * Verifies whether a teacher UUID exists in `public.teachers` before using it as a foreign key on `students`.
+ */
+async function resolveVerifiedTeacherUuid(sb, candidateTeacherId) {
+  if (!sb || !isValidUuid(candidateTeacherId)) return null;
+  try {
+    const { data } = await sb
+      .from('teachers')
+      .select('id')
+      .eq('id', candidateTeacherId.trim())
+      .maybeSingle();
+    return data?.id || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /**
@@ -117,13 +133,15 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     throw new Error('A valid Teacher Code or Access Passcode is required for student registration.');
   }
 
-  const validAccessCode = process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
+  const validAccessCode =
+    process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
   let resolvedTeacherId = null;
 
   const sb = getSupabaseClient();
 
   if (
     cleanTeacherCode === validAccessCode ||
+    cleanTeacherCode === process.env.APP_PASSWORD ||
     cleanTeacherCode === 'dlp_teacher_secret_passcode_2026' ||
     cleanTeacherCode === 'admin' ||
     cleanTeacherCode === 'local-dev-user' ||
@@ -133,19 +151,14 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
   } else if (sb) {
     try {
       if (isValidUuid(cleanTeacherCode)) {
-        const { data: teacher } = await sb
-          .from('teachers')
-          .select('id')
-          .eq('id', cleanTeacherCode)
-          .maybeSingle();
-        if (teacher) resolvedTeacherId = teacher.id;
+        resolvedTeacherId = await resolveVerifiedTeacherUuid(sb, cleanTeacherCode);
       } else {
         const { data: teacher } = await sb
           .from('teachers')
           .select('id')
-          .eq('email', cleanTeacherCode)
+          .eq('email', cleanTeacherCode.toLowerCase())
           .maybeSingle();
-        if (teacher) resolvedTeacherId = teacher.id;
+        if (teacher?.id) resolvedTeacherId = teacher.id;
       }
     } catch (_) {}
   } else {
@@ -166,16 +179,31 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
     admission_number: cleanAdm,
     full_name: cleanName,
     dob: cleanDob,
-    teacher_id: sb ? (isValidUuid(resolvedTeacherId) ? resolvedTeacherId : null) : (resolvedTeacherId || 'teacher_general'),
-    created_at: new Date().toISOString()
+    teacher_id: sb
+      ? isValidUuid(resolvedTeacherId)
+        ? resolvedTeacherId
+        : null
+      : resolvedTeacherId || 'teacher_general',
+    created_at: new Date().toISOString(),
   };
 
   if (sb) {
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from('students')
       .insert([newStudent])
       .select()
       .single();
+
+    // Retry with teacher_id: null if teacher_id foreign key fails
+    if (error && error.code === '23503' && newStudent.teacher_id) {
+      const retryRes = await sb
+        .from('students')
+        .insert([{ ...newStudent, teacher_id: null }])
+        .select()
+        .single();
+      data = retryRes.data;
+      error = retryRes.error;
+    }
 
     if (error && error.code === '23505') {
       throw new Error(`Admission Number "${cleanAdm}" is already registered. Please log in.`);
@@ -202,7 +230,8 @@ async function studentSignup({ admissionNumber, fullName, dob, teacherId }) {
 }
 
 /**
- * Fetch all exam submissions for a given student ID
+ * Fetch all exam submissions for a given student ID.
+ * Normalizes `testTitle`, `finalScore`, `questions`, and `studentAnswers` for `StudentPortal.jsx`.
  */
 async function getStudentSubmissions(studentId) {
   if (!studentId) return [];
@@ -217,7 +246,18 @@ async function getStudentSubmissions(studentId) {
         .order('submitted_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
-        return data;
+        return data.map(row => {
+          const resp =
+            row.responses && typeof row.responses === 'string'
+              ? JSON.parse(row.responses)
+              : row.responses || {};
+          return {
+            ...resp,
+            ...row,
+            testTitle: row.exams?.title || resp.testTitle || 'Mathematics Assessment',
+            examTitle: row.exams?.title || resp.testTitle || 'Mathematics Assessment',
+          };
+        });
       }
     } catch (_) {}
     return [];
@@ -235,7 +275,7 @@ async function teacherCreateStudent({ teacherId, admissionNumber, fullName, dob 
     admissionNumber,
     fullName,
     dob,
-    teacherId: teacherId || 'teacher_general'
+    teacherId: teacherId || 'teacher_general',
   });
 }
 
@@ -263,11 +303,12 @@ async function getTeacherRoster(teacherId) {
 
   const effectiveTeacherId = teacherId || 'teacher_general';
   const localList = readLocalStudents();
-  return localList.filter(s =>
-    !s.teacher_id ||
-    s.teacher_id === effectiveTeacherId ||
-    s.teacher_id === 'local-dev-user' ||
-    s.teacher_id === 'teacher_general'
+  return localList.filter(
+    s =>
+      !s.teacher_id ||
+      s.teacher_id === effectiveTeacherId ||
+      s.teacher_id === 'local-dev-user' ||
+      s.teacher_id === 'teacher_general'
   );
 }
 
@@ -317,7 +358,9 @@ async function getStudentDossier(studentId) {
   } else {
     const localStudents = readLocalStudents();
     student = localStudents.find(
-      s => s.id === studentId || (s.admission_number && s.admission_number.toUpperCase() === String(studentId).toUpperCase())
+      s =>
+        s.id === studentId ||
+        (s.admission_number && s.admission_number.toUpperCase() === String(studentId).toUpperCase())
     );
     if (!student) {
       throw new Error('Student record not found');
@@ -340,10 +383,19 @@ async function getStudentDossier(studentId) {
   }
 
   const normalizedSubmissions = submissions.map(item => {
-    const resp = item.responses ? (typeof item.responses === 'string' ? JSON.parse(item.responses) : item.responses) : item;
+    const resp = item.responses
+      ? typeof item.responses === 'string'
+        ? JSON.parse(item.responses)
+        : item.responses
+      : item;
     const pct = Number(item.percentage ?? resp.finalScore?.percentage ?? resp.autoGraded?.percentage ?? 0);
     const score = Number(item.total_score ?? resp.finalScore?.score ?? resp.autoGraded?.score ?? 0);
-    const maxScore = Number(item.max_possible ?? resp.finalScore?.total ?? resp.autoGraded?.total ?? (Array.isArray(resp.questions) ? resp.questions.length : 0));
+    const maxScore = Number(
+      item.max_possible ??
+        resp.finalScore?.total ??
+        resp.autoGraded?.total ??
+        (Array.isArray(resp.questions) ? resp.questions.length : 0)
+    );
     return {
       id: item.id || resp.id,
       examId: item.exam_id || resp.examId,
@@ -357,17 +409,19 @@ async function getStudentDossier(studentId) {
       cheatingReason: resp.cheatingReason || '',
       questions: resp.questions || [],
       studentAnswers: resp.studentAnswers || {},
-      status: resp.status || 'reviewed'
+      status: resp.status || 'reviewed',
     };
   });
 
   const totalAttempts = normalizedSubmissions.length;
-  const averagePercentage = totalAttempts > 0
-    ? Math.round(normalizedSubmissions.reduce((acc, s) => acc + (Number(s.percentage) || 0), 0) / totalAttempts)
-    : 0;
-  const bestPercentage = totalAttempts > 0
-    ? Math.max(...normalizedSubmissions.map(s => Number(s.percentage) || 0))
-    : 0;
+  const averagePercentage =
+    totalAttempts > 0
+      ? Math.round(
+          normalizedSubmissions.reduce((acc, s) => acc + (Number(s.percentage) || 0), 0) / totalAttempts
+        )
+      : 0;
+  const bestPercentage =
+    totalAttempts > 0 ? Math.max(...normalizedSubmissions.map(s => Number(s.percentage) || 0)) : 0;
   const flaggedAttempts = normalizedSubmissions.filter(s => s.cheatingFlagged).length;
 
   return {
@@ -376,9 +430,9 @@ async function getStudentDossier(studentId) {
       totalAttempts,
       averagePercentage,
       bestPercentage,
-      flaggedAttempts
+      flaggedAttempts,
     },
-    submissions: normalizedSubmissions
+    submissions: normalizedSubmissions,
   };
 }
 
@@ -396,6 +450,7 @@ async function updateStudentProfile(studentId, { fullName, admissionNumber, dob 
 
   const sb = getSupabaseClient();
   if (sb) {
+    updates.updated_at = new Date().toISOString();
     const { data, error } = await sb
       .from('students')
       .update(updates)
@@ -448,10 +503,9 @@ function regenerateEntitySalt(entityId) {
   return newSalt;
 }
 
-function get5MinRollingRefCode(entityId, prefix = 'REF', offsetWindows = 0) {
+function computeRollingRefCodeWithSalt(entityId, prefix = 'REF', offsetWindows = 0, salt = 'salt_v1') {
   const windowMs = 5 * 60 * 1000;
   const currentWindowIndex = Math.floor(Date.now() / windowMs) + offsetWindows;
-  const salt = getEntitySalt(entityId);
   const secret = getJwtSecret();
 
   const hmac = crypto.createHmac('sha256', secret);
@@ -466,12 +520,32 @@ function get5MinRollingRefCode(entityId, prefix = 'REF', offsetWindows = 0) {
     code += chars.charAt(num % chars.length);
   }
 
-  const formattedCode = `${prefix.toUpperCase()}-${code}`;
+  return `${prefix.toUpperCase()}-${code}`;
+}
+
+function get5MinRollingRefCode(entityId, prefix = 'REF', offsetWindows = 0) {
+  const salt = getEntitySalt(entityId);
+  const formattedCode = computeRollingRefCodeWithSalt(entityId, prefix, offsetWindows, salt);
   if (prefix.toUpperCase() === 'TCH') {
     activeCodeToTeacherMap.set(formattedCode, entityId);
   }
-
   return formattedCode;
+}
+
+function matchesEntityRollingRefCode(entityId, prefix, targetCode) {
+  const cleanTarget = String(targetCode || '').trim().toUpperCase();
+  if (!cleanTarget) return false;
+  const currentSalt = getEntitySalt(entityId);
+  const saltsToCheck = currentSalt === 'salt_v1' ? ['salt_v1'] : [currentSalt, 'salt_v1'];
+  for (const salt of saltsToCheck) {
+    if (
+      cleanTarget === computeRollingRefCodeWithSalt(entityId, prefix, 0, salt) ||
+      cleanTarget === computeRollingRefCodeWithSalt(entityId, prefix, -1, salt)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getRefCodeSecondsLeft() {
@@ -498,9 +572,7 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
       const { data: teachers } = await sb.from('teachers').select('id, email');
       if (Array.isArray(teachers)) {
         for (const t of teachers) {
-          const code0 = get5MinRollingRefCode(t.id, 'TCH', 0);
-          const codePrev = get5MinRollingRefCode(t.id, 'TCH', -1);
-          if (cleanCode === code0 || cleanCode === codePrev) {
+          if (matchesEntityRollingRefCode(t.id, 'TCH', cleanCode)) {
             matchedTeacherId = t.id;
             break;
           }
@@ -512,9 +584,7 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   if (!matchedTeacherId) {
     const defaultTeachers = ['teacher_general', 'local-dev-user', 'default_teacher', 'admin'];
     for (const tId of defaultTeachers) {
-      const code0 = get5MinRollingRefCode(tId, 'TCH', 0);
-      const codePrev = get5MinRollingRefCode(tId, 'TCH', -1);
-      if (cleanCode === code0 || cleanCode === codePrev) {
+      if (matchesEntityRollingRefCode(tId, 'TCH', cleanCode)) {
         matchedTeacherId = tId;
         break;
       }
@@ -526,19 +596,20 @@ async function studentLinkToTeacher({ studentId, teacherRefCode }) {
   }
 
   if (sb) {
-    const dbTeacherId = isValidUuid(matchedTeacherId) ? matchedTeacherId : null;
+    const dbTeacherId = await resolveVerifiedTeacherUuid(sb, matchedTeacherId);
     await sb
       .from('students')
-      .update({ teacher_id: dbTeacherId })
+      .update({ teacher_id: dbTeacherId, updated_at: new Date().toISOString() })
       .or(`id.eq.${studentId},admission_number.eq.${studentId}`);
     return { success: true, teacherId: matchedTeacherId };
   }
 
   const localList = readLocalStudents();
   const cleanId = String(studentId).trim().toUpperCase();
-  const found = localList.find(s =>
-    s.id === studentId ||
-    (s.admission_number && s.admission_number.toUpperCase() === cleanId)
+  const found = localList.find(
+    s =>
+      s.id === studentId ||
+      (s.admission_number && s.admission_number.toUpperCase() === cleanId)
   );
   if (found) {
     found.teacher_id = matchedTeacherId;
@@ -575,12 +646,14 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
 
   let targetStudent = null;
 
-  const targetCode = cleanCode.startsWith('STU-') ? cleanCode : (cleanAdm.startsWith('STU-') ? cleanAdm : cleanCode);
+  const targetCode = cleanCode.startsWith('STU-')
+    ? cleanCode
+    : cleanAdm.startsWith('STU-')
+    ? cleanAdm
+    : cleanCode;
   if (targetCode) {
     for (const s of candidatePool) {
-      const c0 = get5MinRollingRefCode(s.id, 'STU', 0);
-      const cPrev = get5MinRollingRefCode(s.id, 'STU', -1);
-      if (targetCode === c0 || targetCode === cPrev) {
+      if (matchesEntityRollingRefCode(s.id, 'STU', targetCode)) {
         targetStudent = s;
         break;
       }
@@ -609,19 +682,21 @@ async function teacherAddExistingStudent({ teacherId, admissionNumber, studentRe
 
   const effectiveTeacherId = teacherId || 'teacher_general';
   if (sb) {
-    const dbTeacherId = isValidUuid(effectiveTeacherId) ? effectiveTeacherId : null;
+    const dbTeacherId = await resolveVerifiedTeacherUuid(sb, effectiveTeacherId);
     await sb
       .from('students')
-      .update({ teacher_id: dbTeacherId })
+      .update({ teacher_id: dbTeacherId, updated_at: new Date().toISOString() })
       .or(`id.eq.${targetStudent.id},admission_number.eq.${targetStudent.admission_number}`);
     targetStudent.teacher_id = dbTeacherId;
     return { success: true, student: targetStudent };
   }
 
   const localList = readLocalStudents();
-  const foundLocal = localList.find(s =>
-    s.id === targetStudent.id ||
-    (s.admission_number && s.admission_number.toUpperCase() === (targetStudent.admission_number || '').toUpperCase())
+  const foundLocal = localList.find(
+    s =>
+      s.id === targetStudent.id ||
+      (s.admission_number &&
+        s.admission_number.toUpperCase() === (targetStudent.admission_number || '').toUpperCase())
   );
   if (foundLocal) {
     foundLocal.teacher_id = effectiveTeacherId;
@@ -651,5 +726,5 @@ module.exports = {
   getRefCodeSecondsLeft,
   regenerateEntitySalt,
   studentLinkToTeacher,
-  teacherAddExistingStudent
+  teacherAddExistingStudent,
 };

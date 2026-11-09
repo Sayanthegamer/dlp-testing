@@ -1,9 +1,12 @@
 -- =======================================================
 -- Supabase PostgreSQL Schema for Tuition Test Platform
+-- Compatible with Modern Publishable (sb_publishable_...)
+-- and Secret (sb_secret_...) API Keys + Legacy Keys
 -- =======================================================
 
--- Enable UUID extension
+-- Enable UUID extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. Teachers / Profiles Table
 CREATE TABLE IF NOT EXISTS teachers (
@@ -14,9 +17,37 @@ CREATE TABLE IF NOT EXISTS teachers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Auto-sync any existing auth.users into the teachers table
+-- Automatically sync new/updated Supabase Auth users into public.teachers
+CREATE OR REPLACE FUNCTION public.handle_new_teacher_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    INSERT INTO public.teachers (id, email, full_name, updated_at)
+    VALUES (
+        NEW.id,
+        COALESCE(NEW.email, NEW.id::text || '@teacher.local'),
+        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(COALESCE(NEW.email, 'Instructor'), '@', 1)),
+        NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = COALESCE(EXCLUDED.full_name, public.teachers.full_name),
+        updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT OR UPDATE ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_teacher_user();
+
+-- Backfill any existing auth.users into the teachers table
 INSERT INTO teachers (id, email, full_name)
-SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1))
+SELECT id, COALESCE(email, id::text || '@teacher.local'), COALESCE(raw_user_meta_data->>'full_name', split_part(COALESCE(email, 'Instructor'), '@', 1))
 FROM auth.users
 ON CONFLICT (id) DO NOTHING;
 
@@ -31,7 +62,7 @@ CREATE TABLE IF NOT EXISTS exams (
     status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'published', 'closed', 'archived')),
     needs_review BOOLEAN DEFAULT FALSE,
     question_count INTEGER DEFAULT 0,
-    snapshot_data JSONB, -- Published question snapshot payload
+    snapshot_data JSONB, -- Published question snapshot payload + sessionMeta
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -56,30 +87,64 @@ CREATE TABLE IF NOT EXISTS questions (
 
 -- 4. Active Rolling Code Exam Sessions Table
 CREATE TABLE IF NOT EXISTS exam_sessions (
-    id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     exam_id TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
-    teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
+    teacher_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     rolling_code TEXT NOT NULL, -- Active 6-digit rolling code
     is_active BOOLEAN DEFAULT TRUE,
     expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ensure existing exam_sessions.teacher_id FK references auth.users(id) safely
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'exam_sessions_teacher_id_fkey'
+          AND table_name = 'exam_sessions'
+    ) THEN
+        ALTER TABLE exam_sessions DROP CONSTRAINT exam_sessions_teacher_id_fkey;
+        ALTER TABLE exam_sessions
+            ADD CONSTRAINT exam_sessions_teacher_id_fkey
+            FOREIGN KEY (teacher_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
 -- 5. Students Table (Admission Number + DOB Authentication)
 CREATE TABLE IF NOT EXISTS students (
-    id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     admission_number TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
     dob DATE NOT NULL,
-    teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
+    teacher_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ensure existing students.teacher_id FK references auth.users(id) safely
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'students_teacher_id_fkey'
+          AND table_name = 'students'
+    ) THEN
+        ALTER TABLE students DROP CONSTRAINT students_teacher_id_fkey;
+        ALTER TABLE students
+            ADD CONSTRAINT students_teacher_id_fkey
+            FOREIGN KEY (teacher_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
 -- 6. Student Submissions & Auto-Graded Scores Table
 CREATE TABLE IF NOT EXISTS submissions (
     id TEXT PRIMARY KEY,
-    exam_id TEXT NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+    exam_id TEXT REFERENCES exams(id) ON DELETE CASCADE,
     student_id TEXT REFERENCES students(id) ON DELETE SET NULL,
     student_name TEXT NOT NULL,
     rolling_code_used TEXT,
@@ -93,6 +158,9 @@ CREATE TABLE IF NOT EXISTS submissions (
     submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ensure submissions.exam_id is nullable for practice/demo assessments
+ALTER TABLE submissions ALTER COLUMN exam_id DROP NOT NULL;
+
 -- Indexes for Fast Query Performance
 CREATE INDEX IF NOT EXISTS idx_exams_teacher_id ON exams(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_questions_exam_id ON questions(exam_id);
@@ -101,6 +169,18 @@ CREATE INDEX IF NOT EXISTS idx_submissions_exam_id ON submissions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_students_admission_number ON students(admission_number);
 CREATE INDEX IF NOT EXISTS idx_students_teacher_id ON students(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON submissions(student_id);
+
+-- =======================================================
+-- Explicit Data API Role Grants (Required for 2026 Supabase Publishable & Secret Keys)
+-- =======================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE teachers ENABLE ROW LEVEL SECURITY;
@@ -116,73 +196,122 @@ ALTER TABLE students ENABLE ROW LEVEL SECURITY;
 
 -- 1. Teachers Policies
 DROP POLICY IF EXISTS "Teachers can view and update own profile" ON teachers;
-CREATE POLICY "Teachers can view and update own profile" 
-    ON teachers FOR ALL USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Public teacher lookup for student linking" ON teachers;
+
+CREATE POLICY "Public teacher lookup for student linking"
+    ON teachers FOR SELECT USING (TRUE);
+
+CREATE POLICY "Teachers can view and update own profile"
+    ON teachers FOR ALL
+    USING (auth.uid() = id OR auth.role() = 'service_role')
+    WITH CHECK (auth.uid() = id OR auth.role() = 'service_role');
 
 -- 2. Exams Policies
 DROP POLICY IF EXISTS "Teachers can manage own exams" ON exams;
-CREATE POLICY "Teachers can manage own exams" 
-    ON exams FOR ALL USING (auth.uid() = teacher_id OR teacher_id IS NULL);
+DROP POLICY IF EXISTS "Public student read for active exams" ON exams;
+
+CREATE POLICY "Public student read for active exams"
+    ON exams FOR SELECT
+    USING (status IN ('active', 'published') OR auth.uid() = teacher_id OR teacher_id IS NULL);
+
+CREATE POLICY "Teachers can manage own exams"
+    ON exams FOR ALL
+    USING (auth.uid() = teacher_id OR teacher_id IS NULL OR auth.role() = 'authenticated')
+    WITH CHECK (auth.uid() = teacher_id OR teacher_id IS NULL OR auth.role() = 'authenticated');
 
 -- 3. Questions Policies
 DROP POLICY IF EXISTS "Teachers can manage own exam questions" ON questions;
-CREATE POLICY "Teachers can manage own exam questions" 
-    ON questions FOR ALL USING (
+DROP POLICY IF EXISTS "Public read questions for active exams" ON questions;
+
+CREATE POLICY "Public read questions for active exams"
+    ON questions FOR SELECT
+    USING (TRUE);
+
+CREATE POLICY "Teachers can manage own exam questions"
+    ON questions FOR ALL
+    USING (
+        auth.role() = 'authenticated' OR
+        EXISTS (SELECT 1 FROM exams WHERE exams.id = questions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
+    )
+    WITH CHECK (
+        auth.role() = 'authenticated' OR
         EXISTS (SELECT 1 FROM exams WHERE exams.id = questions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
 -- 4. Active Sessions Policies
 DROP POLICY IF EXISTS "Public student access for active sessions" ON exam_sessions;
-CREATE POLICY "Public student access for active sessions" 
-    ON exam_sessions FOR SELECT USING (is_active = TRUE);
-
 DROP POLICY IF EXISTS "Teachers can manage exam sessions" ON exam_sessions;
-CREATE POLICY "Teachers can manage exam sessions" 
-    ON exam_sessions FOR ALL USING (
-        auth.role() = 'authenticated' OR EXISTS (SELECT 1 FROM exams WHERE exams.id = exam_sessions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
+
+CREATE POLICY "Public student access for active sessions"
+    ON exam_sessions FOR SELECT
+    USING (is_active = TRUE OR auth.role() = 'authenticated');
+
+CREATE POLICY "Teachers can manage exam sessions"
+    ON exam_sessions FOR ALL
+    USING (
+        auth.role() = 'authenticated' OR
+        teacher_id IS NULL OR
+        EXISTS (SELECT 1 FROM exams WHERE exams.id = exam_sessions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
+    )
+    WITH CHECK (
+        auth.role() = 'authenticated' OR
+        teacher_id IS NULL OR
+        EXISTS (SELECT 1 FROM exams WHERE exams.id = exam_sessions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
 -- 5. Submissions Policies
 DROP POLICY IF EXISTS "Public student submissions insert" ON submissions;
-CREATE POLICY "Public student submissions insert" 
-    ON submissions FOR INSERT WITH CHECK (TRUE);
-
 DROP POLICY IF EXISTS "Teachers view submissions for own exams" ON submissions;
-CREATE POLICY "Teachers view submissions for own exams" 
-    ON submissions FOR SELECT USING (
-        EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
-    );
-
 DROP POLICY IF EXISTS "Teachers update submissions for own exams" ON submissions;
-CREATE POLICY "Teachers update submissions for own exams" 
-    ON submissions FOR UPDATE USING (
+DROP POLICY IF EXISTS "Students can view own submissions" ON submissions;
+
+CREATE POLICY "Public student submissions insert"
+    ON submissions FOR INSERT
+    WITH CHECK (TRUE);
+
+CREATE POLICY "Students can view own submissions"
+    ON submissions FOR SELECT
+    USING (TRUE);
+
+CREATE POLICY "Teachers view submissions for own exams"
+    ON submissions FOR SELECT
+    USING (
+        auth.role() = 'authenticated' OR
+        exam_id IS NULL OR
         EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
     );
 
-DROP POLICY IF EXISTS "Students can view own submissions" ON submissions;
-CREATE POLICY "Students can view own submissions" 
-    ON submissions FOR SELECT USING (TRUE);
+CREATE POLICY "Teachers update submissions for own exams"
+    ON submissions FOR UPDATE
+    USING (
+        auth.role() = 'authenticated' OR
+        exam_id IS NULL OR
+        EXISTS (SELECT 1 FROM exams WHERE exams.id = submissions.exam_id AND (exams.teacher_id = auth.uid() OR exams.teacher_id IS NULL))
+    )
+    WITH CHECK (TRUE);
 
 -- 6. Students Policies
 DROP POLICY IF EXISTS "Public student read for login" ON students;
-CREATE POLICY "Public student read for login" 
-    ON students FOR SELECT USING (TRUE);
-
 DROP POLICY IF EXISTS "Public student registration insert" ON students;
-CREATE POLICY "Public student registration insert" 
-    ON students FOR INSERT WITH CHECK (TRUE);
-
 DROP POLICY IF EXISTS "Teachers can update enrolled students" ON students;
-CREATE POLICY "Teachers can update enrolled students" 
-    ON students FOR UPDATE USING (
-        auth.uid() = teacher_id OR teacher_id IS NULL
-    );
-
 DROP POLICY IF EXISTS "Teachers can delete enrolled students" ON students;
-CREATE POLICY "Teachers can delete enrolled students" 
-    ON students FOR DELETE USING (
-        auth.uid() = teacher_id OR teacher_id IS NULL
-    );
+
+CREATE POLICY "Public student read for login"
+    ON students FOR SELECT
+    USING (TRUE);
+
+CREATE POLICY "Public student registration insert"
+    ON students FOR INSERT
+    WITH CHECK (TRUE);
+
+CREATE POLICY "Teachers can update enrolled students"
+    ON students FOR UPDATE
+    USING (auth.uid() = teacher_id OR teacher_id IS NULL OR auth.role() = 'authenticated')
+    WITH CHECK (TRUE);
+
+CREATE POLICY "Teachers can delete enrolled students"
+    ON students FOR DELETE
+    USING (auth.uid() = teacher_id OR teacher_id IS NULL OR auth.role() = 'authenticated');
 
 -- =======================================================
 -- 7. Storage Bucket Setup for Cropped Diagram Images

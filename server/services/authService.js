@@ -1,5 +1,12 @@
 const crypto = require('crypto');
-const { supabase, isConfigured } = require('./supabaseClient');
+const {
+  getAdminClient,
+  createAuthClient,
+  ensureTeacherProfile,
+  isConfigured,
+  isValidUserJwt,
+  isValidUuid,
+} = require('./supabaseClient');
 
 function getTeacherAccessCode() {
   return process.env.TEACHER_ACCESS_CODE || process.env.APP_PASSWORD || 'dlp_teacher_secret_passcode_2026';
@@ -16,7 +23,7 @@ function safeCompareStrings(inputStr, expectedStr) {
 
 /**
  * Validates whether the given string matches any valid teacher access code
- * (checks TEACHER_ACCESS_CODE, APP_PASSWORD, and the local default fallback).
+ * (checks TEACHER_ACCESS_CODE, APP_PASSWORD, SUPABASE_SECRET_KEY, SUPABASE_HIDDEN_KEY, and local default fallback).
  */
 function isValidTeacherAccessCode(inputStr) {
   if (!inputStr) return false;
@@ -24,6 +31,8 @@ function isValidTeacherAccessCode(inputStr) {
     process.env.TEACHER_ACCESS_CODE,
     process.env.APP_PASSWORD,
     process.env.SUPABASE_SECRET_KEY,
+    process.env.SUPABASE_SECRET_DEFAULT_KEY,
+    process.env.SUPABASE_HIDDEN_KEY,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     'dlp_teacher_secret_passcode_2026',
   ].filter(Boolean);
@@ -33,7 +42,12 @@ function isValidTeacherAccessCode(inputStr) {
 
 /**
  * Secure Teacher Authorization verification helper.
- * Validates request Bearer JWT token against Supabase Auth, or x-app-password / dev tokens in local mode.
+ * Validates request Bearer JWT token against Supabase Auth, or x-app-password / dev tokens in local/passcode mode.
+ *
+ * CRITICAL: When authenticated via a passcode or dev-fallback-token (not a Supabase Auth UUID user),
+ * `req.user.id` is set to `null` (with `req.user.localId = 'local-dev-user'`) and `req.accessToken` is `null`
+ * so downstream database queries never inject non-UUID strings into PostgreSQL UUID columns or send
+ * non-JWT strings in `Authorization: Bearer` headers to PostgREST.
  */
 async function verifyTeacherAuth(req) {
   const headerPass = req.headers['authorization'] || '';
@@ -48,22 +62,34 @@ async function verifyTeacherAuth(req) {
     cleanHeader === 'dev-fallback-token' ||
     isValidTeacherAccessCode(cleanHeader)
   ) {
-    req.user = { id: 'local-dev-user' };
-    req.accessToken = cleanHeader;
+    req.user = {
+      id: null,
+      localId: 'local-dev-user',
+      email: 'teacher@local.dev',
+      role: 'teacher',
+      isPasscodeAuth: true,
+    };
+    req.accessToken = null;
+    req.rawAuthToken = cleanHeader;
     return true;
   }
 
-  // 2. Validate Supabase Auth JWT token in live production mode
-  if (isConfigured() && supabase) {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser(cleanHeader);
-      if (!error && user) {
-        req.user = user;
-        req.accessToken = cleanHeader;
-        return true;
+  // 2. Validate Supabase Auth JWT token in live production mode using an isolated Auth client
+  if (isConfigured() && isValidUserJwt(cleanHeader)) {
+    const authClient = createAuthClient() || getAdminClient();
+    if (authClient) {
+      try {
+        const { data: { user }, error } = await authClient.auth.getUser(cleanHeader);
+        if (!error && user && isValidUuid(user.id)) {
+          req.user = user;
+          req.accessToken = cleanHeader;
+          // Ensure teacher row exists in public.teachers to satisfy FK constraints
+          await ensureTeacherProfile(user);
+          return true;
+        }
+      } catch (err) {
+        console.warn('[Teacher Auth Verification Warning]:', err.message);
       }
-    } catch (err) {
-      console.warn('[Teacher Auth Verification Warning]:', err.message);
     }
   }
 

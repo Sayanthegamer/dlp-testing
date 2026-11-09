@@ -5,7 +5,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { stripBase64Header } = require('../services/diagramCropService');
 const { extractCandidateFigures } = require('../services/layoutExtractorService');
 const { matchDiagramsToQuestions } = require('../services/diagramMatcherService');
-const { hasBareCommandRun, repairMissingMathBackslashes } = require('../services/mathSanitizerService');
+const { repairMissingMathBackslashes } = require('../services/mathSanitizerService');
 
 const SYSTEM_PROMPT = `You are an expert math and science test paper parser for tuition teachers.
 Your task is to parse input (informal text, photo of exam paper, or multi-page PDF) representing exam questions and convert them into strict JSON adhering to this exact schema format:
@@ -48,14 +48,15 @@ CRITICAL RULES:
 2. NO LITERAL "\\n" IN STRINGS: Do not put literal "\\n" string characters inside JSON string values. Replace all line breaks with clean space separators.
 3. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
    - NEVER put plain English sentences, problem instructions, question numbers ("Question 1"), or option letters ("Option A") inside <math> tags.
-4. JSON LATEX ESCAPING MANDATE: Because your response MUST be valid JSON, EVERY single LaTeX backslash inside JSON string values MUST be double-escaped (e.g. "\\frac{a}{b}", "\\ce{...}", "\\pu{...}", "\\pi", "\\alpha", "\\sin", "\\sqrt{x}").
-5. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and use explicit braces around BOTH numerator and denominator (<math>\\frac{numerator}{denominator}</math>) and radicals (<math>\\sqrt{expression}</math>).
+   - For options with plain English words like "4 times" or "16 times", write "<math>4</math> times" or "<math>4 \\text{ times}</math>" — NEVER write "\\\\text" (double LaTeX backslash) or "\\text{\\times}".
+4. LATEX BACKSLASHES: Inside <math>...</math>, use standard single LaTeX commands (\frac{num}{den}, \sqrt{x}, \pi, \alpha, \times, \text{...}, \pu{...}, \ce{...}). Never use double LaTeX backslashes (\\\\frac or \\\\text) inside <math> spans, as \\\\ is a line break in KaTeX.
+5. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and ALWAYS use explicit curly braces around BOTH numerator and denominator (<math>\\frac{N_p}{N_s}</math> — NEVER write bare fracN_pN_s) and radicals (<math>\\sqrt{expression}</math>).
 6. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg).
 7. CHEMISTRY & REACTION NOTATION: Wrap chemical formulas, balanced reactions, state symbols, ionic charges, and nuclear isotopes in <math>\\ce{...}</math> using mhchem syntax.
-8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> (e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{50 \\Omega}</math>).
+8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> (e.g. <math>\\pu{9.8 m/s^2}</math>, <math>\\pu{50 \\Omega}</math>, <math>\\pu{4 V/m}</math>).
 9. PERMUTATIONS & COMBINATIONS: Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math>.
 10. QUESTION TYPES & ANSWERS:
-   - For MCQ: set "type": "mcq", populate "options" with 4 option strings, and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D) ONLY if explicitly stated in the source; otherwise set null.
+   - For MCQ: set "type": "mcq", ALWAYS populate "options" with all 4 option strings from the question, and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D) ONLY if explicitly stated in the source; otherwise set null.
    - For Numerical: set "type": "short_answer_numeric", "options": [], and provide an estimated numeric float/integer "correctAnswer" and "acceptedRange": [min, max].
    - Match the Following: set "type": "match_following" with combination choices in "options".
 11. DIAGRAMS: Bounding boxes for visual diagrams belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex.
@@ -80,10 +81,12 @@ function buildSmartFallbackCatalogue({ type, rawText, docxStructure, candidateFi
     const rawQuestions = Array.isArray(docxStructure.questions)
       ? docxStructure.questions
       : [docxStructure];
-    return extractAndParseJson(JSON.stringify({
-      testTitle: docxStructure.testTitle || 'Word OMML Examination Paper',
-      questions: rawQuestions
-    }));
+    return extractAndParseJson(
+      JSON.stringify({
+        testTitle: docxStructure.testTitle || 'Word OMML Examination Paper',
+        questions: rawQuestions,
+      })
+    );
   }
 
   if (type === 'text' && typeof rawText === 'string' && rawText.trim()) {
@@ -113,7 +116,7 @@ function buildSmartFallbackCatalogue({ type, rawText, docxStructure, candidateFi
     let m;
     while ((m = optRegex.exec(restText)) !== null) {
       const cleanedOpt = m[1].replace(/\.\s*$/, '').trim();
-      options.push( cleanedOpt.includes('<math>') ? cleanedOpt : `<math>${cleanedOpt}</math>` );
+      options.push(cleanedOpt.includes('<math>') ? cleanedOpt : `<math>${cleanedOpt}</math>`);
     }
 
     let correctAnswer = null;
@@ -124,61 +127,68 @@ function buildSmartFallbackCatalogue({ type, rawText, docxStructure, candidateFi
     }
 
     const qType = options.length >= 2 ? 'mcq' : 'short_answer_numeric';
-    return extractAndParseJson(JSON.stringify({
-      testTitle: 'Mathematics Assessment Paper',
-      questions: [
-        {
-          id: 'q1',
-          questionText: convertInformalMath(stemRaw),
-          type: qType,
-          options: qType === 'mcq' ? options : [],
-          correctAnswer: qType === 'mcq' ? correctAnswer : 15,
-          acceptedRange: qType === 'short_answer_numeric' ? [14.8, 15.2] : undefined,
-          confidenceScore: 0.96
-        }
-      ]
-    }));
+    return extractAndParseJson(
+      JSON.stringify({
+        testTitle: 'Mathematics Assessment Paper',
+        questions: [
+          {
+            id: 'q1',
+            questionText: convertInformalMath(stemRaw),
+            type: qType,
+            options: qType === 'mcq' ? options : [],
+            correctAnswer: qType === 'mcq' ? correctAnswer : 15,
+            acceptedRange: qType === 'short_answer_numeric' ? [14.8, 15.2] : undefined,
+            confidenceScore: 0.96,
+          },
+        ],
+      })
+    );
   }
 
   // Image / PDF fallback
   const hasCandidateFig = Array.isArray(candidateFigures) && candidateFigures.length > 0;
-  return extractAndParseJson(JSON.stringify({
-    testTitle: 'Uploaded Examination Paper (Demo Mode)',
-    questions: [
-      {
-        id: 'q1',
-        questionText: 'Determine the equivalent resistance across terminals <math>A</math> and <math>B</math> for the network shown below when <math>R = \\pu{10 \\Omega}</math>.',
-        type: 'short_answer_numeric',
-        options: [],
-        correctAnswer: 15,
-        acceptedRange: [14.8, 15.2],
-        diagrams: hasCandidateFig ? [
-          {
-            id: candidateFigures[0].id || 'diag_1',
-            sourceFileIndex: candidateFigures[0].sourceFileIndex || 0,
-            pageIndex: candidateFigures[0].pageIndex || 0,
-            bbox: candidateFigures[0].bbox || [0.15, 0.15, 0.75, 0.85],
-            caption: 'Extracted Circuit Diagram'
-          }
-        ] : []
-      },
-      {
-        id: 'q2',
-        questionText: 'Find the roots of the quadratic equation <math>x^2 - 5x + 6 = 0</math>.',
-        type: 'mcq',
-        options: [
-          '<math>x = 2, 3</math>',
-          '<math>x = -2, -3</math>',
-          '<math>x = 1, 6</math>',
-          '<math>x = -1, 6</math>'
-        ],
-        correctAnswer: 0
-      }
-    ]
-  }));
+  return extractAndParseJson(
+    JSON.stringify({
+      testTitle: 'Uploaded Examination Paper (Demo Mode)',
+      questions: [
+        {
+          id: 'q1',
+          questionText:
+            'Determine the equivalent resistance across terminals <math>A</math> and <math>B</math> for the network shown below when <math>R = \\pu{10 \\Omega}</math>.',
+          type: 'short_answer_numeric',
+          options: [],
+          correctAnswer: 15,
+          acceptedRange: [14.8, 15.2],
+          diagrams: hasCandidateFig
+            ? [
+                {
+                  id: candidateFigures[0].id || 'diag_1',
+                  sourceFileIndex: candidateFigures[0].sourceFileIndex || 0,
+                  pageIndex: candidateFigures[0].pageIndex || 0,
+                  bbox: candidateFigures[0].bbox || [0.15, 0.15, 0.75, 0.85],
+                  caption: 'Extracted Circuit Diagram',
+                },
+              ]
+            : [],
+        },
+        {
+          id: 'q2',
+          questionText: 'Find the roots of the quadratic equation <math>x^2 - 5x + 6 = 0</math>.',
+          type: 'mcq',
+          options: [
+            '<math>x = 2, 3</math>',
+            '<math>x = -2, -3</math>',
+            '<math>x = 1, 6</math>',
+            '<math>x = -1, 6</math>',
+          ],
+          correctAnswer: 0,
+        },
+      ],
+    })
+  );
 }
 
-async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 2) {
+async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 1) {
   if (!Array.isArray(mediaFiles) || mediaFiles.length === 0) {
     return [[]];
   }
@@ -212,7 +222,7 @@ async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 2) {
                   mimeType: 'image/png',
                   sourceFileIndex: fileIdx,
                   pageIndex: p,
-                  name: `${file.name || 'document'}_page_${p + 1}`
+                  name: `${file.name || 'document'}_page_${p + 1}`,
                 });
               } catch (_) {
                 processedItems.push({ ...file, sourceFileIndex: fileIdx, pageIndex: p });
@@ -237,6 +247,14 @@ async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 2) {
   return chunks.length > 0 ? chunks : [mediaFiles];
 }
 
+/**
+ * Repairs unescaped single backslashes inside JSON string values WITHOUT doubling
+ * already-escaped `\\` pairs.
+ *
+ * Root Cause Fixed: Previously, `/\\(?=[a-zA-Z])/g` lacked a single-pass `\\\\` consumer,
+ * so valid JSON `"\\text"` had its second backslash doubled to `"\\\text"`, triggering
+ * fallback quadruple-escaping into `"\\\\text"` (`\\text` in KaTeX = newline + "text").
+ */
 function repairJsonUnescapedBackslashes(str) {
   if (typeof str !== 'string') return str;
   let clean = str.trim();
@@ -250,22 +268,41 @@ function repairJsonUnescapedBackslashes(str) {
     clean = clean.substring(firstBrace);
   }
 
+  // Restore literal control characters that may already be present in raw strings
   clean = clean
-    .replace(/\x0Crac/g, '\\\\frac')
-    .replace(/\x0ACr/g, '\\\\nCr')
-    .replace(/\x0Dho/g, '\\\\rho')
-    .replace(/\x08eta/g, '\\\\beta')
-    .replace(/\x09imes/g, '\\\\times');
+    .replace(/\x09(ext(?:bf|it|rm)?|imes|heta|au|anh?|o\b|op\b|riangle|ilde|frac|iny)/g, '\\\\t$1')
+    .replace(/\x0C(rac|orall|lat|rown)/g, '\\\\f$1')
+    .replace(/\x0A(Cr|Pr|eq|eg|u\b|abla|otsubset|ot\b|i\b|ewline|ormalsize)/g, '\\\\n$1')
+    .replace(/\x0D(ho|ight|angle|ceil|floor)/g, '\\\\r$1')
+    .replace(/\x08(eta|ar|inom|egin|ig|ullet|ox|ot\b|ackslash)/g, '\\\\b$1');
 
   clean = clean.replace(/("(?:[^"\\]|\\.)*")/g, (token) => {
-    let inner = token;
-    inner = inner.replace(/\\(?=[a-zA-Z\{\}\_\^\%\#\$\&])/g, '\\\\');
+    let inner = token.replace(
+      /\\\\|\\(["\/])|\\u[0-9a-fA-F]{4}|\\([bfnrt])([a-zA-Z]*)|\\(?=[a-zA-Z\{\}\_\^\%\#\$\&\s])/g,
+      (match, quoteOrSlash, ctrlChar, ctrlSuffix) => {
+        // 1. Already-escaped pair `\\` -> preserve as `\\` (never double it!)
+        if (match === '\\\\') return '\\\\';
+        // 2. Standard JSON escapes `\"`, `\/`, `\uXXXX` -> preserve as is
+        if (quoteOrSlash || match.startsWith('\\u')) return match;
+        // 3. `\b`, `\f`, `\n`, `\r`, `\t` followed by command letters (e.g. \frac, \text, \times, \theta, \nCr, \rho, \beta)
+        if (ctrlChar) {
+          if (ctrlSuffix && ctrlSuffix.length > 0) {
+            return '\\\\' + ctrlChar + ctrlSuffix;
+          }
+          return match;
+        }
+        // 4. Single unescaped backslash before a LaTeX command/symbol -> escape to `\\`
+        return '\\\\';
+      }
+    );
+
     inner = inner.replace(/[\u0000-\u001F]/g, (c) => {
       if (c === '\n') return '\\n';
       if (c === '\r') return '\\r';
       if (c === '\t') return '\\t';
       return '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
     });
+
     return inner;
   });
 
@@ -336,6 +373,39 @@ function repairTruncatedJson(jsonStr) {
   return str;
 }
 
+/**
+ * Extracts inline options (e.g. `(A) ... (B) ... (C) ... (D) ...` or `(1) ... (2) ... (3) ... (4) ...`)
+ * from `questionText` if the LLM left `options` empty on an MCQ question.
+ */
+function splitInlineOptionsIfMissing(questionText, existingOptions) {
+  if (Array.isArray(existingOptions) && existingOptions.length >= 2) {
+    return { stem: questionText, options: existingOptions };
+  }
+  if (typeof questionText !== 'string') {
+    return { stem: questionText, options: existingOptions || [] };
+  }
+
+  // Match (A) ... (B) ... (C) ... (D) ... or A) ... B) ... C) ... D) ...
+  const letterPattern = /\s+(?:\([A-Da-d]\)|[A-Da-d][\)\.])\s+/g;
+  const matches = [...questionText.matchAll(letterPattern)];
+  if (matches.length >= 2) {
+    const firstIdx = matches[0].index;
+    const stem = questionText.substring(0, firstIdx).trim();
+    const extracted = [];
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index + matches[i][0].length;
+      const end = i + 1 < matches.length ? matches[i + 1].index : questionText.length;
+      const optText = questionText.substring(start, end).trim();
+      if (optText) extracted.push(optText);
+    }
+    if (stem && extracted.length >= 2) {
+      return { stem, options: extracted };
+    }
+  }
+
+  return { stem: questionText, options: existingOptions || [] };
+}
+
 function extractAndParseJson(text) {
   if (!text || typeof text !== 'string') {
     throw new Error('Received empty or invalid model response text');
@@ -352,21 +422,22 @@ function extractAndParseJson(text) {
     clean = clean.substring(startIdx);
   }
 
-  clean = repairJsonUnescapedBackslashes(clean);
+  const repairedClean = repairJsonUnescapedBackslashes(clean);
 
   let parsed;
   try {
-    parsed = JSON.parse(clean);
+    parsed = JSON.parse(repairedClean);
   } catch (err1) {
     try {
-      const aggressive = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-        return match.replace(/\\/g, '\\\\');
-      });
-      parsed = JSON.parse(aggressive);
+      const fixedTruncated = repairTruncatedJson(repairedClean);
+      parsed = JSON.parse(fixedTruncated);
     } catch (err2) {
       try {
-        const fixedTruncated = repairTruncatedJson(clean);
-        parsed = JSON.parse(fixedTruncated);
+        // Only escape single unescaped backslashes `(?<!\\)\\(?!\\)` so existing `\\` are never quadrupled
+        const safeFallback = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+          return match.replace(/\\\\|\\/g, (m) => (m === '\\\\' ? '\\\\' : '\\\\'));
+        });
+        parsed = JSON.parse(repairTruncatedJson(safeFallback));
       } catch (err3) {
         throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
       }
@@ -406,15 +477,24 @@ function extractAndParseJson(text) {
   });
 
   questions = questions.map((q, idx) => {
-    let rawQuestionText = (q.questionText || `Question ${idx + 1}`).replace(/\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi, ' ');
+    let rawQuestionText = (q.questionText || `Question ${idx + 1}`).replace(
+      /\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi,
+      ' '
+    );
     const originalRaw = rawQuestionText;
 
-    const cleanedText = rawQuestionText.replace(/^(?:Q\d+|Question\s*\d+)[\.\:]\s*(?:JEE\s*Main[^\n\r]*[\n\r]*)?/i, '').trim();
+    const cleanedText = rawQuestionText
+      .replace(/^(?:Q\d+|Question\s*\d+)[\.\:]\s*(?:JEE\s*Main[^\n\r]*[\n\r]*)?/i, '')
+      .trim();
     if (cleanedText.length > 0) {
       rawQuestionText = cleanedText;
     } else if (originalRaw.trim().length > 0) {
       rawQuestionText = originalRaw.trim();
     }
+
+    const splitResult = splitInlineOptionsIfMissing(rawQuestionText, q.options);
+    rawQuestionText = splitResult.stem;
+    const rawOptionsList = splitResult.options;
 
     let questionText = repairMissingMathBackslashes(rawQuestionText).trim();
     if (!questionText) {
@@ -426,11 +506,11 @@ function extractAndParseJson(text) {
       type = 'short_answer_numeric';
     }
 
-    const cleanOptions = (Array.isArray(q.options) ? q.options : []).map(opt =>
+    const cleanOptions = (Array.isArray(rawOptionsList) ? rawOptionsList : []).map(opt =>
       repairMissingMathBackslashes(typeof opt === 'string' ? opt : String(opt))
     );
 
-    const options = (type === 'mcq' || type === 'match_following') ? cleanOptions : [];
+    const options = type === 'mcq' || type === 'match_following' ? cleanOptions : [];
 
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
     const mathSpans = mathMatches.map(m => m.replace(/<\/?math>/g, ''));
@@ -439,9 +519,19 @@ function extractAndParseJson(text) {
     if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
       if (typeof q.correctAnswer === 'string') {
         const letterMap = {
-          a: 0, b: 1, c: 2, d: 3, e: 4,
-          '(a)': 0, '(b)': 1, '(c)': 2, '(d)': 3,
-          'option a': 0, 'option b': 1, 'option c': 2, 'option d': 3
+          a: 0,
+          b: 1,
+          c: 2,
+          d: 3,
+          e: 4,
+          '(a)': 0,
+          '(b)': 1,
+          '(c)': 2,
+          '(d)': 3,
+          'option a': 0,
+          'option b': 1,
+          'option c': 2,
+          'option d': 3,
         };
         const key = q.correctAnswer.trim().toLowerCase();
         if (letterMap[key] !== undefined) {
@@ -457,7 +547,11 @@ function extractAndParseJson(text) {
 
     if (type === 'mcq' || type === 'match_following') {
       if (typeof correctAnswer === 'number') {
-        if (!Number.isInteger(correctAnswer) || correctAnswer < 0 || (options.length > 0 && correctAnswer >= options.length)) {
+        if (
+          !Number.isInteger(correctAnswer) ||
+          correctAnswer < 0 ||
+          (options.length > 0 && correctAnswer >= options.length)
+        ) {
           correctAnswer = null;
         }
       }
@@ -477,7 +571,7 @@ function extractAndParseJson(text) {
         const margin = Math.abs(correctAnswer) > 0 ? Math.max(0.1, Math.abs(correctAnswer) * 0.02) : 0.5;
         acceptedRange = [
           Math.round((correctAnswer - margin) * 100) / 100,
-          Math.round((correctAnswer + margin) * 100) / 100
+          Math.round((correctAnswer + margin) * 100) / 100,
         ];
       }
     }
@@ -492,7 +586,7 @@ function extractAndParseJson(text) {
       mathSpans,
       confidenceScore: q.confidenceScore || 0.95,
       numericalConfirmed: false,
-      needsReview: true
+      needsReview: true,
     };
 
     if (acceptedRange !== undefined) {
@@ -504,7 +598,7 @@ function extractAndParseJson(text) {
 
   return {
     testTitle: parsed.testTitle || 'Mathematics Test Paper',
-    questions
+    questions,
   };
 }
 
@@ -540,9 +634,12 @@ async function handleParseRequest(req, res, forcedType = null) {
     providers.push({ name: 'anthropic', key: anthropicKey });
   }
 
-  const effectiveMediaFiles = (Array.isArray(mediaFiles) && mediaFiles.length > 0)
-    ? mediaFiles
-    : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
+  const effectiveMediaFiles =
+    Array.isArray(mediaFiles) && mediaFiles.length > 0
+      ? mediaFiles
+      : imageBase64
+      ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }]
+      : [];
 
   const candidateFigures = await extractCandidateFigures(effectiveMediaFiles);
 
@@ -553,7 +650,7 @@ async function handleParseRequest(req, res, forcedType = null) {
         type,
         rawText,
         docxStructure,
-        candidateFigures
+        candidateFigures,
       });
       if (effectiveMediaFiles.length > 0) {
         fallbackData.questions = await matchDiagramsToQuestions(
@@ -565,21 +662,22 @@ async function handleParseRequest(req, res, forcedType = null) {
       return res.json({
         success: true,
         data: fallbackData,
-        mode: 'smart_demo_fallback'
+        mode: 'smart_demo_fallback',
       });
     } catch (fbErr) {
       return res.status(400).json({
         success: false,
-        error: `Demo parser could not process input: ${fbErr.message}`
+        error: `Demo parser could not process input: ${fbErr.message}`,
       });
     }
   }
 
-  const isVercel = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
-  const chunkSize = isVercel ? 1 : 2;
-  const mediaChunks = (type === 'image' || type === 'media')
-    ? await chunkMediaFiles(effectiveMediaFiles, chunkSize)
-    : [[{ type, rawText, docxStructure }]];
+  // Process 1 page per chunk so dense multi-question PDF pages never exceed model output token limits
+  const chunkSize = 1;
+  const mediaChunks =
+    type === 'image' || type === 'media'
+      ? await chunkMediaFiles(effectiveMediaFiles, chunkSize)
+      : [[{ type, rawText, docxStructure }]];
 
   const errors = [];
 
@@ -598,7 +696,7 @@ async function handleParseRequest(req, res, forcedType = null) {
             imageBase64,
             mediaType,
             mediaFiles: chunk,
-            docxStructure
+            docxStructure,
           });
         } else if (provider.name === 'anthropic') {
           parsedChunkData = await parseWithClaude({
@@ -608,7 +706,7 @@ async function handleParseRequest(req, res, forcedType = null) {
             imageBase64,
             mediaType,
             mediaFiles: chunk,
-            docxStructure
+            docxStructure,
           });
         }
         return { chunk, parsedChunkData };
@@ -617,7 +715,11 @@ async function handleParseRequest(req, res, forcedType = null) {
       const chunkResults = await Promise.all(chunkPromises);
 
       for (const { chunk, parsedChunkData } of chunkResults) {
-        if (parsedChunkData && parsedChunkData.testTitle && parsedChunkData.testTitle !== 'Mathematics Test Paper') {
+        if (
+          parsedChunkData &&
+          parsedChunkData.testTitle &&
+          parsedChunkData.testTitle !== 'Mathematics Test Paper'
+        ) {
           masterTestTitle = parsedChunkData.testTitle;
         }
 
@@ -625,13 +727,20 @@ async function handleParseRequest(req, res, forcedType = null) {
           const remappedChunkQuestions = parsedChunkData.questions.map((q) => {
             if (Array.isArray(q.diagrams)) {
               q.diagrams = q.diagrams.map(diag => {
-                const chunkItem = (typeof diag.sourceFileIndex === 'number' && chunk[diag.sourceFileIndex])
-                  ? chunk[diag.sourceFileIndex]
-                  : chunk[0];
+                const chunkItem =
+                  typeof diag.sourceFileIndex === 'number' && chunk[diag.sourceFileIndex]
+                    ? chunk[diag.sourceFileIndex]
+                    : chunk[0];
                 return {
                   ...diag,
-                  sourceFileIndex: (chunkItem && typeof chunkItem.sourceFileIndex === 'number') ? chunkItem.sourceFileIndex : 0,
-                  pageIndex: (chunkItem && typeof chunkItem.pageIndex === 'number') ? chunkItem.pageIndex : (diag.pageIndex || 0)
+                  sourceFileIndex:
+                    chunkItem && typeof chunkItem.sourceFileIndex === 'number'
+                      ? chunkItem.sourceFileIndex
+                      : 0,
+                  pageIndex:
+                    chunkItem && typeof chunkItem.pageIndex === 'number'
+                      ? chunkItem.pageIndex
+                      : diag.pageIndex || 0,
                 };
               });
             }
@@ -644,18 +753,19 @@ async function handleParseRequest(req, res, forcedType = null) {
 
       aggregatedQuestions = aggregatedQuestions.map((q, idx) => ({
         ...q,
-        id: `q${idx + 1}`
+        id: `q${idx + 1}`,
       }));
 
       const combinedData = {
         testTitle: masterTestTitle,
-        questions: aggregatedQuestions
+        questions: aggregatedQuestions,
       };
 
       if (combinedData.questions.length === 0) {
         return res.status(400).json({
           success: false,
-          error: 'No exam questions could be extracted from the uploaded document. Select pages containing numbered questions.'
+          error:
+            'No exam questions could be extracted from the uploaded document. Select pages containing numbered questions.',
         });
       }
 
@@ -680,7 +790,7 @@ async function handleParseRequest(req, res, forcedType = null) {
   const errDetails = errors.map(e => `[${e.provider}]: ${e.error}`).join(' | ');
   return res.status(500).json({
     success: false,
-    error: `AI transcription failed: ${errDetails}. Check your API key in environment settings.`
+    error: `AI transcription failed: ${errDetails}. Check your API key in environment settings.`,
   });
 }
 
@@ -698,8 +808,8 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.1,
-      maxOutputTokens: 8192
-    }
+      maxOutputTokens: 16384,
+    },
   });
 
   const promptParts = [SYSTEM_PROMPT];
@@ -707,27 +817,36 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
   if (type === 'text') {
     promptParts.push(`Convert this teacher input into the math test catalogue JSON schema:\n\n"${rawText}"`);
   } else if (type === 'image' || type === 'media') {
-    const filesToProcess = Array.isArray(mediaFiles) && mediaFiles.length > 0
-      ? mediaFiles
-      : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
+    const filesToProcess =
+      Array.isArray(mediaFiles) && mediaFiles.length > 0
+        ? mediaFiles
+        : imageBase64
+        ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }]
+        : [];
 
     filesToProcess.forEach((file) => {
       const rawData = file.data || file.base64 || file.imageBase64;
       promptParts.push({
         inlineData: {
           data: stripBase64Header(rawData),
-          mimeType: file.mimeType || file.mediaType || 'image/jpeg'
-        }
+          mimeType: file.mimeType || file.mediaType || 'image/jpeg',
+        },
       });
     });
 
     promptParts.push(
       `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. ` +
-      `Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ` +
-      DIAGRAM_PROMPT_INSTRUCTION
+        `Extract every numbered question into its own distinct question block with questionText, type, options (all 4 options for MCQ), correctAnswer, and diagrams. ` +
+        DIAGRAM_PROMPT_INSTRUCTION
     );
   } else if (type === 'docx_structure') {
-    promptParts.push(`Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.`);
+    promptParts.push(
+      `Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(
+        docxStructure,
+        null,
+        2
+      )}\n\nFormat this into the test questions array schema.`
+    );
   }
 
   const result = await model.generateContent(promptParts);
@@ -740,11 +859,16 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
   let messages = [];
 
   if (type === 'text') {
-    messages = [{ role: 'user', content: `Convert this teacher input into the math test catalogue JSON schema:\n\n"${rawText}"` }];
+    messages = [
+      { role: 'user', content: `Convert this teacher input into the math test catalogue JSON schema:\n\n"${rawText}"` },
+    ];
   } else if (type === 'image' || type === 'media') {
-    const filesToProcess = Array.isArray(mediaFiles) && mediaFiles.length > 0
-      ? mediaFiles
-      : (imageBase64 ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }] : []);
+    const filesToProcess =
+      Array.isArray(mediaFiles) && mediaFiles.length > 0
+        ? mediaFiles
+        : imageBase64
+        ? [{ data: imageBase64, mimeType: mediaType || 'image/jpeg' }]
+        : [];
 
     const contentBlocks = [];
 
@@ -756,31 +880,40 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
       if (mime === 'application/pdf') {
         contentBlocks.push({
           type: 'document',
-          source: { type: 'base64', media_type: 'application/pdf', data: cleanData }
+          source: { type: 'base64', media_type: 'application/pdf', data: cleanData },
         });
       } else {
         contentBlocks.push({
           type: 'image',
-          source: { type: 'base64', media_type: mime, data: cleanData }
+          source: { type: 'base64', media_type: mime, data: cleanData },
         });
       }
     });
 
     contentBlocks.push({
       type: 'text',
-      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ${DIAGRAM_PROMPT_INSTRUCTION}`
+      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ${DIAGRAM_PROMPT_INSTRUCTION}`,
     });
 
     messages = [{ role: 'user', content: contentBlocks }];
   } else if (type === 'docx_structure') {
-    messages = [{ role: 'user', content: `Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(docxStructure, null, 2)}\n\nFormat this into the test questions array schema.` }];
+    messages = [
+      {
+        role: 'user',
+        content: `Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(
+          docxStructure,
+          null,
+          2
+        )}\n\nFormat this into the test questions array schema.`,
+      },
+    ];
   }
 
   const response = await anthropic.messages.create({
     model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
     max_tokens: 16384,
     system: SYSTEM_PROMPT,
-    messages
+    messages,
   });
 
   const responseText = response.content[0]?.text || '';
@@ -791,4 +924,5 @@ module.exports = router;
 module.exports.validateJsonSchema = validateJsonSchema;
 module.exports.extractAndParseJson = extractAndParseJson;
 module.exports.repairTruncatedJson = repairTruncatedJson;
+module.exports.repairJsonUnescapedBackslashes = repairJsonUnescapedBackslashes;
 module.exports.buildSmartFallbackCatalogue = buildSmartFallbackCatalogue;

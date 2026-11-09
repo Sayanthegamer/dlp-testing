@@ -3,6 +3,7 @@ import MathRenderer from '../PreviewPanel/MathRenderer';
 import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import DiagramAdjustModal from './DiagramAdjustModal';
 import { computeNeedsReview } from '../../services/reviewEvaluator';
+import { repairMissingMathBackslashes } from '../../services/mathSanitizerService';
 import { isLongOptionsLayout } from '../../services/layoutHelpers';
 import {
   Check,
@@ -41,6 +42,28 @@ export default function QuestionCard({
     const newOptions = [...(options || [])];
     newOptions[idx] = val;
     onUpdateQuestion(id, { ...question, options: newOptions });
+  };
+
+  const handleOptionBlur = (idx) => {
+    if (Array.isArray(options) && typeof options[idx] === 'string') {
+      const sanitizedOpt = repairMissingMathBackslashes(options[idx]);
+      if (sanitizedOpt !== options[idx]) {
+        const newOptions = [...options];
+        newOptions[idx] = sanitizedOpt;
+        onUpdateQuestion(id, { ...question, options: newOptions });
+      }
+    }
+    setEditingOptionIdx(null);
+  };
+
+  const handleStemBlur = () => {
+    if (typeof questionText === 'string') {
+      const sanitizedStem = repairMissingMathBackslashes(questionText);
+      if (sanitizedStem !== questionText) {
+        onUpdateQuestion(id, { ...question, questionText: sanitizedStem });
+      }
+    }
+    setIsEditingStem(false);
   };
 
   const handleAddOption = () => {
@@ -181,14 +204,20 @@ export default function QuestionCard({
               <textarea
                 value={questionText}
                 onChange={(e) => onUpdateQuestion(id, { ...question, questionText: e.target.value })}
-                onBlur={() => setIsEditingStem(false)}
+                onBlur={handleStemBlur}
                 rows={3}
                 className="w-full p-3 rounded-lg border border-[#8c4a17] bg-[#fdfbf7] font-serif text-lg text-[#1f1b16] focus:outline-none leading-relaxed"
                 autoFocus
               />
             ) : (
               <div
-                onClick={() => setIsEditingStem(true)}
+                onClick={() => {
+                  const cleanStem = repairMissingMathBackslashes(questionText || '');
+                  if (cleanStem !== questionText) {
+                    onUpdateQuestion(id, { ...question, questionText: cleanStem });
+                  }
+                  setIsEditingStem(true);
+                }}
                 className="font-serif text-lg sm:text-xl text-[#1f1b16] leading-relaxed cursor-text py-1.5 px-2 -mx-2 rounded-lg border border-transparent hover:border-[#dcd5c4] hover:bg-[#f7f4ee] transition-calm"
                 title="Click to edit question stem inline"
               >
@@ -258,13 +287,19 @@ export default function QuestionCard({
                             type="text"
                             value={opt}
                             onChange={(e) => handleOptionChange(optIdx, e.target.value)}
-                            onBlur={() => setEditingOptionIdx(null)}
+                            onBlur={() => handleOptionBlur(optIdx)}
                             className="w-full px-2 py-1 rounded-md border border-[#8c4a17] bg-[#fdfbf7] font-serif text-base text-[#1f1b16] focus:outline-none"
                             autoFocus
                           />
                         ) : (
                           <div
-                            onClick={() => setEditingOptionIdx(optIdx)}
+                            onClick={() => {
+                              const cleanOpt = repairMissingMathBackslashes(opt || '');
+                              if (cleanOpt !== opt) {
+                                handleOptionChange(optIdx, cleanOpt);
+                              }
+                              setEditingOptionIdx(optIdx);
+                            }}
                             className="font-serif text-base text-[#1f1b16] leading-normal cursor-text hover:underline"
                             title="Click to edit option text"
                           >

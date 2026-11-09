@@ -1,15 +1,16 @@
 import React from 'react';
 import katex from 'katex';
 import 'katex/contrib/mhchem';
+import { repairMissingMathBackslashes } from '../../services/mathSanitizerService';
 
 export default function MathRenderer({ text = '', needsReview = false, readOnly = false, onSelectMathForEdit }) {
   if (!text || text.trim() === '') {
     return <span className="text-[#7b7266]">No text entered</span>;
   }
 
-  const sanitizedText = text;
+  const sanitizedText = repairMissingMathBackslashes(text);
   const parts = [];
-  const mathRegex = /<math>(.*?)<\/math>/gs;
+  const mathRegex = /<math>([\s\S]*?)<\/math>/gi;
   let lastIndex = 0;
   let match;
 
@@ -32,14 +33,21 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
           return <span key={idx}>{part.content}</span>;
         }
 
-        let cleanMathContent = part.content.replace(/<\/?math>/gi, '').trim();
+        let cleanMathContent = repairMissingMathBackslashes(part.content.replace(/<\/?math>/gi, '')).trim();
         if (!cleanMathContent) return null;
 
-        cleanMathContent = cleanMathContent.replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}');
-        cleanMathContent = cleanMathContent.replace(/(?<!\\)%/g, '\\%');
+        cleanMathContent = cleanMathContent
+          .replace(/\\{2,}(?=[a-zA-Z])/g, '\\')
+          .replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}')
+          .replace(/(?<!\\)%/g, '\\%');
 
         cleanMathContent = cleanMathContent
-          .replace(/\\text\{([^{}]*)\}/g, (_, inner) => `\\text{${inner.replace(/(?<!\\)_/g, '\\_')}}`)
+          .replace(/\\text\{([^{}]*)\}/g, (_, inner) => {
+            const fixedInner = inner
+              .replace(/\\(times|sec|min|max|in|to|pm|mp|div|cdot)\b/g, '$1')
+              .replace(/(?<!\\)_/g, '\\_');
+            return `\\text{${fixedInner}}`;
+          })
           .replace(/(?<!\\)_{2,}/g, (m) => `\\underline{\\hspace{${m.length * 0.5}em}}`);
 
         if (/^[a-zA-Z\s]{3,}$/.test(cleanMathContent) && !cleanMathContent.includes('\\')) {
