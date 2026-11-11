@@ -3,12 +3,16 @@ const router = express.Router();
 const {
   getAdminClient,
   createAuthClient,
-   createUserClient,
+  createUserClient,
   ensureTeacherProfile,
   isConfigured,
   isValidUserJwt,
 } = require('../services/supabaseClient');
-const { isValidTeacherAccessCode, safeCompareStrings } = require('../services/authService');
+const {
+  isValidTeacherAccessCode,
+  isDemoOrFallbackAllowed,
+  safeCompareStrings,
+} = require('../services/authService');
 
 /**
  * POST /api/auth/signup
@@ -27,6 +31,11 @@ router.post('/signup', async (req, res) => {
   }
 
   if (!isConfigured()) {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({
+        error: 'Authentication database is not configured in production.',
+      });
+    }
     return res.json({
       success: true,
       message: 'Running in dev fallback mode. Account created.',
@@ -103,6 +112,11 @@ async function handleTeacherLogin(req, res) {
   }
 
   if (!isConfigured()) {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({
+        error: 'Authentication database is not configured in production.',
+      });
+    }
     if (
       isValidTeacherAccessCode(password) ||
       safeCompareStrings(password, 'teacher123') ||
@@ -172,11 +186,19 @@ router.get('/me', async (req, res) => {
     return res.status(401).json({ authenticated: false, error: 'No auth token provided' });
   }
 
-  if (
+  const isFallbackOrStaticToken =
     token === 'legacy-app-password-token' ||
     token === 'dev-fallback-token' ||
-    isValidTeacherAccessCode(token)
-  ) {
+    token === 'dlp_teacher_secret_passcode_2026' ||
+    isValidTeacherAccessCode(token);
+
+  if (isFallbackOrStaticToken) {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(401).json({
+        authenticated: false,
+        error: 'Demo or static tokens are rejected in production.',
+      });
+    }
     return res.json({
       authenticated: true,
       mode: 'fallback',
@@ -184,7 +206,20 @@ router.get('/me', async (req, res) => {
     });
   }
 
+  if (!isDemoOrFallbackAllowed() && !isValidUserJwt(token)) {
+    return res.status(401).json({
+      authenticated: false,
+      error: 'Invalid user session token format.',
+    });
+  }
+
   if (!isConfigured()) {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({
+        authenticated: false,
+        error: 'Authentication database is not configured in production.',
+      });
+    }
     return res.json({
       authenticated: true,
       mode: 'dev_fallback',
@@ -198,7 +233,10 @@ router.get('/me', async (req, res) => {
     }
 
     const authClient = createAuthClient() || getAdminClient();
-    const { data: { user }, error } = await authClient.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await authClient.auth.getUser(token);
     if (error || !user) throw error || new Error('Invalid user session');
 
     await ensureTeacherProfile(user, createUserClient(token));
@@ -227,11 +265,28 @@ router.post('/refresh', async (req, res) => {
     return res.status(400).json({ error: 'refresh_token is required.' });
   }
 
-  if (!isConfigured() || refresh_token === 'dev-refresh-token') {
+  const isFallbackOrLegacyRefresh =
+    refresh_token === 'dev-refresh-token' ||
+    refresh_token === 'dev-fallback-token' ||
+    refresh_token === 'legacy-app-password-token';
+
+  if (isFallbackOrLegacyRefresh && !isDemoOrFallbackAllowed()) {
+    return res.status(401).json({
+      error: 'Demo or legacy refresh tokens are rejected in production.',
+    });
+  }
+
+  if (isDemoOrFallbackAllowed() && (!isConfigured() || isFallbackOrLegacyRefresh)) {
     return res.json({
       success: true,
       token: 'dev-fallback-token',
       refresh_token: 'dev-refresh-token',
+    });
+  }
+
+  if (!isConfigured()) {
+    return res.status(503).json({
+      error: 'Authentication database is not configured in production.',
     });
   }
 

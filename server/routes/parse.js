@@ -7,6 +7,46 @@ const { extractCandidateFigures } = require('../services/layoutExtractorService'
 const { matchDiagramsToQuestions } = require('../services/diagramMatcherService');
 const { repairMissingMathBackslashes } = require('../services/mathSanitizerService');
 
+const MAX_CONCURRENT_CHUNKS = 2;
+const CHUNK_TIMEOUT_MS = parseInt(process.env.PARSE_CHUNK_TIMEOUT_MS, 10) || 25000;
+
+function withTimeout(promise, ms, label = 'AI provider request') {
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Executes async worker tasks with bounded concurrency (`limit` workers at a time)
+ * and returns an array of settled results `{ status: 'fulfilled' | 'rejected', value?, reason? }`.
+ */
+async function mapWithConcurrencySettled(items, limit, workerFn) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const currentIdx = nextIndex++;
+      try {
+        const value = await workerFn(items[currentIdx], currentIdx);
+        results[currentIdx] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[currentIdx] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, limit), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return results;
+}
+
 const SYSTEM_PROMPT = `You are an expert math and science test paper parser for tuition teachers.
 Your task is to parse input (informal text, photo of exam paper, or multi-page PDF) representing exam questions and convert them into strict JSON adhering to this exact schema format:
 
@@ -146,7 +186,6 @@ function buildSmartFallbackCatalogue({ type, rawText, docxStructure, candidateFi
     );
   }
 
-  // Image / PDF fallback
   const hasCandidateFig = Array.isArray(candidateFigures) && candidateFigures.length > 0;
   return extractAndParseJson(
     JSON.stringify({
@@ -248,10 +287,6 @@ async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 1) {
   return chunks.length > 0 ? chunks : [mediaFiles];
 }
 
-/**
- * Repairs unescaped single backslashes inside JSON string values WITHOUT doubling
- * already-escaped `\\` pairs.
- */
 function repairJsonUnescapedBackslashes(str) {
   if (typeof str !== 'string') return str;
   let clean = str.trim();
@@ -365,9 +400,6 @@ function repairTruncatedJson(jsonStr) {
   return str;
 }
 
-/**
- * Normalizes options from array, object (`{A: "...", B: "..."}`), or inline stem text.
- */
 function normalizeRawOptionsAndStem(questionText, q) {
   let rawOptions = q.options || q.choices || [];
   if (rawOptions && !Array.isArray(rawOptions) && typeof rawOptions === 'object') {
@@ -381,7 +413,6 @@ function normalizeRawOptionsAndStem(questionText, q) {
     return { stem: questionText, options: rawOptions };
   }
 
-  // Match inline (A) ... (B) ... (C) ... (D) ... or (a) ... (b) ... or (1) ... (2) ...
   const inlinePatterns = [
     /\s+(?:\([A-Da-d]\)|[A-Da-d][\)\.])\s+/g,
     /\s+\([1-4]\)\s+/g,
@@ -454,7 +485,7 @@ function extractAndParseJson(text) {
     throw new Error('AI response JSON has unrecognized structure: missing "questions" array and "questionText" field');
   }
 
-  const solutionHeaderIdx = questions.findIndex(q => {
+  const solutionHeaderIdx = questions.findIndex((q) => {
     const text = (q.questionText || '').trim();
     return /^(?:ANSWERS?\s*(?:AND|&)?\s*SOLUTIONS?|HINTS?\s*(?:AND|&)?\s*SOLUTIONS?|ANSWER\s*KEY)\b/i.test(text);
   });
@@ -463,7 +494,7 @@ function extractAndParseJson(text) {
     questions = questions.slice(0, solutionHeaderIdx);
   }
 
-  questions = questions.filter(q => {
+  questions = questions.filter((q) => {
     const text = (q.questionText || '').trim();
     if (!text) return false;
 
@@ -507,14 +538,14 @@ function extractAndParseJson(text) {
       type = 'short_answer_numeric';
     }
 
-    const cleanOptions = (Array.isArray(rawOptionsList) ? rawOptionsList : []).map(opt =>
+    const cleanOptions = (Array.isArray(rawOptionsList) ? rawOptionsList : []).map((opt) =>
       repairMissingMathBackslashes(typeof opt === 'string' ? opt : String(opt))
     );
 
     const options = type === 'mcq' || type === 'match_following' ? cleanOptions : [];
 
     const mathMatches = (questionText + ' ' + options.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
-    const mathSpans = mathMatches.map(m => m.replace(/<\/?math>/g, ''));
+    const mathSpans = mathMatches.map((m) => m.replace(/<\/?math>/g, ''));
 
     let correctAnswer = null;
     if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
@@ -620,6 +651,54 @@ function getGeminiModelName() {
   return process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 }
 
+async function runSingleChunkWithProvider({
+  provider,
+  type,
+  rawText,
+  imageBase64,
+  mediaType,
+  chunk,
+  docxStructure,
+}) {
+  if (provider.name === 'gemini') {
+    return await withTimeout(
+      parseWithGemini({
+        geminiKey: provider.key,
+        type,
+        rawText,
+        imageBase64,
+        mediaType,
+        mediaFiles: chunk,
+        docxStructure,
+      }),
+      CHUNK_TIMEOUT_MS,
+      'Gemini chunk transcription'
+    );
+  }
+  if (provider.name === 'anthropic') {
+    return await withTimeout(
+      parseWithClaude({
+        anthropicKey: provider.key,
+        type,
+        rawText,
+        imageBase64,
+        mediaType,
+        mediaFiles: chunk,
+        docxStructure,
+      }),
+      CHUNK_TIMEOUT_MS,
+      'Anthropic chunk transcription'
+    );
+  }
+  throw new Error(`Unsupported provider: ${provider.name}`);
+}
+
+/**
+ * Bounded-Concurrency, Per-Chunk Fault-Tolerant Parse Handler:
+ * - Processes media chunks with MAX_CONCURRENT_CHUNKS = 2 and per-chunk deadlines.
+ * - Retries ONLY failed chunks on secondary providers instead of restarting already-parsed pages.
+ * - Preserves partial page successes if at least one chunk succeeded and no fallback provider remains.
+ */
 async function handleParseRequest(req, res, forcedType = null) {
   const { rawText, imageBase64, mediaType, mediaFiles, docxStructure } = req.body || {};
   const type = forcedType || req.body?.type || 'text';
@@ -678,118 +757,149 @@ async function handleParseRequest(req, res, forcedType = null) {
       ? await chunkMediaFiles(effectiveMediaFiles, chunkSize)
       : [[{ type, rawText, docxStructure }]];
 
+  // Track parsed result per chunk index so successful chunks are never re-parsed on failover
+  const resolvedChunks = new Array(mediaChunks.length).fill(null);
   const errors = [];
+  let primaryProviderUsed = providers[0].name;
 
   for (const provider of providers) {
-    try {
-      let aggregatedQuestions = [];
-      let masterTestTitle = 'Mathematics Test Paper';
+    const pendingIndices = [];
+    for (let i = 0; i < mediaChunks.length; i++) {
+      if (!resolvedChunks[i]) pendingIndices.push(i);
+    }
+    if (pendingIndices.length === 0) break;
 
-      const chunkPromises = mediaChunks.map(async (chunk) => {
-        let parsedChunkData = null;
-        if (provider.name === 'gemini') {
-          parsedChunkData = await parseWithGemini({
-            geminiKey: provider.key,
-            type,
-            rawText,
-            imageBase64,
-            mediaType,
-            mediaFiles: chunk,
-            docxStructure,
-          });
-        } else if (provider.name === 'anthropic') {
-          parsedChunkData = await parseWithClaude({
-            anthropicKey: provider.key,
-            type,
-            rawText,
-            imageBase64,
-            mediaType,
-            mediaFiles: chunk,
-            docxStructure,
-          });
-        }
-        return { chunk, parsedChunkData };
-      });
-
-      const chunkResults = await Promise.all(chunkPromises);
-
-      for (const { chunk, parsedChunkData } of chunkResults) {
-        if (
-          parsedChunkData &&
-          parsedChunkData.testTitle &&
-          parsedChunkData.testTitle !== 'Mathematics Test Paper'
-        ) {
-          masterTestTitle = parsedChunkData.testTitle;
-        }
-
-        if (parsedChunkData && Array.isArray(parsedChunkData.questions)) {
-          const remappedChunkQuestions = parsedChunkData.questions.map((q) => {
-            if (Array.isArray(q.diagrams)) {
-              q.diagrams = q.diagrams.map(diag => {
-                const chunkItem =
-                  typeof diag.sourceFileIndex === 'number' && chunk[diag.sourceFileIndex]
-                    ? chunk[diag.sourceFileIndex]
-                    : chunk[0];
-                return {
-                  ...diag,
-                  sourceFileIndex:
-                    chunkItem && typeof chunkItem.sourceFileIndex === 'number'
-                      ? chunkItem.sourceFileIndex
-                      : 0,
-                  pageIndex:
-                    chunkItem && typeof chunkItem.pageIndex === 'number'
-                      ? chunkItem.pageIndex
-                      : diag.pageIndex || 0,
-                };
-              });
-            }
-            return q;
-          });
-
-          aggregatedQuestions.push(...remappedChunkQuestions);
-        }
+    const settledBatch = await mapWithConcurrencySettled(
+      pendingIndices,
+      MAX_CONCURRENT_CHUNKS,
+      async (chunkIdx) => {
+        const chunk = mediaChunks[chunkIdx];
+        const parsedChunkData = await runSingleChunkWithProvider({
+          provider,
+          type,
+          rawText,
+          imageBase64,
+          mediaType,
+          chunk,
+          docxStructure,
+        });
+        return { chunkIdx, chunk, parsedChunkData, provider: provider.name };
       }
+    );
 
-      aggregatedQuestions = aggregatedQuestions.map((q, idx) => ({
-        ...q,
-        id: `q${idx + 1}`,
-      }));
-
-      const combinedData = {
-        testTitle: masterTestTitle,
-        questions: aggregatedQuestions,
-      };
-
-      if (combinedData.questions.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'No exam questions could be extracted from the uploaded document. Select pages containing numbered questions.',
+    settledBatch.forEach((item, idx) => {
+      const chunkIdx = pendingIndices[idx];
+      if (item.status === 'fulfilled' && item.value?.parsedChunkData) {
+        resolvedChunks[chunkIdx] = item.value;
+        primaryProviderUsed = item.value.provider;
+      } else {
+        const reasonMsg = item.reason?.message || 'Chunk transcription failed';
+        errors.push({
+          provider: provider.name,
+          chunkIndex: chunkIdx,
+          error: reasonMsg,
         });
       }
+    });
+  }
 
-      if (!validateJsonSchema(combinedData)) {
-        throw new Error(`${provider.name} response failed JSON schema shape validation after aggregation`);
-      }
+  const succeededCount = resolvedChunks.filter(Boolean).length;
+  const failedCount = mediaChunks.length - succeededCount;
 
-      try {
-        combinedData.questions = await matchDiagramsToQuestions(
-          combinedData.questions,
-          candidateFigures,
-          effectiveMediaFiles
-        );
-      } catch (_) {}
+  if (succeededCount === 0) {
+    const errDetails = errors.map((e) => `[${e.provider}#${e.chunkIndex + 1}]: ${e.error}`).join(' | ');
+    return res.status(500).json({
+      success: false,
+      error: `AI transcription failed: ${errDetails}. Check your API key in environment settings.`,
+    });
+  }
 
-      return res.json({ success: true, data: combinedData, mode: `live_${provider.name}` });
-    } catch (err) {
-      errors.push({ provider: provider.name, error: err.message });
+  let aggregatedQuestions = [];
+  let masterTestTitle = 'Mathematics Test Paper';
+
+  for (const entry of resolvedChunks) {
+    if (!entry) continue;
+    const { chunk, parsedChunkData } = entry;
+
+    if (
+      parsedChunkData &&
+      parsedChunkData.testTitle &&
+      parsedChunkData.testTitle !== 'Mathematics Test Paper'
+    ) {
+      masterTestTitle = parsedChunkData.testTitle;
+    }
+
+    if (parsedChunkData && Array.isArray(parsedChunkData.questions)) {
+      const remappedChunkQuestions = parsedChunkData.questions.map((q) => {
+        if (Array.isArray(q.diagrams)) {
+          q.diagrams = q.diagrams.map((diag) => {
+            const chunkItem =
+              typeof diag.sourceFileIndex === 'number' && chunk[diag.sourceFileIndex]
+                ? chunk[diag.sourceFileIndex]
+                : chunk[0];
+            return {
+              ...diag,
+              sourceFileIndex:
+                chunkItem && typeof chunkItem.sourceFileIndex === 'number'
+                  ? chunkItem.sourceFileIndex
+                  : 0,
+              pageIndex:
+                chunkItem && typeof chunkItem.pageIndex === 'number'
+                  ? chunkItem.pageIndex
+                  : diag.pageIndex || 0,
+            };
+          });
+        }
+        return q;
+      });
+
+      aggregatedQuestions.push(...remappedChunkQuestions);
     }
   }
 
-  const errDetails = errors.map(e => `[${e.provider}]: ${e.error}`).join(' | ');
-  return res.status(500).json({
-    success: false,
-    error: `AI transcription failed: ${errDetails}. Check your API key in environment settings.`,
+  aggregatedQuestions = aggregatedQuestions.map((q, idx) => ({
+    ...q,
+    id: `q${idx + 1}`,
+  }));
+
+  const combinedData = {
+    testTitle: masterTestTitle,
+    questions: aggregatedQuestions,
+    chunkStats: {
+      totalChunks: mediaChunks.length,
+      succeededChunks: succeededCount,
+      failedChunks: failedCount,
+    },
+  };
+
+  if (combinedData.questions.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error:
+        'No exam questions could be extracted from the uploaded document. Select pages containing numbered questions.',
+    });
+  }
+
+  if (!validateJsonSchema(combinedData)) {
+    return res.status(422).json({
+      success: false,
+      error: 'Extracted questions did not pass schema validation.',
+    });
+  }
+
+  try {
+    combinedData.questions = await matchDiagramsToQuestions(
+      combinedData.questions,
+      candidateFigures,
+      effectiveMediaFiles
+    );
+  } catch (_) {}
+
+  return res.json({
+    success: true,
+    data: combinedData,
+    mode: `live_${primaryProviderUsed}`,
+    chunkStats: combinedData.chunkStats,
   });
 }
 
@@ -870,7 +980,7 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
 
     const contentBlocks = [];
 
-    filesToProcess.forEach(file => {
+    filesToProcess.forEach((file) => {
       const mime = file.mimeType || file.mediaType || 'image/jpeg';
       const rawData = file.data || file.base64 || file.imageBase64;
       const cleanData = stripBase64Header(rawData);
@@ -924,3 +1034,8 @@ module.exports.extractAndParseJson = extractAndParseJson;
 module.exports.repairTruncatedJson = repairTruncatedJson;
 module.exports.repairJsonUnescapedBackslashes = repairJsonUnescapedBackslashes;
 module.exports.buildSmartFallbackCatalogue = buildSmartFallbackCatalogue;
+module.exports.mapWithConcurrencySettled = mapWithConcurrencySettled;
+module.exports.withTimeout = withTimeout;
+module.exports.handleParseRequest = handleParseRequest;
+module.exports.MAX_CONCURRENT_CHUNKS = MAX_CONCURRENT_CHUNKS;
+module.exports.CHUNK_TIMEOUT_MS = CHUNK_TIMEOUT_MS;

@@ -1,66 +1,73 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
-function isServerlessEnv() {
-  return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV) || process.env.NODE_ENV === 'production';
+function isProductionEnv() {
+  if (process.env.ALLOW_DEMO_AUTH === 'true') return false;
+  return (
+    process.env.NODE_ENV === 'production' ||
+    process.env.VERCEL === '1' ||
+    process.env.VERCEL_ENV === 'production'
+  );
 }
 
 function getFilePath(filename) {
-  if (isServerlessEnv()) {
-    return path.join('/tmp', filename);
+  if (isProductionEnv()) {
+    throw new Error(
+      `[Durable Storage Required]: Local JSON fallback (${filename}) is disabled in production. Configure SUPABASE_URL and SUPABASE_SECRET_KEY.`
+    );
   }
-  return path.join(__dirname, '..', 'data', filename);
+  const baseDir =
+    process.env.LOCAL_DATA_DIR && process.env.LOCAL_DATA_DIR.trim()
+      ? path.resolve(process.env.LOCAL_DATA_DIR.trim())
+      : path.join(__dirname, '..', 'data');
+  return path.join(baseDir, filename);
 }
 
 function ensureDataFile(filename, defaultData = []) {
   const filePath = getFilePath(filename);
   const dirPath = path.dirname(filePath);
-  try {
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2), 'utf8');
-    }
-    return filePath;
-  } catch (err) {
-    const tmpPath = path.join('/tmp', filename);
-    try {
-      if (!fs.existsSync(tmpPath)) {
-        fs.writeFileSync(tmpPath, JSON.stringify(defaultData, null, 2), 'utf8');
-      }
-    } catch (_) {}
-    return tmpPath;
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
   }
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2), 'utf8');
+  }
+  return filePath;
 }
 
 function readLocalCollection(filename) {
   const filePath = ensureDataFile(filename, []);
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(raw) || [];
-  } catch (_) {
-    try {
-      const rawTmp = fs.readFileSync(path.join('/tmp', filename), 'utf8');
-      return JSON.parse(rawTmp) || [];
-    } catch (__) {
-      return [];
-    }
-  }
+  const raw = fs.readFileSync(filePath, 'utf8');
+  return JSON.parse(raw) || [];
 }
 
 function writeLocalCollection(filename, data) {
   const filePath = ensureDataFile(filename, []);
+  const serialized = JSON.stringify(data, null, 2);
+  const randSuffix = crypto.randomBytes(4).toString('hex');
+  const tmpFile = `${filePath}.${process.pid}.${Date.now()}.${randSuffix}.tmp`;
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    return true;
-  } catch (_) {
+    fs.writeFileSync(tmpFile, serialized, 'utf8');
     try {
-      fs.writeFileSync(path.join('/tmp', filename), JSON.stringify(data, null, 2), 'utf8');
-      return true;
-    } catch (__) {
-      return false;
+      fs.renameSync(tmpFile, filePath);
+    } catch (renameErr) {
+      if (renameErr && (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY')) {
+        fs.writeFileSync(filePath, serialized, 'utf8');
+        try {
+          if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+        } catch (_) {}
+      } else {
+        throw renameErr;
+      }
     }
+    return true;
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+    } catch (_) {}
+    console.error(`[Local Store Write Error (${filename})]:`, err.message);
+    return false;
   }
 }
 
@@ -76,10 +83,15 @@ const writeLocalStudents = (data) => writeLocalCollection('students.json', data)
 const readTeacherStudentsLocal = () => readLocalCollection('teacher_students.json');
 const writeTeacherStudentsLocal = (data) => writeLocalCollection('teacher_students.json', data);
 
-function enrollTeacherStudentLocal({ teacherId, studentId, classCode = null, enrollmentSource = 'class_code' }) {
+function enrollTeacherStudentLocal({
+  teacherId,
+  studentId,
+  classCode = null,
+  enrollmentSource = 'class_code',
+}) {
   if (!teacherId || !studentId) return null;
   const list = readTeacherStudentsLocal();
-  const existing = list.find(r => r.teacher_id === teacherId && r.student_id === studentId);
+  const existing = list.find((r) => r.teacher_id === teacherId && r.student_id === studentId);
   if (existing) {
     existing.class_code = classCode || existing.class_code;
     existing.enrollment_source = enrollmentSource || existing.enrollment_source;
@@ -92,7 +104,7 @@ function enrollTeacherStudentLocal({ teacherId, studentId, classCode = null, enr
     student_id: studentId,
     class_code: classCode,
     enrollment_source: enrollmentSource,
-    enrolled_at: new Date().toISOString()
+    enrolled_at: new Date().toISOString(),
   };
   list.push(newRecord);
   writeTeacherStudentsLocal(list);
@@ -100,6 +112,8 @@ function enrollTeacherStudentLocal({ teacherId, studentId, classCode = null, enr
 }
 
 module.exports = {
+  isProductionEnv,
+  getFilePath,
   readLocalCollection,
   writeLocalCollection,
   readExamsLocal,
@@ -110,5 +124,5 @@ module.exports = {
   writeLocalStudents,
   readTeacherStudentsLocal,
   writeTeacherStudentsLocal,
-  enrollTeacherStudentLocal
+  enrollTeacherStudentLocal,
 };

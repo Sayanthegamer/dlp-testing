@@ -410,7 +410,7 @@ export default function StudentAuthModal({
                 className="inline-flex items-center gap-1.5 font-medium text-[#8c4a17] hover:underline"
               >
                 <Terminal className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span>Enter demo candidate mode</span>
+                <span>Preview sample paper</span>
               </button>
             </div>
           </div>

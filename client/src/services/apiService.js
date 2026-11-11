@@ -3,7 +3,7 @@
  */
 
 function getAuthHeader() {
-  const token = localStorage.getItem('teacher_auth_token') || 'dev-fallback-token';
+  const token = localStorage.getItem('teacher_auth_token');
   const headers = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -172,9 +172,15 @@ export async function checkServerHealth() {
 
 export async function submitStudentTest(payload) {
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const studentToken = localStorage.getItem('student_auth_token');
+    if (studentToken) {
+      headers['Authorization'] = `Bearer ${studentToken}`;
+    }
+
     const response = await fetch('/api/submissions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload)
     });
     if (!response.ok) {
@@ -583,6 +589,11 @@ export async function studentLinkToTeacher(teacherRefCode) {
 
 async function handleApiResponse(response) {
   if (!response.ok) {
+    if (response.status === 413) {
+      throw new Error(
+        'Uploaded files exceed the 4.5 MB server request limit. Please upload fewer or smaller files at once.'
+      );
+    }
     const errData = await response.json().catch(() => ({}));
     throw new Error(errData.error || errData.details || `Server HTTP Error ${response.status}`);
   }

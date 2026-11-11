@@ -1,12 +1,13 @@
 -- ====================================================================
--- Supabase SQL Migration: Student Authentication, Key Migration & RLS Fixes
--- Run this script in your Supabase SQL Editor to update your database.
+-- Supabase SQL Migration: Stage 1 Security & RLS Hardening
+-- Run this script in your Supabase SQL Editor to lock down live tables.
+-- Idempotent across fresh or older databases.
 -- ====================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. Create Students Table (Admission Number + DOB Authentication)
+-- 0. Ensure tables, columns, and teacher auto-sync trigger exist on legacy DBs
 CREATE TABLE IF NOT EXISTS students (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     admission_number TEXT UNIQUE NOT NULL,
@@ -17,21 +18,28 @@ CREATE TABLE IF NOT EXISTS students (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Index for fast Admission Number login lookups
-CREATE INDEX IF NOT EXISTS idx_students_admission_number ON students(admission_number);
-CREATE INDEX IF NOT EXISTS idx_students_teacher_id ON students(teacher_id);
-
--- 2. Update Submissions Table to link with Students & allow practice/demo submissions
 ALTER TABLE submissions
     ADD COLUMN IF NOT EXISTS student_id TEXT REFERENCES students(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS is_dev_demo BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS attempt_number INTEGER DEFAULT 1;
 
-ALTER TABLE submissions ALTER COLUMN exam_id DROP NOT NULL;
+CREATE TABLE IF NOT EXISTS teacher_students (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    teacher_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    class_code TEXT,
+    enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    enrollment_source TEXT DEFAULT 'class_code',
+    UNIQUE(teacher_id, student_id)
+);
 
+CREATE INDEX IF NOT EXISTS idx_students_admission_number ON students(admission_number);
+CREATE INDEX IF NOT EXISTS idx_students_teacher_id ON students(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON submissions(student_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_students_teacher ON teacher_students(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_students_student ON teacher_students(student_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_students_class_code ON teacher_students(class_code);
 
--- 3. Auto-sync auth.users into public.teachers so foreign keys never fail
 CREATE OR REPLACE FUNCTION public.handle_new_teacher_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -64,72 +72,172 @@ SELECT id, COALESCE(email, id::text || '@teacher.local'), COALESCE(raw_user_meta
 FROM auth.users
 ON CONFLICT (id) DO NOTHING;
 
--- 4. Explicit Data API Role Grants for Publishable & Secret Keys
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+-- 1. Revoke unrestricted anonymous PostgREST table dumps
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+GRANT USAGE ON SCHEMA public TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
 
--- 5. Enable Row Level Security (RLS) for Students Table
+-- 2. Ensure Row Level Security is enabled on all tables
+ALTER TABLE teachers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
-
--- 6. Idempotent RLS Policies for Students, Exams, and Submissions
-DROP POLICY IF EXISTS "Public student read for login" ON students;
-CREATE POLICY "Public student read for login"
-    ON students FOR SELECT USING (TRUE);
-
-DROP POLICY IF EXISTS "Public student registration insert" ON students;
-CREATE POLICY "Public student registration insert"
-    ON students FOR INSERT WITH CHECK (TRUE);
-
-DROP POLICY IF EXISTS "Teachers can update enrolled students" ON students;
-CREATE POLICY "Teachers can update enrolled students"
-    ON students FOR UPDATE
-    USING (auth.uid() = teacher_id OR teacher_id IS NULL OR auth.role() = 'authenticated')
-    WITH CHECK (TRUE);
-
-DROP POLICY IF EXISTS "Teachers can delete enrolled students" ON students;
-CREATE POLICY "Teachers can delete enrolled students"
-    ON students FOR DELETE
-    USING (auth.uid() = teacher_id OR teacher_id IS NULL OR auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "Public student read for active exams" ON exams;
-CREATE POLICY "Public student read for active exams"
-    ON exams FOR SELECT
-    USING (status IN ('active', 'published') OR auth.uid() = teacher_id OR teacher_id IS NULL);
-
-DROP POLICY IF EXISTS "Students can view own submissions" ON submissions;
-CREATE POLICY "Students can view own submissions"
-    ON submissions FOR SELECT USING (TRUE);
-
--- 7. Multi-Tenant Teacher-Student Classroom Junction Table
-CREATE TABLE IF NOT EXISTS teacher_students (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    teacher_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
-    class_code TEXT,
-    enrolled_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    enrollment_source TEXT DEFAULT 'class_code', -- 'class_code', 'invite_link', 'live_exam', 'manual_lookup'
-    UNIQUE(teacher_id, student_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_teacher_students_teacher ON teacher_students(teacher_id);
-CREATE INDEX IF NOT EXISTS idx_teacher_students_student ON teacher_students(student_id);
-CREATE INDEX IF NOT EXISTS idx_teacher_students_class_code ON teacher_students(class_code);
-
-GRANT ALL ON TABLE teacher_students TO anon, authenticated, service_role;
 ALTER TABLE teacher_students ENABLE ROW LEVEL SECURITY;
 
+-- 3. Drop permissive legacy policies (auth.role() = 'authenticated', teacher_id IS NULL, USING (TRUE))
+DROP POLICY IF EXISTS "Teachers can view and update own profile" ON teachers;
+DROP POLICY IF EXISTS "Public teacher lookup for student linking" ON teachers;
+DROP POLICY IF EXISTS "Public student read for active exams" ON exams;
+DROP POLICY IF EXISTS "Teachers can manage own exams" ON exams;
+DROP POLICY IF EXISTS "Public read questions for active exams" ON questions;
+DROP POLICY IF EXISTS "Teachers can manage own exam questions" ON questions;
+DROP POLICY IF EXISTS "Public student access for active sessions" ON exam_sessions;
+DROP POLICY IF EXISTS "Teachers can manage exam sessions" ON exam_sessions;
+DROP POLICY IF EXISTS "Public student submissions insert" ON submissions;
+DROP POLICY IF EXISTS "Students can view own submissions" ON submissions;
+DROP POLICY IF EXISTS "Teachers view submissions for own exams" ON submissions;
+DROP POLICY IF EXISTS "Teachers update submissions for own exams" ON submissions;
+DROP POLICY IF EXISTS "Public student read for login" ON students;
+DROP POLICY IF EXISTS "Public student registration insert" ON students;
+DROP POLICY IF EXISTS "Teachers can view enrolled students" ON students;
+DROP POLICY IF EXISTS "Teachers can update enrolled students" ON students;
+DROP POLICY IF EXISTS "Teachers can delete enrolled students" ON students;
 DROP POLICY IF EXISTS "Public teacher_students select" ON teacher_students;
-CREATE POLICY "Public teacher_students select"
-    ON teacher_students FOR SELECT
-    USING (TRUE);
-
 DROP POLICY IF EXISTS "Public teacher_students insert" ON teacher_students;
-CREATE POLICY "Public teacher_students insert"
-    ON teacher_students FOR INSERT
-    WITH CHECK (TRUE);
-
 DROP POLICY IF EXISTS "Teachers can delete enrolled student junction" ON teacher_students;
-CREATE POLICY "Teachers can delete enrolled student junction"
-    ON teacher_students FOR DELETE
-    USING (auth.uid() = teacher_id OR auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Teachers can manage own classroom roster" ON teacher_students;
+
+-- 4. Create strict owner-scoped policies
+CREATE POLICY "Teachers can view and update own profile"
+    ON teachers FOR ALL
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Teachers can manage own exams"
+    ON exams FOR ALL
+    USING (auth.uid() = teacher_id)
+    WITH CHECK (auth.uid() = teacher_id);
+
+CREATE POLICY "Teachers can manage own exam questions"
+    ON questions FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = questions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = questions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Teachers can manage exam sessions"
+    ON exam_sessions FOR ALL
+    USING (
+        auth.uid() = teacher_id
+        AND EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = exam_sessions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        auth.uid() = teacher_id
+        AND EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = exam_sessions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Teachers view submissions for own exams"
+    ON submissions FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = submissions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Teachers update submissions for own exams"
+    ON submissions FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = submissions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM exams
+            WHERE exams.id = submissions.exam_id
+              AND exams.teacher_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Teachers can view enrolled students"
+    ON students FOR SELECT
+    USING (
+        auth.uid() = teacher_id
+        OR EXISTS (
+            SELECT 1 FROM teacher_students
+            WHERE teacher_students.student_id = students.id
+              AND teacher_students.teacher_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Teachers can update enrolled students"
+    ON students FOR UPDATE
+    USING (
+        auth.uid() = teacher_id
+        OR EXISTS (
+            SELECT 1 FROM teacher_students
+            WHERE teacher_students.student_id = students.id
+              AND teacher_students.teacher_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        auth.uid() = teacher_id
+        OR EXISTS (
+            SELECT 1 FROM teacher_students
+            WHERE teacher_students.student_id = students.id
+              AND teacher_students.teacher_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Teachers can delete enrolled students"
+    ON students FOR DELETE
+    USING (auth.uid() = teacher_id);
+
+CREATE POLICY "Teachers can manage own classroom roster"
+    ON teacher_students FOR ALL
+    USING (auth.uid() = teacher_id)
+    WITH CHECK (auth.uid() = teacher_id);
+
+-- 5. Storage Bucket & Strict Upload Policies for Cropped Diagram Images
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('diagram-media', 'diagram-media', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Public Read Diagram Media" ON storage.objects;
+DROP POLICY IF EXISTS "Public Upload Diagram Media" ON storage.objects;
+DROP POLICY IF EXISTS "Public Update Diagram Media" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Teachers Upload Diagram Media" ON storage.objects;
+
+CREATE POLICY "Public Read Diagram Media"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'diagram-media');
+
+CREATE POLICY "Authenticated Teachers Upload Diagram Media"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'diagram-media' AND auth.role() IN ('authenticated', 'service_role'));

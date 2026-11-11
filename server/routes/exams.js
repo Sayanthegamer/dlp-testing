@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const {
   supabase,
   getAdminClient,
@@ -9,13 +10,35 @@ const {
   ensureTeacherProfile,
   isValidUuid,
 } = require('../services/supabaseClient');
-const { verifyTeacherAuth } = require('../services/authService');
+const {
+  verifyTeacherAuth,
+  isDemoOrFallbackAllowed,
+} = require('../services/authService');
 const {
   readExamsLocal,
   writeExamsLocal,
   readSubmissionsLocal,
 } = require('../services/localStoreService');
-const { autoEnrollStudentWithExamTeacher } = require('../services/studentAuthService');
+const { autoEnrollStudentWithExamTeacher, getJwtSecret } = require('../services/studentAuthService');
+const { sanitizeExamSnapshotForStudent } = require('../services/gradingService');
+
+function extractVerifiedStudentIdFromReq(req) {
+  const authHeader = (req && req.headers && req.headers['authorization']) || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, getJwtSecret());
+      if (decoded && decoded.role === 'student' && decoded.studentId) {
+        return decoded.studentId;
+      }
+    } catch (_) {}
+  }
+  if (isDemoOrFallbackAllowed()) {
+    const fallbackId = req?.body?.studentId || req?.body?.student_id || null;
+    return fallbackId && fallbackId !== 'dev_demo_candidate' ? fallbackId : null;
+  }
+  return null;
+}
 
 // In-memory active rolling sessions cache (6-hour TTL so 3-hour exams never expire mid-session)
 const activeRollingSessions = new Map();
@@ -33,11 +56,24 @@ function evictExpiredSessions() {
 
 /**
  * Computes deterministic 6-digit rolling passcode for a 5-minute time bucket (300 seconds).
+ * Returns null if no signing secret is configured in production (never falls back to a public literal).
  */
 function get5MinRollingCode(examId, windowOffset = 0) {
-  if (!examId) return '849201';
+  if (!examId) return null;
+  const rawJwt = typeof process.env.JWT_SECRET === 'string' ? process.env.JWT_SECRET.trim() : '';
+  const validJwt =
+    rawJwt && !rawJwt.includes('your_jwt_secret') && !rawJwt.includes('placeholder') ? rawJwt : '';
+  const secret =
+    process.env.APP_PASSWORD ||
+    process.env.TEACHER_ACCESS_CODE ||
+    validJwt ||
+    (isDemoOrFallbackAllowed() ? 'rolling-passcode-secret-key' : '');
+
+  if (!secret) {
+    return null;
+  }
+
   const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000)) + windowOffset;
-  const secret = process.env.APP_PASSWORD || process.env.TEACHER_ACCESS_CODE || 'rolling-passcode-secret-key';
   const hash = crypto.createHmac('sha256', secret).update(`${examId}_${timeBucket}`).digest('hex');
   const codeNum = (parseInt(hash.substring(0, 8), 16) % 900000) + 100000;
   return codeNum.toString();
@@ -64,7 +100,7 @@ function parseSnapshot(raw) {
 
 /**
  * PROTECTED Teacher Endpoint: GET /api/exams
- * Uses Supabase exclusively when configured; falls back to local store only in test/unconfigured mode.
+ * Strictly scoped to the authenticated teacher's exams and returns 500 on database failure.
  */
 router.get('/exams', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -75,90 +111,73 @@ router.get('/exams', async (req, res) => {
   let allSubmissions = [];
 
   if (isConfigured()) {
-    const adminDb = getAdminClient() || supabase;
-    const userDb = createUserClient(req.accessToken) || adminDb;
+    const db = createUserClient(req.accessToken) || getAdminClient() || supabase;
     const teacherUuid = isValidUuid(req.user?.id) ? req.user.id : null;
 
-    try {
-      let query = userDb
-        .from('exams')
-        .select('id, title, question_count, status, created_at, teacher_id')
-        .order('created_at', { ascending: false });
-
-      if (teacherUuid) {
-        query = query.or(`teacher_id.eq.${teacherUuid},teacher_id.is.null`);
-      }
-
-      const { data: userData, error: userError } = await query;
-
-      if (!userError && Array.isArray(userData)) {
-        examList = userData;
-      } else if (adminDb) {
-        let adminQuery = adminDb
-          .from('exams')
-          .select('id, title, question_count, status, created_at, teacher_id')
-          .order('created_at', { ascending: false });
-
-        if (teacherUuid) {
-          adminQuery = adminQuery.or(`teacher_id.eq.${teacherUuid},teacher_id.is.null`);
-        }
-
-        const { data: adminData } = await adminQuery;
-        if (Array.isArray(adminData)) {
-          examList = adminData;
-        }
-      }
-    } catch (e) {
-      console.error('[Supabase Exams Fetch Exception]:', e.message);
+    if (!teacherUuid && !isDemoOrFallbackAllowed()) {
+      return res.status(403).json({ error: 'Valid teacher account required to list exams.' });
     }
 
-    try {
-      const { data: userSubs, error: subErr } = await userDb
+    let query = db
+      .from('exams')
+      .select('id, title, question_count, status, created_at, teacher_id')
+      .order('created_at', { ascending: false });
+
+    if (teacherUuid) {
+      query = query.eq('teacher_id', teacherUuid);
+    }
+
+    const { data: examData, error: examError } = await query;
+    if (examError) {
+      return res.status(500).json({
+        error: `Failed to fetch exams from database: ${examError.message}`,
+      });
+    }
+    examList = Array.isArray(examData) ? examData : [];
+
+    if (examList.length > 0) {
+      const examIds = examList.map((e) => e.id);
+      const { data: subData, error: subError } = await db
         .from('submissions')
-        .select('id, exam_id, responses');
-      if (!subErr && Array.isArray(userSubs)) {
-        allSubmissions = userSubs;
-      } else if (adminDb) {
-        const { data: adminSubs } = await adminDb
-          .from('submissions')
-          .select('id, exam_id, responses');
-        if (Array.isArray(adminSubs)) {
-          allSubmissions = adminSubs;
-        }
+        .select('id, exam_id')
+        .in('exam_id', examIds);
+
+      if (subError) {
+        return res.status(500).json({
+          error: `Failed to fetch submission counts from database: ${subError.message}`,
+        });
       }
-    } catch (_) {}
+      allSubmissions = Array.isArray(subData) ? subData : [];
+    }
   } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     const localExams = readExamsLocal();
-    examList = localExams.map(e => ({
+    examList = localExams.map((e) => ({
       id: e.id,
       title: e.testTitle || e.title,
-      question_count: Array.isArray(e.questions) ? e.questions.length : (e.question_count || 0),
+      question_count: Array.isArray(e.questions) ? e.questions.length : e.question_count || 0,
       created_at: e.createdAt || e.created_at,
       status: e.status || 'active',
     }));
     allSubmissions = readSubmissionsLocal();
   }
 
-  // Calculate submission count per exam ID
   const submissionCounts = {};
-  const singleActiveExamId = examList.length === 1 ? examList[0].id : null;
-
-  allSubmissions.forEach(sub => {
+  allSubmissions.forEach((sub) => {
     const resp = sub.responses
       ? typeof sub.responses === 'string'
         ? JSON.parse(sub.responses)
         : sub.responses
       : sub;
     const targetExamId = sub.exam_id || sub.examId || resp.exam_id || resp.examId;
-
     if (targetExamId && targetExamId !== 'exam_default') {
       submissionCounts[targetExamId] = (submissionCounts[targetExamId] || 0) + 1;
-    } else if (singleActiveExamId) {
-      submissionCounts[singleActiveExamId] = (submissionCounts[singleActiveExamId] || 0) + 1;
     }
   });
 
-  const formatted = examList.map(e => ({
+  const formatted = examList.map((e) => ({
     id: e.id,
     testTitle: e.title || e.testTitle,
     questionCount: e.question_count ?? (Array.isArray(e.questions) ? e.questions.length : 0),
@@ -172,6 +191,7 @@ router.get('/exams', async (req, res) => {
 
 /**
  * PROTECTED Teacher Endpoint: POST /api/exams/publish
+ * Requires teacher ownership (never retries with teacher_id: null on error).
  */
 router.post('/exams/publish', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -201,6 +221,12 @@ router.post('/exams/publish', async (req, res) => {
     const userDb = createUserClient(req.accessToken) || adminDb;
     const teacherUuid = isValidUuid(req.user?.id) ? req.user.id : null;
 
+    if (!teacherUuid && !isDemoOrFallbackAllowed()) {
+      return res.status(403).json({
+        error: 'A verified teacher account is required to publish an exam in production.',
+      });
+    }
+
     try {
       if (teacherUuid) {
         await ensureTeacherProfile(req.user, userDb);
@@ -215,53 +241,38 @@ router.post('/exams/publish', async (req, res) => {
         snapshot_data: examSnapshot,
       };
 
-      let { error: insertErr } = await userDb.from('exams').insert(examRow).select();
-
-      // Fallback to admin client if RLS or non-existent teacher profile rejected the insert
-      if (insertErr && adminDb && adminDb !== userDb) {
-        const retryRes = await adminDb.from('exams').insert(examRow).select();
-        insertErr = retryRes.error;
-      }
-
-      // If foreign key on teacher_id still failed, retry with teacher_id: null
-      if (insertErr && teacherUuid) {
-        const retryNullTeacher = await (adminDb || userDb)
-          .from('exams')
-          .insert({ ...examRow, teacher_id: null })
-          .select();
-        insertErr = retryNullTeacher.error;
-      }
-
+      const { error: insertErr } = await userDb.from('exams').insert(examRow).select();
       if (insertErr) {
         return res.status(500).json({ error: `Failed to publish exam to database: ${insertErr.message}` });
       }
 
-      // Best-effort sync of normalized question records into `public.questions` table
-      try {
-        const questionRows = questions.map((q, idx) => {
-          const validType = ['mcq', 'short_answer_numeric', 'match_following'].includes(q.type)
-            ? q.type
-            : 'short_answer_numeric';
-          return {
-            id: `${serverGeneratedId}_${q.id || `q${idx + 1}`}`,
-            exam_id: serverGeneratedId,
-            question_text: String(q.questionText || `Question ${idx + 1}`),
-            type: validType,
-            options: Array.isArray(q.options) ? q.options : [],
-            correct_answer:
-              typeof q.correctAnswer === 'number' && Number.isInteger(q.correctAnswer)
-                ? q.correctAnswer
-                : null,
-            accepted_range: Array.isArray(q.acceptedRange) ? q.acceptedRange : null,
-            numerical_confirmed: Boolean(q.numericalConfirmed),
-            diagrams: Array.isArray(q.diagrams) ? q.diagrams : [],
-            diagram_images: Array.isArray(q.diagramImages) ? q.diagramImages : [],
-            diagrams_confirmed: Boolean(q.diagramsConfirmed),
-            needs_review: Boolean(q.needsReview),
-          };
-        });
-        await (adminDb || userDb).from('questions').upsert(questionRows, { onConflict: 'id' });
-      } catch (_) {}
+      const questionRows = questions.map((q, idx) => {
+        const validType = ['mcq', 'short_answer_numeric', 'match_following'].includes(q.type)
+          ? q.type
+          : 'short_answer_numeric';
+        return {
+          id: `${serverGeneratedId}_${q.id || `q${idx + 1}`}`,
+          exam_id: serverGeneratedId,
+          question_text: String(q.questionText || `Question ${idx + 1}`),
+          type: validType,
+          options: Array.isArray(q.options) ? q.options : [],
+          correct_answer:
+            typeof q.correctAnswer === 'number' && Number.isInteger(q.correctAnswer)
+              ? q.correctAnswer
+              : null,
+          accepted_range: Array.isArray(q.acceptedRange) ? q.acceptedRange : null,
+          numerical_confirmed: Boolean(q.numericalConfirmed),
+          diagrams: Array.isArray(q.diagrams) ? q.diagrams : [],
+          diagram_images: Array.isArray(q.diagramImages) ? q.diagramImages : [],
+          diagrams_confirmed: Boolean(q.diagramsConfirmed),
+          needs_review: Boolean(q.needsReview),
+        };
+      });
+
+      const { error: qErr } = await userDb.from('questions').upsert(questionRows, { onConflict: 'id' });
+      if (qErr) {
+        console.warn('[Questions table sync warning]:', qErr.message);
+      }
 
       return res.json({
         success: true,
@@ -274,9 +285,18 @@ router.post('/exams/publish', async (req, res) => {
       return res.status(500).json({ error: `Database error publishing exam: ${dbErr.message}` });
     }
   } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     const list = readExamsLocal();
-    list.unshift(examSnapshot);
-    writeExamsLocal(list);
+    list.unshift({
+      ...examSnapshot,
+      teacherId: req.user?.id || req.user?.localId || null,
+    });
+    const savedOk = writeExamsLocal(list);
+    if (!savedOk) {
+      return res.status(500).json({ error: 'Failed to persist published exam to local storage.' });
+    }
 
     return res.json({
       success: true,
@@ -302,6 +322,12 @@ router.post('/exams/session/start', async (req, res) => {
   }
 
   const rollingCode = get5MinRollingCode(examId, 0);
+  if (!rollingCode) {
+    return res.status(503).json({
+      error:
+        'Server configuration error: JWT_SECRET, APP_PASSWORD, or TEACHER_ACCESS_CODE is required to generate session passcodes.',
+    });
+  }
   const secondsRemaining = get5MinSecondsRemaining();
   const createdAt = new Date().toISOString();
   const durationMins = parseInt(req.body.durationMinutes, 10) || 180;
@@ -315,27 +341,20 @@ router.post('/exams/session/start', async (req, res) => {
     }
 
     const teacherUuid = isValidUuid(req.user?.id) ? req.user.id : null;
+    if (!teacherUuid && !isDemoOrFallbackAllowed()) {
+      return res.status(403).json({ error: 'Valid teacher account required to start an exam session.' });
+    }
 
     try {
       if (teacherUuid) {
         await ensureTeacherProfile(req.user, userDb);
       }
 
-      let { data: examData, error: examErr } = await userDb
+      const { data: examData, error: examErr } = await userDb
         .from('exams')
-        .select('status, snapshot_data, duration_minutes')
+        .select('status, snapshot_data, duration_minutes, teacher_id')
         .eq('id', examId)
         .maybeSingle();
-
-      if ((examErr || !examData) && adminDb && adminDb !== userDb) {
-        const adminLookup = await adminDb
-          .from('exams')
-          .select('status, snapshot_data, duration_minutes')
-          .eq('id', examId)
-          .maybeSingle();
-        examData = adminLookup.data;
-        examErr = adminLookup.error;
-      }
 
       if (examErr) {
         return res.status(500).json({ error: `Database error verifying exam status: ${examErr.message}` });
@@ -343,16 +362,23 @@ router.post('/exams/session/start', async (req, res) => {
       if (!examData) {
         return res.status(404).json({ error: `Exam '${examId}' not found.` });
       }
+      if (
+        teacherUuid &&
+        (examData.teacher_id
+          ? examData.teacher_id !== teacherUuid
+          : !isDemoOrFallbackAllowed())
+      ) {
+        return res.status(403).json({ error: 'Forbidden: You do not own this exam.' });
+      }
       if (examData.status === 'closed') {
         return res.status(403).json({
           error: 'Cannot start rolling session for a closed exam. Reopen the exam first.',
         });
       }
 
-      const dbWriter = adminDb || userDb;
-      await dbWriter.from('exam_sessions').update({ is_active: false }).eq('exam_id', examId);
+      await userDb.from('exam_sessions').update({ is_active: false }).eq('exam_id', examId);
 
-      let { error: sessionErr } = await dbWriter.from('exam_sessions').insert({
+      const { error: sessionErr } = await userDb.from('exam_sessions').insert({
         exam_id: examId,
         teacher_id: teacherUuid,
         rolling_code: rollingCode,
@@ -360,29 +386,15 @@ router.post('/exams/session/start', async (req, res) => {
         expires_at: new Date(startTime + (durationMins + 30) * 60 * 1000).toISOString(),
       });
 
-      // If teacher_id FK constraint fails (e.g., teacher row missing in public.teachers), retry with null teacher_id
-      if (sessionErr && teacherUuid) {
-        const retrySession = await dbWriter.from('exam_sessions').insert({
-          exam_id: examId,
-          teacher_id: null,
-          rolling_code: rollingCode,
-          is_active: true,
-          expires_at: new Date(startTime + (durationMins + 30) * 60 * 1000).toISOString(),
-        });
-        sessionErr = retrySession.error;
-      }
-
       if (sessionErr) {
         return res.status(500).json({
           error: `Failed to record active test session in database: ${sessionErr.message}`,
         });
       }
 
-      // Persist session timing metadata inside exams.duration_minutes & snapshot_data.sessionMeta
-      // so serverless functions share duration and live time extensions across instances
       const existingSnapshot = parseSnapshot(examData.snapshot_data) || {};
       const existingMeta = existingSnapshot.sessionMeta || {};
-      const preservedExtended = existingMeta.examId === examId ? (existingMeta.extendedMinutes || 0) : 0;
+      const preservedExtended = existingMeta.examId === examId ? existingMeta.extendedMinutes || 0 : 0;
       const preservedStart = existingMeta.startTime || startTime;
 
       const sessionInfo = {
@@ -394,19 +406,23 @@ router.post('/exams/session/start', async (req, res) => {
         extendedMinutes: preservedExtended,
       };
 
-      try {
-        await dbWriter
-          .from('exams')
-          .update({
-            duration_minutes: durationMins,
-            snapshot_data: {
-              ...existingSnapshot,
-              sessionMeta: sessionInfo,
-            },
-            updated_at: createdAt,
-          })
-          .eq('id', examId);
-      } catch (_) {}
+      const { error: metaUpdateErr } = await userDb
+        .from('exams')
+        .update({
+          duration_minutes: durationMins,
+          snapshot_data: {
+            ...existingSnapshot,
+            sessionMeta: sessionInfo,
+          },
+          updated_at: createdAt,
+        })
+        .eq('id', examId);
+
+      if (metaUpdateErr) {
+        return res.status(500).json({
+          error: `Failed to persist session metadata on exam: ${metaUpdateErr.message}`,
+        });
+      }
 
       evictExpiredSessions();
       activeRollingSessions.set(rollingCode, sessionInfo);
@@ -427,9 +443,15 @@ router.post('/exams/session/start', async (req, res) => {
       return res.status(500).json({ error: `Database error starting session: ${dbErr.message}` });
     }
   } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     const list = readExamsLocal();
-    const localExam = list.find(e => e.id === examId);
-    if (localExam && localExam.status === 'closed') {
+    const localExam = list.find((e) => e.id === examId);
+    if (!localExam) {
+      return res.status(404).json({ error: `Exam '${examId}' not found.` });
+    }
+    if (localExam.status === 'closed') {
       return res.status(403).json({
         error: 'Cannot start rolling session for a closed exam. Reopen the exam first.',
       });
@@ -444,10 +466,10 @@ router.post('/exams/session/start', async (req, res) => {
       extendedMinutes: 0,
     };
 
-    if (localExam) {
-      localExam.durationMinutes = durationMins;
-      localExam.sessionMeta = sessionInfo;
-      writeExamsLocal(list);
+    localExam.durationMinutes = durationMins;
+    localExam.sessionMeta = sessionInfo;
+    if (!writeExamsLocal(list)) {
+      return res.status(500).json({ error: 'Failed to persist session metadata to local storage.' });
     }
 
     evictExpiredSessions();
@@ -470,7 +492,6 @@ router.post('/exams/session/start', async (req, res) => {
 
 /**
  * PROTECTED Teacher Endpoint: POST /api/exams/session/extend
- * Persists extended time both in memory and in Supabase `exams.snapshot_data.sessionMeta` for serverless durability.
  */
 router.post('/exams/session/extend', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -478,6 +499,9 @@ router.post('/exams/session/extend', async (req, res) => {
   }
 
   const { examId, rollingCode, extraMinutes } = req.body || {};
+  if (!examId) {
+    return res.status(400).json({ error: 'examId is required to extend session time.' });
+  }
   const minutesToAdd = parseInt(extraMinutes, 10) || 5;
 
   let session = null;
@@ -485,83 +509,93 @@ router.post('/exams/session/extend', async (req, res) => {
     session = activeRollingSessions.get(rollingCode);
   } else if (examId && activeRollingSessions.has(examId)) {
     session = activeRollingSessions.get(examId);
-  } else if (examId) {
-    for (const s of activeRollingSessions.values()) {
-      if (s.examId === examId) {
-        session = s;
-        break;
-      }
+  }
+
+  if (isConfigured()) {
+    const db = createUserClient(req.accessToken) || getAdminClient() || supabase;
+    const teacherUuid = isValidUuid(req.user?.id) ? req.user.id : null;
+
+    const { data: examData, error: fetchErr } = await db
+      .from('exams')
+      .select('duration_minutes, snapshot_data, teacher_id')
+      .eq('id', examId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      return res.status(500).json({ error: `Database error loading exam: ${fetchErr.message}` });
     }
-  }
+    if (!examData) {
+      return res.status(404).json({ error: `Exam '${examId}' not found.` });
+    }
+    if (
+      teacherUuid &&
+      (examData.teacher_id
+        ? examData.teacher_id !== teacherUuid
+        : !isDemoOrFallbackAllowed())
+    ) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this exam.' });
+    }
 
-  // Hydrate from Supabase if this serverless instance did not have the session cached in memory
-  if (!session && isConfigured() && examId) {
-    const db = getAdminClient() || createUserClient(req.accessToken) || supabase;
-    try {
-      const { data: examData } = await db
-        .from('exams')
-        .select('duration_minutes, snapshot_data')
-        .eq('id', examId)
-        .maybeSingle();
-      const snap = parseSnapshot(examData?.snapshot_data);
-      if (snap?.sessionMeta) {
-        session = { ...snap.sessionMeta };
-      } else if (examData) {
-        session = {
-          examId,
-          rollingCode: rollingCode || get5MinRollingCode(examId, 0),
-          createdAt: new Date().toISOString(),
-          startTime: Date.now(),
-          durationMinutes: examData.duration_minutes || 180,
-          extendedMinutes: 0,
-        };
-      }
-    } catch (_) {}
-  }
+    const existingSnapshot = parseSnapshot(examData.snapshot_data) || {};
+    if (!session) {
+      session = existingSnapshot.sessionMeta
+        ? { ...existingSnapshot.sessionMeta }
+        : {
+            examId,
+            rollingCode: rollingCode || get5MinRollingCode(examId, 0),
+            createdAt: new Date().toISOString(),
+            startTime: Date.now(),
+            durationMinutes: examData.duration_minutes || 180,
+            extendedMinutes: 0,
+          };
+    }
 
-  if (!session) {
-    session = {
-      examId: examId || 'default',
-      rollingCode: rollingCode || '000000',
-      createdAt: new Date().toISOString(),
-      startTime: Date.now(),
-      durationMinutes: 180,
-      extendedMinutes: 0,
-    };
-  }
+    session.extendedMinutes = (session.extendedMinutes || 0) + minutesToAdd;
+    if (rollingCode) activeRollingSessions.set(rollingCode, session);
+    activeRollingSessions.set(examId, session);
 
-  session.extendedMinutes = (session.extendedMinutes || 0) + minutesToAdd;
-  if (rollingCode) activeRollingSessions.set(rollingCode, session);
-  if (session.examId) activeRollingSessions.set(session.examId, session);
+    const { error: updateErr } = await db
+      .from('exams')
+      .update({
+        snapshot_data: {
+          ...existingSnapshot,
+          sessionMeta: session,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', examId);
 
-  // Persist updated sessionMeta to Supabase or local store
-  if (isConfigured() && session.examId && session.examId !== 'default') {
-    const db = getAdminClient() || createUserClient(req.accessToken) || supabase;
-    try {
-      const { data: examData } = await db
-        .from('exams')
-        .select('snapshot_data')
-        .eq('id', session.examId)
-        .maybeSingle();
-      const existingSnapshot = parseSnapshot(examData?.snapshot_data) || {};
-      await db
-        .from('exams')
-        .update({
-          snapshot_data: {
-            ...existingSnapshot,
-            sessionMeta: session,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', session.examId);
-    } catch (_) {}
-  } else if (!isConfigured() && session.examId) {
+    if (updateErr) {
+      return res.status(500).json({
+        error: `Failed to persist extended session time: ${updateErr.message}`,
+      });
+    }
+  } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     const list = readExamsLocal();
-    const localExam = list.find(e => e.id === session.examId);
-    if (localExam) {
-      localExam.sessionMeta = session;
-      writeExamsLocal(list);
+    const localExam = list.find((e) => e.id === examId);
+    if (!localExam) {
+      return res.status(404).json({ error: `Exam '${examId}' not found.` });
     }
+    if (!session) {
+      session = localExam.sessionMeta || {
+        examId,
+        rollingCode: rollingCode || get5MinRollingCode(examId, 0),
+        createdAt: new Date().toISOString(),
+        startTime: Date.now(),
+        durationMinutes: localExam.durationMinutes || 180,
+        extendedMinutes: 0,
+      };
+    }
+    session.extendedMinutes = (session.extendedMinutes || 0) + minutesToAdd;
+    localExam.sessionMeta = session;
+    if (!writeExamsLocal(list)) {
+      return res.status(500).json({ error: 'Failed to persist extended session time to local storage.' });
+    }
+    if (rollingCode) activeRollingSessions.set(rollingCode, session);
+    activeRollingSessions.set(examId, session);
   }
 
   const totalDuration = (session.durationMinutes || 180) + session.extendedMinutes;
@@ -579,7 +613,6 @@ router.post('/exams/session/extend', async (req, res) => {
 
 /**
  * PUBLIC Student Endpoint: GET /api/exams/session/status
- * Reads from memory cache and falls back to Supabase `exams.snapshot_data.sessionMeta` on serverless cold starts.
  */
 router.get('/exams/session/status', async (req, res) => {
   const { examId, rollingCode } = req.query || {};
@@ -622,7 +655,7 @@ router.get('/exams/session/status', async (req, res) => {
     } catch (_) {}
   } else if (!session && !isConfigured() && examId) {
     const list = readExamsLocal();
-    const localExam = list.find(e => e.id === examId);
+    const localExam = list.find((e) => e.id === examId);
     if (localExam?.sessionMeta) {
       session = localExam.sessionMeta;
     }
@@ -645,6 +678,7 @@ router.get('/exams/session/status', async (req, res) => {
 
 /**
  * PUBLIC Student Endpoint: POST /api/exams/student-access
+ * Strips answer keys (`correctAnswer` & `acceptedRange`) before sending the exam snapshot to the student client.
  */
 router.post('/exams/student-access', async (req, res) => {
   const { studentName, rollingCode, examId } = req.body || {};
@@ -687,7 +721,7 @@ router.post('/exams/student-access', async (req, res) => {
 
         const { data, error } = await query;
         if (!error && Array.isArray(data) && data.length > 0) {
-          const matchedItem = data.find(session => {
+          const matchedItem = data.find((session) => {
             const currentCode = get5MinRollingCode(session.exam_id, 0);
             const previousCode = get5MinRollingCode(session.exam_id, -1);
             return (
@@ -699,7 +733,7 @@ router.post('/exams/student-access', async (req, res) => {
 
           if (matchedItem) {
             matchedSession = matchedItem;
-            targetExamId = matchedSession.exam_id;
+            targetExamId = matchedItem.exam_id;
           }
         }
       } catch (_) {}
@@ -713,7 +747,7 @@ router.post('/exams/student-access', async (req, res) => {
           .neq('status', 'closed');
 
         if (Array.isArray(activeExams)) {
-          const foundExam = activeExams.find(e => {
+          const foundExam = activeExams.find((e) => {
             if (examId && e.id !== examId) return false;
             const currentCode = get5MinRollingCode(e.id, 0);
             const previousCode = get5MinRollingCode(e.id, -1);
@@ -778,19 +812,23 @@ router.post('/exams/student-access', async (req, res) => {
         });
       }
 
-      const snapshot = parseSnapshot(data.snapshot_data) || data.snapshot_data;
+      const rawSnapshot = parseSnapshot(data.snapshot_data) || data.snapshot_data;
+      const safeSnapshot = sanitizeExamSnapshotForStudent(rawSnapshot);
 
-      // Auto-enroll registered student with the exam's teacher
-      const candStudentId = req.body.studentId || req.body.student_id;
+      const candStudentId = extractVerifiedStudentIdFromReq(req);
       if (candStudentId && targetExamId) {
         try {
-          await autoEnrollStudentWithExamTeacher({ studentId: candStudentId, examId: targetExamId, source: 'live_exam' });
+          await autoEnrollStudentWithExamTeacher({
+            studentId: candStudentId,
+            examId: targetExamId,
+            source: 'live_exam',
+          });
         } catch (_) {}
       }
 
       return res.json({
         success: true,
-        exam: snapshot,
+        exam: safeSnapshot,
         studentName: studentName.trim(),
         rollingCodeUsed: cleanCode,
       });
@@ -798,6 +836,9 @@ router.post('/exams/student-access', async (req, res) => {
       return res.status(500).json({ error: `Database error fetching exam paper: ${dbErr.message}` });
     }
   } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     if (!matchedSession) {
       evictExpiredSessions();
       for (const session of activeRollingSessions.values()) {
@@ -821,7 +862,7 @@ router.post('/exams/student-access', async (req, res) => {
 
     if (!matchedSession) {
       const list = readExamsLocal();
-      const matchedLocal = list.find(e => {
+      const matchedLocal = list.find((e) => {
         if (e.status === 'closed') return false;
         if (examId && e.id !== examId) return false;
         const currentCode = get5MinRollingCode(e.id, 0);
@@ -851,7 +892,7 @@ router.post('/exams/student-access', async (req, res) => {
     }
 
     const list = readExamsLocal();
-    const localExam = list.find(e => e.id === targetExamId);
+    const localExam = list.find((e) => e.id === targetExamId);
 
     if (!localExam) {
       return res.status(404).json({ error: 'Exam paper snapshot not found or link has expired.' });
@@ -864,17 +905,20 @@ router.post('/exams/student-access', async (req, res) => {
       });
     }
 
-    // Auto-enroll registered student with the exam's teacher in local mode
-    const candStudentId = req.body.studentId || req.body.student_id;
+    const candStudentId = extractVerifiedStudentIdFromReq(req);
     if (candStudentId && targetExamId) {
       try {
-        await autoEnrollStudentWithExamTeacher({ studentId: candStudentId, examId: targetExamId, source: 'live_exam' });
+        await autoEnrollStudentWithExamTeacher({
+          studentId: candStudentId,
+          examId: targetExamId,
+          source: 'live_exam',
+        });
       } catch (_) {}
     }
 
     return res.json({
       success: true,
-      exam: localExam,
+      exam: sanitizeExamSnapshotForStudent(localExam),
       studentName: studentName.trim(),
       rollingCodeUsed: cleanCode,
     });
@@ -883,6 +927,7 @@ router.post('/exams/student-access', async (req, res) => {
 
 /**
  * PUBLIC Student Endpoint: GET /api/exams/:id
+ * Strips answer keys before returning the exam paper to the student client.
  */
 router.get('/exams/:id', async (req, res) => {
   const targetId = req.params.id;
@@ -898,7 +943,7 @@ router.get('/exams/:id', async (req, res) => {
   const currentCode = get5MinRollingCode(targetId, 0);
   const graceCode = get5MinRollingCode(targetId, -1);
 
-  let isValidCode = providedCode === currentCode || providedCode === graceCode;
+  let isValidCode = Boolean(providedCode) && (providedCode === currentCode || providedCode === graceCode);
 
   if (isConfigured()) {
     const db = getAdminClient() || supabase;
@@ -910,7 +955,7 @@ router.get('/exams/:id', async (req, res) => {
           .select('rolling_code')
           .eq('exam_id', targetId)
           .eq('is_active', true);
-        if (Array.isArray(data) && data.some(s => s.rolling_code === providedCode)) {
+        if (Array.isArray(data) && data.some((s) => s.rolling_code === providedCode)) {
           isValidCode = true;
         }
       } catch (_) {}
@@ -951,11 +996,18 @@ router.get('/exams/:id', async (req, res) => {
         });
       }
 
-      return res.json({ success: true, exam: parseSnapshot(data.snapshot_data) || data.snapshot_data });
+      const rawSnapshot = parseSnapshot(data.snapshot_data) || data.snapshot_data;
+      return res.json({
+        success: true,
+        exam: sanitizeExamSnapshotForStudent(rawSnapshot),
+      });
     } catch (e) {
       return res.status(500).json({ error: `Database error fetching exam: ${e.message}` });
     }
   } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     if (!isValidCode) {
       for (const session of activeRollingSessions.values()) {
         if ((session.examId || session.exam_id) === targetId && session.rollingCode === providedCode) {
@@ -973,7 +1025,7 @@ router.get('/exams/:id', async (req, res) => {
     }
 
     const list = readExamsLocal();
-    const exam = list.find(e => e.id === targetId);
+    const exam = list.find((e) => e.id === targetId);
 
     if (!exam) {
       return res.status(404).json({ error: 'Exam paper snapshot not found or link has expired.' });
@@ -987,12 +1039,16 @@ router.get('/exams/:id', async (req, res) => {
       });
     }
 
-    return res.json({ success: true, exam });
+    return res.json({
+      success: true,
+      exam: sanitizeExamSnapshotForStudent(exam),
+    });
   }
 });
 
 /**
  * PROTECTED Teacher Endpoint: PATCH /api/exams/:id/status
+ * Enforces teacher ownership and returns explicit errors if the update fails.
  */
 router.patch('/exams/:id/status', async (req, res) => {
   if (!(await verifyTeacherAuth(req))) {
@@ -1008,34 +1064,47 @@ router.patch('/exams/:id/status', async (req, res) => {
   }
 
   if (isConfigured()) {
-    const adminDb = getAdminClient() || supabase;
-    const userDb = createUserClient(req.accessToken) || adminDb;
+    const db = createUserClient(req.accessToken) || getAdminClient() || supabase;
+    const teacherUuid = isValidUuid(req.user?.id) ? req.user.id : null;
+
+    if (!teacherUuid && !isDemoOrFallbackAllowed()) {
+      return res.status(403).json({ error: 'Valid teacher account required to update exam status.' });
+    }
+
     try {
+      const { data: existingExam, error: lookupErr } = await db
+        .from('exams')
+        .select('id, teacher_id')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      if (lookupErr) {
+        return res.status(500).json({ error: `Database error verifying exam: ${lookupErr.message}` });
+      }
+      if (!existingExam) {
+        return res.status(404).json({ error: `Exam '${targetId}' not found.` });
+      }
+      if (
+        teacherUuid &&
+        (existingExam.teacher_id
+          ? existingExam.teacher_id !== teacherUuid
+          : !isDemoOrFallbackAllowed())
+      ) {
+        return res.status(403).json({ error: 'Forbidden: You do not own this exam.' });
+      }
+
       const updatedAt = new Date().toISOString();
-      let { error: updateErr } = await userDb
+      const { error: updateErr } = await db
         .from('exams')
         .update({ status, updated_at: updatedAt })
         .eq('id', targetId);
-
-      if (updateErr && adminDb && adminDb !== userDb) {
-        const retryRes = await adminDb
-          .from('exams')
-          .update({ status, updated_at: updatedAt })
-          .eq('id', targetId);
-        updateErr = retryRes.error;
-      }
 
       if (updateErr) {
         return res.status(500).json({ error: `Failed to update exam status in database: ${updateErr.message}` });
       }
 
       if (status === 'closed') {
-        try {
-          await (adminDb || userDb)
-            .from('exam_sessions')
-            .update({ is_active: false })
-            .eq('exam_id', targetId);
-        } catch (_) {}
+        await db.from('exam_sessions').update({ is_active: false }).eq('exam_id', targetId);
       }
 
       return res.json({ success: true, examId: targetId, status });
@@ -1043,15 +1112,23 @@ router.patch('/exams/:id/status', async (req, res) => {
       return res.status(500).json({ error: `Database error updating exam status: ${dbErr.message}` });
     }
   } else {
+    if (!isDemoOrFallbackAllowed()) {
+      return res.status(503).json({ error: 'Database persistence is not configured in production.' });
+    }
     const list = readExamsLocal();
-    const examIdx = list.findIndex(e => e.id === targetId);
-    if (examIdx !== -1) {
-      list[examIdx].status = status;
-      writeExamsLocal(list);
+    const examIdx = list.findIndex((e) => e.id === targetId);
+    if (examIdx === -1) {
+      return res.status(404).json({ error: `Exam '${targetId}' not found.` });
+    }
+    list[examIdx].status = status;
+    if (!writeExamsLocal(list)) {
+      return res.status(500).json({ error: 'Failed to persist updated exam status to local storage.' });
     }
 
     return res.json({ success: true, examId: targetId, status });
   }
 });
+
+router.get5MinRollingCode = get5MinRollingCode;
 
 module.exports = router;

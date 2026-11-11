@@ -239,8 +239,10 @@ export default function StudentRosterTab() {
 
   const handleClaimStudent = async (e) => {
     e.preventDefault();
-    if (!claimAdmNum.trim() && !claimStudentRefCode.trim()) {
-      setClaimError('Enter a Roll Number, Candidate Name, or 5-minute student code');
+    const trimmedAdm = claimAdmNum.trim().toUpperCase();
+    const trimmedRef = claimStudentRefCode.trim().toUpperCase();
+    if (!trimmedAdm && !trimmedRef) {
+      setClaimError('Enter an exact Roll Number (DLP-26-XXXXX) or a 5-minute Student Reference Code (STU-XXXXXX)');
       return;
     }
     setClaimError('');
@@ -248,11 +250,7 @@ export default function StudentRosterTab() {
     setClaiming(true);
 
     try {
-      const res = await teacherAddExistingStudent(
-        claimAdmNum.trim(),
-        claimStudentRefCode.trim(),
-        claimAdmNum.trim()
-      );
+      const res = await teacherAddExistingStudent(trimmedAdm, trimmedRef, '');
       if (res && res.success) {
         setClaimSuccess(`Added ${res.student.full_name || res.student.admission_number} to your roster`);
         setClaimAdmNum('');
@@ -260,7 +258,10 @@ export default function StudentRosterTab() {
         loadRoster();
       }
     } catch (err) {
-      setClaimError(err.message || 'No student found matching that Roll Number or Name');
+      setClaimError(
+        err.message ||
+          'No student found matching that exact Roll Number or valid 5-minute Reference Code'
+      );
     } finally {
       setClaiming(false);
     }
@@ -832,7 +833,7 @@ export default function StudentRosterTab() {
                 Add Student to Classroom Roster
               </h3>
               <p className="text-xs text-[#5e554a] mt-0.5">
-                Type any candidate's Roll Number (<span className="font-mono">DLP-26-XXXXX</span>) or Full Name to enroll them into your classroom instantly.
+                Enter the student&apos;s exact Roll Number (<span className="font-mono">DLP-26-XXXXX</span>) or their 5-minute Student Reference Code (<span className="font-mono">STU-XXXXXX</span>) to enroll them in your classroom.
               </p>
             </div>
 
@@ -842,28 +843,27 @@ export default function StudentRosterTab() {
             <form onSubmit={handleClaimStudent} className="space-y-3 text-xs">
               <div>
                 <label className="block font-medium text-[#5e554a] mb-1">
-                  Candidate Roll Number or Full Name <span className="text-[#8c4a17]">*</span>
+                  Exact Roll Number <span className="text-[10px] text-[#7b7266] font-normal">(or leave blank if using Reference Code)</span>
                 </label>
                 <input
                   type="text"
                   value={claimAdmNum}
                   onChange={(e) => setClaimAdmNum(e.target.value.toUpperCase())}
-                  placeholder="DLP-26-XXXXX or Rahul Sharma"
+                  placeholder="DLP-26-XXXXX"
                   className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#1f1b16] focus:outline-none focus:border-[#8c4a17]"
-                  required
                   autoFocus
                 />
               </div>
 
               <div>
                 <label className="block font-medium text-[#5e554a] mb-1">
-                  5-minute Student Reference Code <span className="text-[10px] text-[#7b7266] font-normal">(Optional)</span>
+                  5-minute Student Reference Code <span className="text-[10px] text-[#7b7266] font-normal">(Optional if Roll No. provided)</span>
                 </label>
                 <input
                   type="text"
                   value={claimStudentRefCode}
                   onChange={(e) => setClaimStudentRefCode(e.target.value.toUpperCase())}
-                  placeholder="STU-XXXXXX (Optional)"
+                  placeholder="STU-XXXXXX"
                   className="w-full px-3 h-9 rounded-lg border border-[#dcd5c4] bg-[#fdfbf7] font-mono tabular-nums font-medium text-sm text-[#8c4a17] focus:outline-none focus:border-[#8c4a17]"
                 />
               </div>

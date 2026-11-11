@@ -4,7 +4,7 @@ import DiagramBlock from '../PreviewPanel/DiagramBlock';
 import ResultPrintModal from './ResultPrintModal';
 import { gradeAttempt } from '../../services/gradingService';
 import { submitStudentTest } from '../../services/apiService';
-import { CheckCircle2, XCircle, Clock, RotateCcw, Home, Printer, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, RotateCcw, Home, Printer, ShieldAlert, AlertTriangle, BookOpen } from 'lucide-react';
 
 export default function TestResultScreen({
   questions,
@@ -22,19 +22,44 @@ export default function TestResultScreen({
 }) {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState('submitting');
+  const [submissionError, setSubmissionError] = useState('');
+  const [serverSubmission, setServerSubmission] = useState(null);
 
-  const result = gradeAttempt(questions, studentAnswers);
-  let { autoGraded, pendingReview, perQuestion } = result;
+  const localFallbackResult = gradeAttempt(questions, studentAnswers);
+  const effectiveQuestions = Array.isArray(serverSubmission?.questions) && serverSubmission.questions.length > 0
+    ? serverSubmission.questions
+    : questions;
+
+  let autoGraded = serverSubmission?.autoGraded || localFallbackResult.autoGraded;
+  const perQuestion = Array.isArray(serverSubmission?.perQuestion)
+    ? serverSubmission.perQuestion
+    : localFallbackResult.perQuestion;
+  const pendingReviewCount = typeof serverSubmission?.pendingCount === 'number'
+    ? serverSubmission.pendingCount
+    : localFallbackResult.pendingReview.length;
 
   if (cheatingFlagged) {
-    autoGraded = { score: 0, total: questions.length, percentage: 0 };
+    autoGraded = { score: 0, total: effectiveQuestions.length, percentage: 0 };
   }
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 
+  const isDevEnv = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+  const isLocalSamplePaper = (!examId || examId === 'exam_default' || !rollingCodeUsed);
+  const isProdDemoPreview = Boolean(isDevDemo) && !isDevEnv;
+  const isLocalPracticeRun = isLocalSamplePaper || isProdDemoPreview;
+
   useEffect(() => {
     let isMounted = true;
     async function doSubmit() {
+      if (isLocalPracticeRun) {
+        if (isMounted) {
+          setSubmissionStatus('demo_local');
+          setSubmissionError('');
+        }
+        return;
+      }
+
       const payload = {
         examId: examId || 'exam_default',
         rollingCodeUsed: rollingCodeUsed || '',
@@ -42,8 +67,6 @@ export default function TestResultScreen({
         studentName: studentName || 'Candidate',
         studentId: studentId || null,
         isDevDemo: Boolean(isDevDemo),
-        autoGraded,
-        pendingCount: pendingReview.length,
         questions,
         studentAnswers,
         cheatingFlagged,
@@ -52,9 +75,14 @@ export default function TestResultScreen({
       const res = await submitStudentTest(payload);
       if (isMounted) {
         if (res && res.success) {
+          if (res.submission) {
+            setServerSubmission(res.submission);
+          }
           setSubmissionStatus('submitted');
+          setSubmissionError('');
         } else {
-          setSubmissionStatus('offline');
+          setSubmissionStatus('failed');
+          setSubmissionError(res?.error || 'Could not record submission on the server.');
         }
       }
     }
@@ -79,13 +107,39 @@ export default function TestResultScreen({
             </div>
           )}
 
+          {submissionStatus === 'demo_local' && (
+            <div className="p-3.5 rounded-lg bg-[#f7f4ee] border border-[#dcd5c4] text-[#5e554a] space-y-1">
+              <div className="font-medium flex items-center gap-2 text-xs text-[#1f1b16]">
+                <BookOpen className="w-4 h-4 text-[#8c4a17] shrink-0" strokeWidth={1.5} />
+                <span>Sample practice mode</span>
+              </div>
+              <p className="text-xs text-[#5e554a]">
+                {isProdDemoPreview
+                  ? 'Local preview mode — scorecard computed locally. Sign in with your permanent Roll Number and join with a 6-digit passcode to store an official grade.'
+                  : 'Local preview mode — scorecard computed locally and not stored as an official grade.'}
+              </p>
+            </div>
+          )}
+
+          {submissionStatus === 'failed' && (
+            <div className="p-4 rounded-lg bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] space-y-1">
+              <div className="font-medium flex items-center gap-2 text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                <span>Submission failed to save</span>
+              </div>
+              <p className="text-xs text-[#5e554a]">
+                {submissionError}
+              </p>
+            </div>
+          )}
+
           <div className="exam-rule-double pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <span className="text-xs font-medium text-[#8c4a17] block">
-                Official evaluation scorecard
+                {submissionStatus === 'demo_local' ? 'Practice preview scorecard' : 'Official evaluation scorecard'}
               </span>
               <h1 className="font-serif font-medium text-2xl text-[#1f1b16]">
-                {testTitle || 'Mathematics Assessment'}
+                {serverSubmission?.testTitle || testTitle || 'Mathematics Assessment'}
               </h1>
             </div>
 
@@ -100,15 +154,22 @@ export default function TestResultScreen({
                   <span>Recorded</span>
                 </span>
               )}
+              {submissionStatus === 'demo_local' && (
+                <span className="text-xs font-medium bg-[#efe9df] border border-[#dcd5c4] text-[#5e554a] px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-[#8c4a17]" strokeWidth={1.5} />
+                  <span>Sample practice mode</span>
+                </span>
+              )}
               {submissionStatus === 'submitting' && (
                 <span className="text-xs font-medium bg-[#efe9df] border border-[#dcd5c4] text-[#5e554a] px-2.5 py-1 rounded-md flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 animate-spin" strokeWidth={1.5} />
                   <span>Saving</span>
                 </span>
               )}
-              {submissionStatus === 'offline' && (
-                <span className="text-xs text-[#5e554a] bg-[#efe9df] border border-[#dcd5c4] px-2.5 py-1 rounded-md">
-                  Saved locally
+              {submissionStatus === 'failed' && (
+                <span className="text-xs font-medium bg-[#fdf2f2] border border-[#dc2626] text-[#dc2626] px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  <span>Not saved</span>
                 </span>
               )}
 
@@ -138,11 +199,11 @@ export default function TestResultScreen({
             </div>
           )}
 
-          {pendingReview.length > 0 && (
+          {pendingReviewCount > 0 && (
             <div className="p-3 rounded-lg bg-[#f7f4ee] border border-[#b8622e] text-[#1f1b16] text-xs flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#b8622e] shrink-0" strokeWidth={1.5} />
               <span>
-                <strong className="font-mono tabular-nums">{pendingReview.length}</strong> {pendingReview.length === 1 ? 'question' : 'questions'} routed for instructor review
+                <strong className="font-mono tabular-nums">{pendingReviewCount}</strong> {pendingReviewCount === 1 ? 'question' : 'questions'} routed for instructor review
               </span>
             </div>
           )}
@@ -150,9 +211,11 @@ export default function TestResultScreen({
 
         {/* Itemized Response Breakdown */}
         <div className="bg-[#fdfbf7] border border-[#dcd5c4] rounded-xl divide-y divide-[#dcd5c4] overflow-hidden">
-          {questions.map((q, idx) => {
+          {effectiveQuestions.map((q, idx) => {
             const item = perQuestion[idx] || {};
             const studentAns = studentAnswers[q.id];
+            const correctAns = q.correctAnswer !== undefined ? q.correctAnswer : item.correctAnswer;
+            const acceptedRange = q.acceptedRange !== undefined ? q.acceptedRange : item.acceptedRange;
 
             let formattedStudentAns = 'No response provided';
             if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
@@ -165,14 +228,14 @@ export default function TestResultScreen({
             }
 
             let revealedCorrectAns = null;
-            if ((q.type === 'mcq' || q.type === 'match_following') && typeof q.correctAnswer === 'number') {
-              const correctLetter = optionLetters[q.correctAnswer] || q.correctAnswer;
+            if ((q.type === 'mcq' || q.type === 'match_following') && typeof correctAns === 'number') {
+              const correctLetter = optionLetters[correctAns] || correctAns;
               revealedCorrectAns = `Option ${correctLetter}`;
             } else if (q.type === 'short_answer_numeric') {
-              if (Array.isArray(q.acceptedRange)) {
-                revealedCorrectAns = `${q.correctAnswer} (accepted: ${q.acceptedRange[0]} to ${q.acceptedRange[1]})`;
-              } else if (q.correctAnswer !== null && q.correctAnswer !== undefined) {
-                revealedCorrectAns = `${q.correctAnswer}`;
+              if (Array.isArray(acceptedRange)) {
+                revealedCorrectAns = `${correctAns ?? acceptedRange[0]} (accepted: ${acceptedRange[0]} to ${acceptedRange[1]})`;
+              } else if (correctAns !== null && correctAns !== undefined) {
+                revealedCorrectAns = `${correctAns}`;
               }
             }
 
@@ -218,7 +281,7 @@ export default function TestResultScreen({
                     {q.options.map((opt, optIdx) => {
                       const letter = optionLetters[optIdx] || optIdx + 1;
                       const isCandidateChoice = studentAns === optIdx;
-                      const isCorrectKey = q.correctAnswer === optIdx;
+                      const isCorrectKey = correctAns === optIdx;
 
                       let badgeText = null;
                       let badgeStyle = '';
@@ -310,9 +373,9 @@ export default function TestResultScreen({
 
       {showPrintModal && (
         <ResultPrintModal
-          testTitle={testTitle}
+          testTitle={serverSubmission?.testTitle || testTitle}
           studentName={studentName}
-          questions={questions}
+          questions={effectiveQuestions}
           studentAnswers={studentAnswers}
           onClose={() => setShowPrintModal(false)}
         />

@@ -1,118 +1,14 @@
-const express = require('express');
-const cors = require('cors');
-const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const { verifyTeacherAuth } = require('../server/services/authService');
+// Keep literal require references so Vercel's Node File Tracer (NFT) bundles all route modules
+require('../server/routes/auth');
+require('../server/routes/studentAuth');
+require('../server/routes/submissions');
+require('../server/routes/exams');
+require('../server/routes/parse');
 
-const app = express();
+const { createApp } = require('../server/app');
 
-// Rate Limiters for Serverless Protection against Bot Floods & Abuse
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Too many authentication attempts. Please try again after 15 minutes.' }
-});
-
-// CORS — same policy as server/index.js
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-  process.env.CLIENT_ORIGIN,
-].filter(Boolean);
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
-      return callback(null, true);
-    }
-    return callback(new Error('CORS policy: Origin not allowed'), false);
-  },
-  credentials: true,
-}));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Auth Gate Middleware: same verifyTeacherAuth used by server/index.js
-const authMiddleware = async (req, res, next) => {
-  const isAuthorized = await verifyTeacherAuth(req);
-  if (isAuthorized) {
-    return next();
-  }
-  return res.status(401).json({ success: false, error: 'Unauthorized teacher access.' });
-};
-
-// 1. Register Lightweight Zero-Dependency Routes FIRST (guaranteed to never 500 on cold start)
-app.get('/api/health', (req, res) => {
-  const { isConfigured, getKeyType, getSecretKey } = require('../server/services/supabaseClient');
-  const hasGemini = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 5 && !process.env.GEMINI_API_KEY.includes('your_'));
-  const hasAnthropic = !!(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.length > 5 && !process.env.ANTHROPIC_API_KEY.includes('your_'));
-  const dbConnected = isConfigured();
-
-  return res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    hasApiKey: hasGemini || hasAnthropic,
-    providers: {
-      gemini: hasGemini ? 'active' : 'inactive',
-      anthropic: hasAnthropic ? 'active' : 'inactive'
-    },
-    database: {
-      supabase: dbConnected ? 'connected' : 'unconfigured_local_fallback',
-      keyMode: dbConnected ? getKeyType(getSecretKey()) : 'none'
-    },
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
-  });
-});
-
-// 2. Apply Anti-Abuse Rate Limiting on Public Authentication Routes
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/teacher-login', authLimiter);
-app.use('/api/auth/signup', authLimiter);
-app.use('/api/student/login', authLimiter);
-app.use('/api/student/signup', authLimiter);
-app.use('/api/student-auth/login', authLimiter);
-app.use('/api/student-auth/signup', authLimiter);
-
-// 3. Safe Mount Helper using literal require callbacks so Vercel's NFT AST tracer bundles the files
-function safeMount(pathPrefix, loadFn, ...middleware) {
-  try {
-    const router = loadFn();
-    if (middleware.length > 0) {
-      app.use(pathPrefix, ...middleware, router);
-    } else {
-      app.use(pathPrefix, router);
-    }
-  } catch (err) {
-    console.error(`[Vercel Safe Mount Error]:`, err.message);
-    app.use(pathPrefix, (req, res) => {
-      res.status(503).json({
-        success: false,
-        error: `Route module failed to load on serverless function: ${err.message}`
-      });
-    });
-  }
-}
-
-// 3. Defensively Mount Application Routes with Literal Require Strings for Vercel Tracing
-safeMount('/api/auth', () => require('../server/routes/auth'));
-safeMount('/api', () => require('../server/routes/studentAuth'));
-safeMount('/api', () => require('../server/routes/submissions'));
-safeMount('/api', () => require('../server/routes/exams'));
-safeMount('/api', () => require('../server/routes/parse'), authMiddleware);
-
-// 4. Express Error Handling Middleware Standard (4 parameters required)
-app.use((err, req, res, next) => {
-  console.error('[Express API Global Error]:', err.message || err);
-  const statusCode = err.status || err.statusCode || 500;
-  res.status(statusCode).json({
-    success: false,
-    error: err.message || 'Internal Server Error'
-  });
-});
+const app = createApp();
 
 module.exports = app;
