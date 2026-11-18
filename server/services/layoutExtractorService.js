@@ -7,8 +7,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { stripBase64Header, getPdfJsLib, rasterizePdfPage } = require('./diagramCropService');
-const sharp = require('sharp');
+const {
+  stripBase64Header,
+  getPdfJsLib,
+  rasterizePdfPage,
+  getSharp,
+} = require('./diagramCropService');
 
 /**
  * Generates an SVG visual diagnostic overlay with labeled bounding boxes for detected candidate figures
@@ -19,6 +23,9 @@ async function generateDiagnosticOverlay(sourceBuffer, pageCandidates, fileLabel
   if (process.env.NODE_ENV === 'production') return;
 
   try {
+    const sharp = getSharp();
+    if (!sharp) return;
+
     const meta = await sharp(sourceBuffer).metadata();
     const width = meta.width || 800;
     const height = meta.height || 600;
@@ -75,18 +82,21 @@ async function extractCandidateFigures(mediaFiles) {
 
     try {
       if (mime === 'application/pdf') {
-        // PDF candidate extraction via pdfjs-dist
         try {
           const pdfjsLib = await getPdfJsLib();
           if (!pdfjsLib) throw new Error('pdfjs-dist module unavailable');
           const pdfBuffer = Buffer.from(cleanStr, 'base64');
-          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+          const loadingTask = pdfjsLib.getDocument({
+            data: new Uint8Array(pdfBuffer),
+            disableWorker: true,
+            isEvalSupported: false,
+          });
           const pdf = await loadingTask.promise;
 
           for (let pIndex = 0; pIndex < pdf.numPages; pIndex++) {
             const page = await pdf.getPage(pIndex + 1);
             const ops = await page.getOperatorList();
-            
+
             let imgCount = 0;
             let vectorCount = 0;
             let textCount = 0;
@@ -96,21 +106,10 @@ async function extractCandidateFigures(mediaFiles) {
               for (let i = 0; i < ops.fnArray.length; i++) {
                 const fn = ops.fnArray[i];
 
-                // 1. Detect embedded bitmap images (paintImageXObject / paintInlineImageXObject)
                 if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintInlineImageXObject) {
                   imgCount++;
-                  const figId = `fig_${fileIdx}_p${pIndex}_img_${imgCount}`;
-                  pageCandidates.push({
-                    id: figId,
-                    sourceFileIndex: fileIdx,
-                    pageIndex: pIndex,
-                    type: 'bitmap_image',
-                    bbox: [0.1, 0.1, 0.8, 0.8],
-                    caption: `Extracted Image #${imgCount}`
-                  });
                 }
 
-                // 2. Detect vector path primitives (constructPath, stroke, fill, curveTo, lineTo)
                 if (
                   fn === pdfjsLib.OPS.constructPath ||
                   fn === pdfjsLib.OPS.stroke ||
@@ -121,13 +120,28 @@ async function extractCandidateFigures(mediaFiles) {
                   vectorCount++;
                 }
 
-                // 3. Detect text operators (showText, showSpans)
                 if (fn === pdfjsLib.OPS.showText || fn === pdfjsLib.OPS.showSpans) {
                   textCount++;
                 }
               }
 
-              // If page has vector drawings (e.g. circuits, graphs, apparatus, geometry paths)
+              // Avoid registering a full-page scanned bitmap (1 image, 0 text blocks) as a diagram crop box;
+              // only register embedded sub-figures on digital PDFs or multiple embedded images on a page.
+              const isFullPageScanOnly = imgCount === 1 && textCount === 0 && vectorCount < 10;
+              if (!isFullPageScanOnly && imgCount > 0) {
+                for (let k = 1; k <= imgCount; k++) {
+                  const figId = `fig_${fileIdx}_p${pIndex}_img_${k}`;
+                  pageCandidates.push({
+                    id: figId,
+                    sourceFileIndex: fileIdx,
+                    pageIndex: pIndex,
+                    type: 'bitmap_image',
+                    bbox: [0.1, 0.1, 0.8, 0.8],
+                    caption: `Extracted Image #${k}`,
+                  });
+                }
+              }
+
               if (vectorCount >= 10) {
                 const vectorFigId = `fig_${fileIdx}_p${pIndex}_vector_1`;
                 pageCandidates.push({
@@ -136,7 +150,7 @@ async function extractCandidateFigures(mediaFiles) {
                   pageIndex: pIndex,
                   type: 'vector_drawing',
                   bbox: [0.1, 0.15, 0.8, 0.7],
-                  caption: `Extracted Vector Drawing (${vectorCount} primitives)`
+                  caption: `Extracted Vector Drawing (${vectorCount} primitives)`,
                 });
               }
             }
@@ -147,23 +161,24 @@ async function extractCandidateFigures(mediaFiles) {
 
             candidates.push(...pageCandidates);
 
-            // Rasterize PDF page & save diagnostic visual overlay
-            try {
-              const pagePngBuffer = await rasterizePdfPage(cleanStr, pIndex);
-              await generateDiagnosticOverlay(pagePngBuffer, pageCandidates, `file${fileIdx}_page_${pIndex + 1}`);
-            } catch (ovErr) {
-              console.warn('[Layout Extractor Warning] Overlay generation skipped:', ovErr.message);
+            if (process.env.NODE_ENV !== 'production' && pageCandidates.length > 0) {
+              try {
+                const pagePngBuffer = await rasterizePdfPage(cleanStr, pIndex);
+                await generateDiagnosticOverlay(pagePngBuffer, pageCandidates, `file${fileIdx}_page_${pIndex + 1}`);
+              } catch (ovErr) {
+                console.warn('[Layout Extractor Warning] Overlay generation skipped:', ovErr.message);
+              }
             }
           }
         } catch (pdfErr) {
           console.warn('[Layout Extractor Warning] PDF candidate extraction skipped:', pdfErr.message);
         }
       } else {
-        // Standard Image candidate extraction via sharp metadata
         try {
           const buffer = Buffer.from(cleanStr, 'base64');
-          const meta = await sharp(buffer).metadata();
-          
+          const sharp = getSharp();
+          const meta = sharp ? await sharp(buffer).metadata() : { width: 800, height: 600 };
+
           if (meta.width > 50 && meta.height > 50) {
             const figId = `fig_${fileIdx}_img_1`;
             const imageCandidate = {
@@ -174,12 +189,16 @@ async function extractCandidateFigures(mediaFiles) {
               dataUrl: `data:${mime};base64,${cleanStr}`,
               bbox: [0.0, 0.0, 1.0, 1.0],
               width: meta.width,
-              height: meta.height
+              height: meta.height,
             };
             candidates.push(imageCandidate);
-            console.log(`[Layout Extractor] Image upload (file index ${fileIdx}): Candidate figure ${figId} registered (${meta.width}x${meta.height}).`);
+            console.log(
+              `[Layout Extractor] Image upload (file index ${fileIdx}): Candidate figure ${figId} registered (${meta.width}x${meta.height}).`
+            );
 
-            await generateDiagnosticOverlay(buffer, [imageCandidate], `file${fileIdx}_img`);
+            if (process.env.NODE_ENV !== 'production') {
+              await generateDiagnosticOverlay(buffer, [imageCandidate], `file${fileIdx}_img`);
+            }
           }
         } catch (imgErr) {
           console.warn('[Layout Extractor Warning] Image candidate extraction skipped:', imgErr.message);

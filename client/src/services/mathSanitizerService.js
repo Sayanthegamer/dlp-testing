@@ -8,10 +8,43 @@ const GREEK_NAMES =
 // Note: Plain English prepositions like "in" or "to" are intentionally excluded from bare-word
 // auto-prefixing so phrases like "High resistance in parallel" are never corrupted into "\in parallel".
 const OP_NAMES =
-  'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|oint|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|neq|leq|geq|approx|equiv|propto|partial|nabla|forall|exists|notin|subset|subseteq|cup|cap|therefore|angle|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow';
+  'times|cdot|pm|mp|infty|text|mathrm|ce|pu|hat|bar|vec|sqrt|sum|int|oint|prod|lim|log|ln|sin|cos|tan|cot|sec|csc|det|adj|neq|leq|geq|approx|equiv|propto|partial|nabla|forall|exists|notin|subset|subseteq|cup|cap|therefore|angle|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow';
+
+const SINGLE_LETTER_MATRIX_VARS = /^[a-zA-Z]$/;
 
 export const BARE_COMMAND_RUN_REGEX =
   /(?<!\\)\b(frac|sqrt|pi|lambda|theta|alpha|beta|gamma|delta|sigma|omega)([0-9a-zA-Z\{\}\+\-\*\/\^\._]+)/i;
+
+export function repairMatrixEnvironments(span) {
+  if (!span || typeof span !== 'string' || !span.includes('begin{')) return span;
+
+  return span.replace(
+    /(\\begin\{(?:[bpvBV]?matrix|cases|array|aligned)\})([\s\S]*?)(\\end\{(?:[bpvBV]?matrix|cases|array|aligned)\})/g,
+    (_, beginTag, body, endTag) => {
+      let fixedBody = body;
+
+      fixedBody = fixedBody.replace(/\\{3,}([a-zA-Z]+)/g, (m, word) => {
+        if (SINGLE_LETTER_MATRIX_VARS.test(word)) {
+          return `\\\\ ${word}`;
+        }
+        return `\\\\ \\${word}`;
+      });
+
+      fixedBody = fixedBody.replace(/\\{2}([a-zA-Z]+)/g, (m, word) => {
+        if (SINGLE_LETTER_MATRIX_VARS.test(word)) {
+          return `\\\\ ${word}`;
+        }
+        return `\\\\ \\${word}`;
+      });
+
+      fixedBody = fixedBody.replace(/\\+(?=[0-9\-\+])/g, '\\\\ ');
+      fixedBody = fixedBody.replace(/(?<!\\)\\(?=\s)/g, '\\\\');
+      fixedBody = fixedBody.replace(/(?<!\\)\\([a-zA-Z])(?![a-zA-Z])/g, '\\\\ $1');
+
+      return `${beginTag}${fixedBody}${endTag}`;
+    }
+  );
+}
 
 /**
  * Checks if text contains malformed bare LaTeX command runs missing leading backslashes,
@@ -174,11 +207,82 @@ export function repairFractionSyntax(str) {
 function repairControlCharEscapes(str) {
   if (!str || typeof str !== 'string') return str;
   return str
-    .replace(/\x09(ext(?:bf|it|rm)?|imes|heta|au|anh?|o\b|op\b|riangle|ilde|frac|iny)/g, '\\t$1')
+    .replace(/\x09(ext(?:bf|it|rm)?|imes|heta|au|anh?|o(?![a-zA-Z])|op(?![a-zA-Z])|riangle|ilde|frac|iny)/g, '\\t$1')
     .replace(/\x0C(rac|orall|lat|rown)/g, '\\f$1')
-    .replace(/\x0A(Cr|Pr|eq|eg|u\b|abla|otsubset|ot\b|i\b|ewline|ormalsize|mid|parallel|sim)/g, '\\n$1')
+    .replace(
+      /\x0A(Cr|Pr|eq|eg|u(?![a-zA-Z])|abla|otsubset|ot(?![a-zA-Z])|i(?![a-zA-Z])|ewline|ormalsize|mid|parallel|sim|atural|oindent)/g,
+      '\\n$1'
+    )
     .replace(/\x0D(ho|ight(?:arrow|harpoondown|harpoonup|leftarrows|leftharpoons)?|angle|ceil|floor)/g, '\\r$1')
-    .replace(/\x08(eta|ar|inom|egin|ig(?:ger|g|l|r|m)?|ullet|ox|ot\b|ackslash|bmod|ecause)/g, '\\b$1');
+    .replace(
+      /\x08(eta|ar|inom|egin|ig(?:ger|g|l|r|m)?|ullet|ox|ot(?![a-zA-Z])|ackslash|bmod|ecause)/g,
+      '\\b$1'
+    );
+}
+
+export function balanceMathTagsLocally(str) {
+  if (typeof str !== 'string' || (!str.includes('<math>') && !str.includes('</math>'))) {
+    return str;
+  }
+
+  let s = str;
+
+  if (s.includes('</math>') && !s.includes('<math>')) {
+    return s.replace(/^([\s\S]+?)\s*<\/math>/gi, (_, inner) => `<math>${inner.trim()}</math>`);
+  }
+
+  s = s.replace(/<math>\s*<math>/gi, '<math>').replace(/<\/math>\s*<\/math>/gi, '</math>');
+
+  const tagRegex = /<\/?math>/gi;
+  let result = '';
+  let lastIndex = 0;
+  let inMath = false;
+  let match;
+
+  while ((match = tagRegex.exec(s)) !== null) {
+    const tag = match[0].toLowerCase();
+    const segment = s.substring(lastIndex, match.index);
+
+    if (tag === '<math>') {
+      if (inMath) {
+        const englishBridge = segment.match(/^([\s\S]*?)(\s+(?:and|or|where|if|then|such\s+that|is\s+equal\s+to|for\s+all)\s+[\s\S]*)$/i);
+        if (englishBridge && englishBridge[1].trim()) {
+          result += `${englishBridge[1].trim()}</math>${englishBridge[2]}<math>`;
+        } else {
+          result += `${segment}</math><math>`;
+        }
+      } else {
+        result += segment + '<math>';
+        inMath = true;
+      }
+    } else {
+      if (inMath) {
+        result += segment + '</math>';
+        inMath = false;
+      } else {
+        if (!result && segment.trim()) {
+          result += `<math>${segment.trim()}</math>`;
+        } else {
+          result += segment;
+        }
+      }
+    }
+    lastIndex = tagRegex.lastIndex;
+  }
+
+  const tail = s.substring(lastIndex);
+  if (inMath) {
+    const englishTail = tail.match(/^([\s\S]*?)(\s+(?:is\s+equal\s+to|has\s+infinitely|lie\s+in\s+the\s+interval|then\s+the\s+sum)[\s\S]*)$/i);
+    if (englishTail && englishTail[1].trim()) {
+      result += `${englishTail[1].trim()}</math>${englishTail[2]}`;
+    } else {
+      result += `${tail}</math>`;
+    }
+  } else {
+    result += tail;
+  }
+
+  return result.replace(/<math>\s*<\/math>/gi, '');
 }
 
 /**
@@ -189,7 +293,7 @@ export function sanitizeTextBlocksInMath(span) {
 
   return span.replace(/\\text(?:rm)?\{([^{}]*)\}/g, (fullMatch, rawBody) => {
     let body = rawBody.replace(
-      /\\(times|sec|min|max|in|to|and|or|for|if|is|of|volt|volts|amp|amps|ohm|ohms|watt|watts|joule|joules|meter|meters|cm|mm|km|kg|gm|hr|hrs|hour|hours|day|days)\b/gi,
+      /\\(times|sec|min|max|det|adj|in|to|and|or|for|if|is|of|volt|volts|amp|amps|ohm|ohms|watt|watts|joule|joules|meter|meters|cm|mm|km|kg|gm|hr|hrs|hour|hours|day|days)\b/gi,
       '$1'
     );
 
@@ -230,7 +334,7 @@ export function cleanLeakedBackslashesInPlainText(plainSegment) {
   if (!plainSegment || typeof plainSegment !== 'string') return plainSegment;
   return plainSegment
     .replace(
-      /\\+(in|to|times|sec|min|max|pm|mp|bar|hat|vec|sum|int|lim|log|ln|sin|cos|tan|cot|csc|and|or|if|for|is|of)\b/g,
+      /\\+(in|to|times|sec|min|max|pm|mp|bar|hat|vec|sum|int|lim|log|ln|sin|cos|tan|cot|csc|det|adj|and|or|if|for|is|of)\b/g,
       '$1'
     )
     .replace(
@@ -241,7 +345,8 @@ export function cleanLeakedBackslashesInPlainText(plainSegment) {
 
 /**
  * Auto-repairs missing LaTeX backslashes, over-escaped double backslashes (\\text, \\frac),
- * `\text{ \Omega}` text-mode crashes, `\text{ \times}` spans, fake XML tags, & brackets in math expressions.
+ * matrix/determinant row breaks (\\), `\text{ \Omega}` text-mode crashes, `\text{ \times}` spans,
+ * fake XML tags, & brackets in math expressions.
  * @param {string} text
  * @returns {string} Repaired LaTeX text
  */
@@ -250,7 +355,10 @@ export function repairMissingMathBackslashes(text) {
 
   let cleaned = repairControlCharEscapes(text);
   cleaned = convertMathMLToKaTeX(cleaned);
-  cleaned = cleaned.replace(/\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi, ' ');
+  cleaned = cleaned.replace(
+    /\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize|mid|parallel|sim|atural|oindent)(?![a-zA-Z]))/gi,
+    ' '
+  );
 
   cleaned = cleaned
     .replace(/\\+pu\{\\?(?:Omega|ohm)\}/gi, '\\Omega')
@@ -276,33 +384,36 @@ export function repairMissingMathBackslashes(text) {
   cleaned = cleaned.replace(/<\/?_?\s*p\s*u\s*>/gi, '');
   cleaned = cleaned.replace(/<\/?_?\s*c\s*e\s*>/gi, '');
 
-  if (cleaned.includes('</math>') && !cleaned.includes('<math>')) {
-    cleaned = cleaned.replace(/^([\s\S]+?)\s*<\/math>/gi, (match, inner) => {
-      const trimmed = inner.trim();
-      return `<math>${trimmed}</math>`;
-    });
-  }
-
-  const openCount = (cleaned.match(/<math>/gi) || []).length;
-  const closeCount = (cleaned.match(/<\/math>/gi) || []).length;
-  if (openCount > closeCount) {
-    cleaned += '</math>'.repeat(openCount - closeCount);
-  }
-
-  cleaned = cleaned.replace(/<math>\s*<\/math>/gi, '');
-  cleaned = cleaned.replace(/<math>\s*<math>/gi, '<math>').replace(/<\/math>\s*<\/math>/gi, '</math>');
+  cleaned = balanceMathTagsLocally(cleaned);
 
   const replaceInSpan = (inner) => {
     let span = repairControlCharEscapes(inner);
 
+    span = repairMatrixEnvironments(span);
+
+    const matrixBlocks = [];
+    span = span.replace(
+      /\\begin\{(?:[bpvBV]?matrix|cases|array|aligned)\}[\s\S]*?\\end\{(?:[bpvBV]?matrix|cases|array|aligned)\}/g,
+      (mat) => {
+        const protectedMat = mat.replace(/\\\\(\s+)/g, '__MATRIX_ROW_SEP__$1');
+        const idx = matrixBlocks.length;
+        matrixBlocks.push(protectedMat);
+        return `__MATRIX_ENV_BLOCK_${idx}__`;
+      }
+    );
+
     span = span.replace(/\\{2,}(?=[a-zA-Z])/g, '\\');
 
-    span = sanitizeTextBlocksInMath(span);
+    span = span.replace(/__MATRIX_ENV_BLOCK_(\d+)__/g, (_, idx) => {
+      return matrixBlocks[Number(idx)].replace(/\\{2,}(?=[a-zA-Z])/g, '\\');
+    });
 
+    span = sanitizeTextBlocksInMath(span);
+    span = span.replace(/\\adj\b/g, '\\text{adj}');
     span = span.replace(/(?<![a-zA-Z0-9\}\)])\^\s*\\circ\b/g, '{}^{\\circ}');
 
     const protectedBlocks = [];
-    span = span.replace(/\\(?:text|mathrm|ce|pu)\{[^{}]*\}/g, (match) => {
+    span = span.replace(/\\(?:text|mathrm|ce|pu|operatorname)\{[^{}]*\}/g, (match) => {
       const idx = protectedBlocks.length;
       protectedBlocks.push(match);
       return `__MATH_PROTECTED_BLOCK_${idx}__`;
@@ -315,10 +426,14 @@ export function repairMissingMathBackslashes(text) {
     span = repairFractionSyntax(span);
 
     span = span.replace(new RegExp(`(?<!\\\\)\\b(${GREEK_NAMES})\\b`, 'g'), '\\$1');
-    span = span.replace(new RegExp(`(?<!\\\\)\\b(${OP_NAMES})\\b`, 'g'), '\\$1');
+    span = span.replace(new RegExp(`(?<!\\\\)\\b(${OP_NAMES})\\b`, 'g'), (m, op) => {
+      if (op === 'adj') return '\\text{adj}';
+      return `\\${op}`;
+    });
 
     span = span.replace(/__MATH_PROTECTED_BLOCK_(\d+)__/g, (_, idx) => protectedBlocks[Number(idx)]);
     span = span.replace(/\\{2,}(?=[a-zA-Z])/g, '\\');
+    span = span.replace(/__MATRIX_ROW_SEP__/g, '\\\\');
 
     return span;
   };
@@ -343,7 +458,7 @@ export function repairMissingMathBackslashes(text) {
 
   const looksLikePlainEnglishSentence =
     !BARE_COMMAND_RUN_REGEX.test(cleaned) &&
-    !/\\(?:frac|sqrt|text|mathrm|pu|ce|Omega|omega|mu|pi|alpha|beta|gamma|delta|theta|lambda|sigma|times|cdot|pm|int|sum|lim)\b/.test(
+    !/\\(?:frac|sqrt|text|mathrm|pu|ce|Omega|omega|mu|pi|alpha|beta|gamma|delta|theta|lambda|sigma|times|cdot|pm|int|sum|lim|begin|end)\b/.test(
       cleaned
     ) &&
     !/[\^_{}=]/.test(cleaned);

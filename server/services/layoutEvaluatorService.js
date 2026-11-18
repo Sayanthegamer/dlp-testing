@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
+const { getSharp } = require('./diagramCropService');
 
 /**
  * Renders a visual match diagnostic overlay showing Question -> Matched Figure associations.
@@ -17,6 +17,9 @@ async function generateMatchOverlay(sourceBuffer, questions, fileLabel) {
   if (process.env.NODE_ENV === 'production' || process.env.DEBUG_DIAGRAMS !== 'true') return;
 
   try {
+    const sharp = getSharp();
+    if (!sharp) return;
+
     const meta = await sharp(sourceBuffer).metadata();
     const width = meta.width || 800;
     const height = meta.height || 600;
@@ -87,7 +90,7 @@ function evaluateLayoutMetrics(testResults = []) {
     correctlyAttachedFigures: totalCorrectAttachments,
     detectionRecallPercent: Math.round(recall * 10) / 10,
     detectionPrecisionPercent: Math.round(precision * 10) / 10,
-    attachmentAccuracyPercent: Math.round(attachmentAccuracy * 10) / 10
+    attachmentAccuracyPercent: Math.round(attachmentAccuracy * 10) / 10,
   };
 }
 

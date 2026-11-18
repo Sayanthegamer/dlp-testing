@@ -2,13 +2,38 @@ const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { stripBase64Header } = require('../services/diagramCropService');
+const {
+  stripBase64Header,
+  getPdfJsLib,
+  rasterizePdfPage,
+  extractEmbeddedJpegsFromPdf,
+  countPdfPagesPureJs,
+  isRasterImageBuffer,
+} = require('../services/diagramCropService');
 const { extractCandidateFigures } = require('../services/layoutExtractorService');
 const { matchDiagramsToQuestions } = require('../services/diagramMatcherService');
 const { repairMissingMathBackslashes } = require('../services/mathSanitizerService');
 
 const MAX_CONCURRENT_CHUNKS = 2;
 const CHUNK_TIMEOUT_MS = parseInt(process.env.PARSE_CHUNK_TIMEOUT_MS, 10) || 25000;
+const MAX_TRANSIENT_RETRIES = parseInt(process.env.PARSE_MAX_TRANSIENT_RETRIES, 10) || 2;
+const TRANSIENT_RETRY_BASE_MS =
+  parseInt(process.env.PARSE_TRANSIENT_RETRY_BASE_MS, 10) ||
+  (process.env.NODE_ENV === 'test' ? 15 : 1200);
+
+function isTransientProviderError(err) {
+  if (!err) return false;
+  const status = err.status || err.statusCode;
+  if ([429, 502, 503, 504].includes(status)) return true;
+  const msg = String(err.message || err || '');
+  return /(?:\b503\b|\b429\b|\b502\b|\b504\b|UNAVAILABLE|RESOURCE_EXHAUSTED|high demand|overloaded|rate limit|too many requests|timed out|ECONNRESET|ETIMEDOUT|fetch failed)/i.test(
+    msg
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function withTimeout(promise, ms, label = 'AI provider request') {
   let timer = null;
@@ -48,7 +73,7 @@ async function mapWithConcurrencySettled(items, limit, workerFn) {
 }
 
 const SYSTEM_PROMPT = `You are an expert math and science test paper parser for tuition teachers.
-Your task is to parse input (informal text, photo of exam paper, or multi-page PDF) representing exam questions and convert them into strict JSON adhering to this exact schema format:
+Your task is to parse input (informal text, photo of exam paper, handwritten question notebook, or multi-page PDF) representing exam questions and convert them into strict JSON adhering to this exact schema format:
 
 {
   "testTitle": "Mathematics Test Paper",
@@ -83,32 +108,39 @@ Your task is to parse input (informal text, photo of exam paper, or multi-page P
 }
 
 CRITICAL RULES:
-1. EXTRACT STRICTLY ORIGINAL EXAM QUESTIONS ONLY: Extract ONLY actual numbered exam questions that students are expected to solve.
-   - NEVER create questions out of solution notes, answer key explanations, solution booklets, header/footer page numbers, copyright notices, or exam instructions.
-2. NO LITERAL "\\n" IN STRINGS: Do not put literal "\\n" string characters inside JSON string values. Replace all line breaks with clean space separators.
-3. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>x</math>).
-   - NEVER put plain English sentences, problem instructions, question numbers ("Question 1"), or option letters ("Option A") inside <math> tags.
+1. EXTRACT ALL EXAM QUESTIONS COMPLETELY (NEVER TRUNCATE STEMS):
+   - Extract every numbered exam question completely from its opening word ("Let...", "If...", "Consider...", "For...") all the way through its final prompt clause ("...then ... is equal to", "...has", "...lie in the interval").
+   - HANDWRITTEN NOTEBOOKS WITH INLINE SCRATCH WORK: In handwritten test notebooks, students or teachers frequently write small intermediate scratch calculations, numeric substitutions (e.g. "alpha = 2, beta = 1", "3^4 * 1/(8^3 * 3^2)", "A * adj(A) = |A| |A|^2"), or tick marks right between the lines of a question or beside the options. NEVER stop or truncate a question stem when you hit an inline scratch calculation—read past the scratch annotation to capture the full question sentence and its options, while excluding the scratch calculation itself from questionText.
+   - CROSS-PAGE SPLIT QUESTIONS:
+     * If a numbered question at the very bottom of a page is cut off mid-sentence (for example, ending with "Let A be a square matrix such that AA^T = I. Then" at the bottom of the page), still extract that partial numbered question as the last item in "questions".
+     * Conversely, if the very top of a page begins with an unnumbered continuation of a question from the previous page (for example, starting directly with a formula like "\\frac{1}{2} A [(A + A^T)^2 + (A - A^T)^2] is equal to" followed by options (a), (b), (c), (d)), YOU MUST EXTRACT that top continuation as the FIRST item in "questions" with "id": "page_continuation" and "isContinuation": true.
+2. NO LITERAL "\\n" IN STRINGS: Do not put literal "\\n" line breaks inside JSON string values. Use clean space separators.
+3. MATH TAG BOUNDARIES: Wrap mathematical formulas, equations, variables, chemical notation, physical units, matrices, determinants, and math symbols in <math>...</math> tags (e.g. <math>x^2 + 2x - 3 = 0</math>, <math>\\frac{a}{b}</math>, <math>A = \\begin{bmatrix} 1 & 2 \\\\ 0 & 1 \\end{bmatrix}</math>).
+   - Every <math> tag MUST have a matching closing </math> tag immediately after that formula before plain English words resume.
+   - NEVER put plain English sentences, problem instructions, question numbers ("Question 1"), or option letters ("(a)") inside <math> tags.
    - NEVER put LaTeX backslashes in plain English text outside <math> tags (write "High resistance in parallel" and "Gamma rays", NEVER "High resistance \\in parallel" or "\\Gamma rays").
-4. LATEX BACKSLASHES & UNITS: Inside <math>...</math>, use standard single LaTeX commands (\\frac{num}{den}, \\sqrt{x}, \\pi, \\alpha, \\times, \\Omega, \\mu).
-   - NEVER put math-mode symbols like \\Omega, \\mu, ^, or _ inside \\text{...} (because KaTeX throws a parse error on \\text{ \\Omega}). Instead write <math>P = 10\\,\\Omega</math>, <math>20\\,\\Omega</math>, or <math>\\pu{20 \\Omega}</math>.
-   - Never use double LaTeX backslashes (\\\\frac or \\\\text) inside <math> spans, as \\\\ is a line break in KaTeX.
-5. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>a_{12}</math>), and ALWAYS use explicit curly braces around BOTH numerator and denominator (<math>\\frac{N_p}{N_s}</math> — NEVER write bare fracN_pN_s) and radicals (<math>\\sqrt{expression}</math>).
-6. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg).
+4. LATEX BACKSLASHES, MATRICES & DETERMINANTS:
+   - Inside <math>...</math>, use standard LaTeX commands (\\frac{num}{den}, \\sqrt{x}, \\pi, \\alpha, \\beta, \\gamma, \\lambda, \\mu, \\times, \\Omega, \\det, \\text{adj}).
+   - For matrices, determinants, and column vectors, use <math>\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}</math>, <math>\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}</math>, or <math>\\begin{pmatrix} a \\\\ b \\end{pmatrix}</math>. ALWAYS separate matrix/determinant rows with a double-backslash followed by a space (\\\\ ) so row breaks are never merged with the first token of the next row.
+   - Do not double-escape regular command names (write \\frac and \\text, not \\\\frac or \\\\text).
+   - NEVER put math-mode symbols like \\Omega, \\mu, ^, or _ inside \\text{...}. Instead write <math>P = 10\\,\\Omega</math> or <math>\\pu{20 \\Omega}</math>.
+5. BRACE DISCIPLINE: Always enclose multi-character superscripts/subscripts in curly braces (<math>x^{10}</math>, <math>A^{13}</math>, <math>2A_{10} - A_8</math>), and ALWAYS use explicit curly braces around BOTH numerator and denominator (<math>\\frac{N_p}{N_s}</math>) and radicals (<math>\\sqrt{2}</math>).
+6. FUNCTIONS & SYMBOLS: Precede standard function names with a backslash (\\sin, \\cos, \\tan, \\cot, \\sec, \\csc, \\log, \\ln, \\lim, \\max, \\min, \\det, \\deg), and write matrix adjoint as \\text{adj}.
 7. CHEMISTRY & REACTION NOTATION: Wrap chemical formulas, balanced reactions, state symbols, ionic charges, and nuclear isotopes in <math>\\ce{...}</math> using mhchem syntax.
-8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> or use math-mode units (e.g. <math>9.8\\,\\mathrm{m/s^2}</math>, <math>20\\,\\Omega</math>, <math>4\\,\\mathrm{V/m}</math>).
+8. PHYSICAL QUANTITIES WITH UNITS: Wrap value+unit pairs in <math>\\pu{...}</math> or use math-mode units (e.g. <math>9.8\\,\\mathrm{m/s^2}</math>, <math>20\\,\\Omega</math>).
 9. PERMUTATIONS & COMBINATIONS: Use custom macros <math>\\nCr{n}{r}</math> and <math>\\nPr{n}{r}</math>.
-10. QUESTION TYPES & ANSWERS:
-   - For MCQ: set "type": "mcq", ALWAYS populate "options" as a JSON array of 4 option strings (never leave "options": [] on an MCQ question; if options are split across columns or partially cut off, reconstruct the 4 standard options), and set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D) ONLY if explicitly stated in the source; otherwise set null.
-   - For Numerical: set "type": "short_answer_numeric", "options": [], and provide an estimated numeric float/integer "correctAnswer" and "acceptedRange": [min, max].
+10. QUESTION TYPES & OPTIONS:
+   - For MCQ: set "type": "mcq", and put each option's text into the "options" array (WITHOUT the leading "(a)", "(b)", "(c)", "(d)" labels, and NEVER leave the options appended inside "questionText"). If all 4 options (a)-(d) are visible, include all 4; if a handwritten question only has 2 or 3 options written on the page (e.g. only (a) and (b) are written), include all visible options in "options". Set "correctAnswer" as the 0-indexed integer (0 for A, 1 for B, 2 for C, 3 for D) if marked/ticked on the sheet or explicitly known; otherwise set null.
+   - For Numerical (single numerical value answer, e.g. a boxed number like [7] with no (a)/(b) options): set "type": "short_answer_numeric", "options": [], and provide the numeric float/integer "correctAnswer" and "acceptedRange": [min, max].
    - Match the Following: set "type": "match_following" with combination choices in "options".
-11. DIAGRAMS: Bounding boxes for visual diagrams belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex.
+11. DIAGRAMS: Bounding boxes for genuine visual diagrams/circuits/graphs belong in the "diagrams" array as normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 on sourceFileIndex. Do NOT treat matrices, determinants, or handwritten equations as diagrams.
 12. SUBPARTS DISAGGREGATION: Extract multi-part sub-questions into DISTINCT individual question objects in the "questions" array.
 13. ABSOLUTELY NO FAKE XML TAGS: <math>...</math> is the ONLY allowed XML tag format.
 14. ABSOLUTELY NO RAW MATHML TAGS: Always output standard KaTeX LaTeX inside <math>...</math> tags.
-15. HARD STOP ON ANSWERS AND SOLUTIONS SECTION: Stop extracting questions if you reach an "ANSWERS AND SOLUTIONS", "HINTS & SOLUTIONS", or "ANSWER KEY" section.
+15. HARD STOP ON DEDICATED ANSWERS AND SOLUTIONS SECTION: Stop extracting questions only if you reach a dedicated final section titled "ANSWERS AND SOLUTIONS", "HINTS & SOLUTIONS", or "ANSWER KEY".
 16. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. Do NOT wrap in markdown code blocks.`;
 
-const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image, YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text-only questions without visual figures.`;
+const DIAGRAM_PROMPT_INSTRUCTION = `CRITICAL DIAGRAM INSTRUCTION: IF and ONLY IF a question contains a visual diagram, circuit, figure, graph, organic structure, or apparatus drawing in the source image (NOT a mathematical matrix or determinant), YOU MUST INCLUDE a "diagrams" array for that question containing {"id": "diag_1", "sourceFileIndex": 0, "pageIndex": 0, "bbox": [ymin, xmin, ymax, xmax], "caption": "description"}, where bbox contains 4 normalized floats [ymin, xmin, ymax, xmax] between 0.0 and 1.0 tightly bounding the diagram area and labels on sourceFileIndex. DO NOT output diagrams array for text/matrix-only questions without visual figures.`;
 
 function isKeyValid(key) {
   return typeof key === 'string' && key.trim().length > 5 && !key.includes('your_');
@@ -228,6 +260,13 @@ function buildSmartFallbackCatalogue({ type, rawText, docxStructure, candidateFi
   );
 }
 
+/**
+ * Splits multi-page PDFs into 1-page chunks reliably across all environments:
+ * 1. Fast pure-JS embedded JPEG extraction ONLY for genuine image-only scanned PDFs (0 fonts, 1:1 page match).
+ * 2. pdfjs-dist + canvas rasterization for vector/digital PDFs (verified via PNG/JPEG magic headers).
+ * 3. Virtual per-page PDF chunking (`targetPageNumber` + `totalPages`) if rasterization is unavailable on a digital PDF,
+ *    so a multi-page PDF is ALWAYS processed 1 page per chunk and never mislabeled as `image/png`.
+ */
 async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 1) {
   if (!Array.isArray(mediaFiles) || mediaFiles.length === 0) {
     return [[]];
@@ -244,34 +283,73 @@ async function chunkMediaFiles(mediaFiles, maxPagesPerChunk = 1) {
     const cleanStr = stripBase64Header(rawData);
 
     if (mime === 'application/pdf') {
+      const pdfBuffer = Buffer.from(cleanStr, 'base64');
+
+      // Strategy 1: Pure-JS embedded page JPEG extraction (strictly gated to image-only scanned PDFs)
+      const embeddedJpegs = extractEmbeddedJpegsFromPdf(pdfBuffer);
+      if (embeddedJpegs.length > maxPagesPerChunk) {
+        for (let p = 0; p < embeddedJpegs.length; p++) {
+          processedItems.push({
+            data: embeddedJpegs[p].buffer.toString('base64'),
+            mimeType: 'image/jpeg',
+            sourceFileIndex: fileIdx,
+            pageIndex: p,
+            totalPages: embeddedJpegs.length,
+            name: `${file.name || 'document'}_page_${p + 1}`,
+          });
+        }
+        continue;
+      }
+
+      // Strategy 2: pdfjs-dist page count + verified rasterization
+      let numPages = 0;
       try {
-        const { getPdfJsLib, rasterizePdfPage } = require('../services/diagramCropService');
         const pdfjsLib = await getPdfJsLib();
         if (pdfjsLib) {
-          const pdfBuffer = Buffer.from(cleanStr, 'base64');
-          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+          const loadingTask = pdfjsLib.getDocument({
+            data: new Uint8Array(pdfBuffer),
+            disableWorker: true,
+            isEvalSupported: false,
+          });
           const pdf = await loadingTask.promise;
-          const numPages = pdf.numPages;
-
-          if (numPages > maxPagesPerChunk) {
-            for (let p = 0; p < numPages; p++) {
-              try {
-                const pageBuffer = await rasterizePdfPage(cleanStr, p);
-                processedItems.push({
-                  data: pageBuffer.toString('base64'),
-                  mimeType: 'image/png',
-                  sourceFileIndex: fileIdx,
-                  pageIndex: p,
-                  name: `${file.name || 'document'}_page_${p + 1}`,
-                });
-              } catch (_) {
-                processedItems.push({ ...file, sourceFileIndex: fileIdx, pageIndex: p });
-              }
-            }
-            continue;
-          }
+          numPages = pdf.numPages || 0;
         }
       } catch (_) {}
+
+      if (!numPages) {
+        numPages = countPdfPagesPureJs(pdfBuffer);
+      }
+
+      if (numPages > maxPagesPerChunk) {
+        for (let p = 0; p < numPages; p++) {
+          try {
+            const pageBuffer = await rasterizePdfPage(cleanStr, p);
+            if (isRasterImageBuffer(pageBuffer)) {
+              const isJpeg = pageBuffer[0] === 0xff && pageBuffer[1] === 0xd8;
+              processedItems.push({
+                data: pageBuffer.toString('base64'),
+                mimeType: isJpeg ? 'image/jpeg' : 'image/png',
+                sourceFileIndex: fileIdx,
+                pageIndex: p,
+                totalPages: numPages,
+                name: `${file.name || 'document'}_page_${p + 1}`,
+              });
+              continue;
+            }
+          } catch (_) {}
+
+          // Strategy 3: Virtual single-page PDF chunk with explicit page target instruction
+          processedItems.push({
+            ...file,
+            sourceFileIndex: fileIdx,
+            pageIndex: p,
+            targetPageNumber: p + 1,
+            totalPages: numPages,
+            name: `${file.name || 'document'}_page_${p + 1}`,
+          });
+        }
+        continue;
+      }
     }
 
     processedItems.push({ ...file, sourceFileIndex: fileIdx, pageIndex: file.pageIndex || 0 });
@@ -309,7 +387,7 @@ function repairJsonUnescapedBackslashes(str) {
 
   clean = clean.replace(/("(?:[^"\\]|\\.)*")/g, (token) => {
     let inner = token.replace(
-      /\\\\|\\(["\/])|\\u[0-9a-fA-F]{4}|\\([bfnrt])([a-zA-Z]*)|\\(?=[a-zA-Z\{\}\_\^\%\#\$\&\s])/g,
+      /\\\\|\\(["\/])|\\u[0-9a-fA-F]{4}|\\([bfnrt])([a-zA-Z]*)|\\(?=[a-zA-Z0-9\{\}\_\^\%\#\$\&\s\,\;\!\:\|\[\]\(\)\-\+\=])/g,
       (match, quoteOrSlash, ctrlChar, ctrlSuffix) => {
         if (match === '\\\\') return '\\\\';
         if (quoteOrSlash || match.startsWith('\\u')) return match;
@@ -400,6 +478,29 @@ function repairTruncatedJson(jsonStr) {
   return str;
 }
 
+/**
+ * Checks whether a character index in `text` lies inside a `<math>...</math>` span.
+ */
+function isIndexInsideMathTag(text, index) {
+  const mathSpanRegex = /<math>[\s\S]*?<\/math>/gi;
+  let m;
+  while ((m = mathSpanRegex.exec(text)) !== null) {
+    if (index >= m.index && index < m.index + m[0].length) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Safely splits inline MCQ options from a question stem ONLY when `rawOptions` has fewer than 2 items
+ * AND sequential option markers ((a), (b), ... or (A), (B), ... or A), B), ... or (1), (2), ...) appear
+ * at the end of the stem OUTSIDE <math> tags.
+ *
+ * - Never touches stems when `rawOptions.length >= 2` (preserving inline statement lists like
+ *   "Consider statements (a) A is symmetric (b) A is orthogonal. Which is true?").
+ * - Never splits on matrix or variable names like "A.", "B.", "det(A)", or "adj(A)".
+ */
 function normalizeRawOptionsAndStem(questionText, q) {
   let rawOptions = q.options || q.choices || [];
   if (rawOptions && !Array.isArray(rawOptions) && typeof rawOptions === 'object') {
@@ -413,30 +514,152 @@ function normalizeRawOptionsAndStem(questionText, q) {
     return { stem: questionText, options: rawOptions };
   }
 
-  const inlinePatterns = [
-    /\s+(?:\([A-Da-d]\)|[A-Da-d][\)\.])\s+/g,
-    /\s+\([1-4]\)\s+/g,
-  ];
+  const markerRegex = /\s+(?:\(([A-Da-d])\)|\(([1-4])\)|([A-Da-d])\))\s+/g;
+  const rawMatches = [...questionText.matchAll(markerRegex)].filter(
+    (m) => !isIndexInsideMathTag(questionText, m.index)
+  );
 
-  for (const pattern of inlinePatterns) {
-    const matches = [...questionText.matchAll(pattern)];
-    if (matches.length >= 2) {
-      const firstIdx = matches[0].index;
-      const stem = questionText.substring(0, firstIdx).trim();
-      const extracted = [];
-      for (let i = 0; i < matches.length; i++) {
-        const start = matches[i].index + matches[i][0].length;
-        const end = i + 1 < matches.length ? matches[i + 1].index : questionText.length;
-        const optText = questionText.substring(start, end).trim();
-        if (optText) extracted.push(optText);
+  let sequentialMatches = [];
+  for (let startIdx = 0; startIdx < rawMatches.length; startIdx++) {
+    const firstToken = (rawMatches[startIdx][1] || rawMatches[startIdx][2] || rawMatches[startIdx][3] || '').toLowerCase();
+    if (firstToken !== 'a' && firstToken !== '1') continue;
+
+    const isNumeric = firstToken === '1';
+    const expectedSeq = isNumeric ? ['1', '2', '3', '4'] : ['a', 'b', 'c', 'd'];
+    const run = [rawMatches[startIdx]];
+
+    for (let j = startIdx + 1; j < rawMatches.length && run.length < 4; j++) {
+      const nextToken = (rawMatches[j][1] || rawMatches[j][2] || rawMatches[j][3] || '').toLowerCase();
+      if (nextToken === expectedSeq[run.length]) {
+        run.push(rawMatches[j]);
       }
-      if (stem && extracted.length >= 2) {
-        return { stem, options: extracted };
-      }
+    }
+
+    if (run.length >= 2) {
+      sequentialMatches = run;
+      break;
+    }
+  }
+
+  if (sequentialMatches.length >= 2) {
+    const firstIdx = sequentialMatches[0].index;
+    const stem = questionText.substring(0, firstIdx).trim();
+    const extracted = [];
+    for (let i = 0; i < sequentialMatches.length; i++) {
+      const start = sequentialMatches[i].index + sequentialMatches[i][0].length;
+      const end = i + 1 < sequentialMatches.length ? sequentialMatches[i + 1].index : questionText.length;
+      const optText = questionText.substring(start, end).trim();
+      if (optText) extracted.push(optText);
+    }
+
+    // Do not split if the last "option" actually trails into a closing question sentence (e.g. "... (b) A is orthogonal. Which is true?")
+    const lastOpt = extracted[extracted.length - 1] || '';
+    const looksLikeInlineStatementsWithTrailingPrompt =
+      /\.\s+(?:Which|Then|Find|Select|Choose|How\s+many)\b/i.test(lastOpt) || /\?\s*$/.test(lastOpt);
+
+    if (stem && extracted.length >= 2 && !looksLikeInlineStatementsWithTrailingPrompt) {
+      return { stem, options: extracted };
     }
   }
 
   return { stem: questionText, options: rawOptions };
+}
+
+/**
+ * Merges questions that were split across two consecutive PDF page chunks
+ * (e.g., Question 11 starting at the bottom of Page 2: "Let A be a square matrix such that AA^T = I. Then"
+ * and continuing at the top of Page 3: "1/2 A[(A+A^T)^2 + (A-A^T)^2] is equal to (a)... (b)... (c)... (d)...").
+ *
+ * Strictly requires either:
+ * 1. Explicit continuation marking (`curr.isContinuation === true` or `id === 'page_continuation'`), OR
+ * 2. An actual cross-chunk/page boundary (`curr._chunkIndex !== prev._chunkIndex` when chunk indices are present)
+ *    where `prev` ends with a dangling connector word (`Then`, `such that`, `where`) and has 0 options, and `curr`
+ *    begins directly with a formula or `"is equal to"`.
+ * Never merges two independent questions on the same page!
+ */
+function mergeCrossPageContinuations(questions) {
+  if (!Array.isArray(questions) || questions.length < 2) return questions || [];
+
+  const merged = [];
+  for (let i = 0; i < questions.length; i++) {
+    const curr = questions[i];
+    if (!curr) continue;
+
+    if (merged.length > 0) {
+      const prev = merged[merged.length - 1];
+      const prevStem = (prev.questionText || '').trim();
+      const currStem = (curr.questionText || '').trim();
+      const prevHasNoOptions = !Array.isArray(prev.options) || prev.options.length === 0;
+
+      // Only match genuine trailing dangling connectors at the end of a cut-off bottom-of-page stem
+      const prevEndsWithDanglingConnector =
+        /\b(?:then|such\s+that|where|for\s+which)\s*[\.\:\-]?\s*$/i.test(prevStem);
+
+      const currMarkedContinuation =
+        curr.isContinuation === true ||
+        /^page_continuation/i.test(String(curr.rawId || curr.id || '')) ||
+        /^continuation/i.test(String(curr.rawId || curr.id || ''));
+
+      // Check whether prev and curr are on different chunks/pages (when chunk tracking metadata is attached)
+      const hasChunkTracking =
+        typeof prev._chunkIndex === 'number' && typeof curr._chunkIndex === 'number';
+      const crossesPageBoundary = !hasChunkTracking || curr._chunkIndex > prev._chunkIndex;
+
+      // Only allow heuristic merge across a page boundary when `prev` was the LAST item of its page
+      // and `curr` is the FIRST item of the next page and starts directly with a formula + "is equal to"
+      const isBoundaryPair =
+        !hasChunkTracking ||
+        (prev._isLastInChunk === true &&
+          curr._isFirstInChunk === true &&
+          curr._chunkIndex === prev._chunkIndex + 1);
+
+      const currStartsAsFormulaContinuation =
+        !/^(?:Let|If|Consider|For|Find|Evaluate|Solve|Determine|Calculate|The\s+value|The\s+sum|In\s+a|A\s+matrix|Which|Given|Matrix|Two|Three|A\s+particle|An?\s+object|Suppose)\b/i.test(
+          currStem
+        ) &&
+        (/\bis\s+equal\s+to\b/i.test(currStem) || /^<math>/.test(currStem));
+
+      const shouldMerge =
+        crossesPageBoundary &&
+        (currMarkedContinuation ||
+          (isBoundaryPair && prevEndsWithDanglingConnector && currStartsAsFormulaContinuation));
+
+      if (shouldMerge) {
+        const cleanPrevStem = prevStem.replace(/\s+$/, '');
+        const combinedStem = `${cleanPrevStem} ${currStem}`.trim();
+        const combinedOptions =
+          Array.isArray(curr.options) && curr.options.length > 0 ? curr.options : prev.options || [];
+        const combinedType =
+          combinedOptions.length >= 2 ? 'mcq' : curr.type || prev.type || 'short_answer_numeric';
+        const combinedAnswer =
+          curr.correctAnswer !== null && curr.correctAnswer !== undefined
+            ? curr.correctAnswer
+            : prev.correctAnswer;
+
+        const mathMatches =
+          (combinedStem + ' ' + combinedOptions.join(' ')).match(/<math>(.*?)<\/math>/g) || [];
+        const mathSpans = mathMatches.map((m) => m.replace(/<\/?math>/g, ''));
+
+        merged[merged.length - 1] = {
+          ...prev,
+          questionText: combinedStem,
+          type: combinedType,
+          options: combinedOptions,
+          correctAnswer: combinedAnswer,
+          acceptedRange: curr.acceptedRange || prev.acceptedRange,
+          diagrams: [...(prev.diagrams || []), ...(curr.diagrams || [])],
+          mathSpans,
+          _chunkIndex: curr._chunkIndex,
+          _isLastInChunk: curr._isLastInChunk,
+        };
+        continue;
+      }
+    }
+
+    merged.push(curr);
+  }
+
+  return merged;
 }
 
 function extractAndParseJson(text) {
@@ -467,9 +690,17 @@ function extractAndParseJson(text) {
     } catch (err2) {
       try {
         const safeFallback = clean.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-          return match.replace(/\\\\|\\/g, (m) => (m === '\\\\' ? '\\\\' : '\\\\'));
+          return match.replace(/\\\\|\\(["\/])|\\/g, (m, q) => {
+            if (m === '\\\\') return '\\\\';
+            if (q) return m;
+            return '\\\\';
+          });
         });
-        parsed = JSON.parse(repairTruncatedJson(safeFallback));
+        try {
+          parsed = JSON.parse(safeFallback);
+        } catch (_) {
+          parsed = JSON.parse(repairTruncatedJson(safeFallback));
+        }
       } catch (err3) {
         throw new Error(`AI generated an invalid JSON structure: ${err1.message}`);
       }
@@ -509,10 +740,7 @@ function extractAndParseJson(text) {
   });
 
   questions = questions.map((q, idx) => {
-    let rawQuestionText = (q.questionText || `Question ${idx + 1}`).replace(
-      /\n(?!(?:Cr|Pr|u|abla|eq|eg|ewline|otsubset|ot|i|n|ormalsize)\b)/gi,
-      ' '
-    );
+    let rawQuestionText = repairMissingMathBackslashes(q.questionText || `Question ${idx + 1}`);
     const originalRaw = rawQuestionText;
 
     const cleanedText = rawQuestionText
@@ -533,14 +761,14 @@ function extractAndParseJson(text) {
       questionText = `Question ${idx + 1}`;
     }
 
-    let type = q.type;
-    if (type !== 'mcq' && type !== 'match_following') {
-      type = 'short_answer_numeric';
-    }
-
     const cleanOptions = (Array.isArray(rawOptionsList) ? rawOptionsList : []).map((opt) =>
       repairMissingMathBackslashes(typeof opt === 'string' ? opt : String(opt))
     );
+
+    let type = q.type;
+    if (type !== 'mcq' && type !== 'match_following') {
+      type = cleanOptions.length >= 2 ? 'mcq' : 'short_answer_numeric';
+    }
 
     const options = type === 'mcq' || type === 'match_following' ? cleanOptions : [];
 
@@ -610,6 +838,8 @@ function extractAndParseJson(text) {
 
     const normalized = {
       id: q.id || `q_${Date.now()}_${idx}`,
+      rawId: q.id || null,
+      isContinuation: Boolean(q.isContinuation || /^page_continuation/i.test(String(q.id || ''))),
       questionText,
       type,
       options,
@@ -651,7 +881,7 @@ function getGeminiModelName() {
   return process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 }
 
-async function runSingleChunkWithProvider({
+async function executeSingleAttemptWithProvider({
   provider,
   type,
   rawText,
@@ -693,11 +923,29 @@ async function runSingleChunkWithProvider({
   throw new Error(`Unsupported provider: ${provider.name}`);
 }
 
+async function runSingleChunkWithProvider(params) {
+  let lastError;
+  for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt++) {
+    try {
+      return await executeSingleAttemptWithProvider(params);
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_TRANSIENT_RETRIES && isTransientProviderError(err)) {
+        const delayMs = TRANSIENT_RETRY_BASE_MS * Math.pow(2, attempt);
+        await sleep(delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Bounded-Concurrency, Per-Chunk Fault-Tolerant Parse Handler:
  * - Processes media chunks with MAX_CONCURRENT_CHUNKS = 2 and per-chunk deadlines.
  * - Retries ONLY failed chunks on secondary providers instead of restarting already-parsed pages.
- * - Preserves partial page successes if at least one chunk succeeded and no fallback provider remains.
+ * - Stitches cross-page split questions across adjacent chunks via mergeCrossPageContinuations.
  */
 async function handleParseRequest(req, res, forcedType = null) {
   const { rawText, imageBase64, mediaType, mediaFiles, docxStructure } = req.body || {};
@@ -757,7 +1005,6 @@ async function handleParseRequest(req, res, forcedType = null) {
       ? await chunkMediaFiles(effectiveMediaFiles, chunkSize)
       : [[{ type, rawText, docxStructure }]];
 
-  // Track parsed result per chunk index so successful chunks are never re-parsed on failover
   const resolvedChunks = new Array(mediaChunks.length).fill(null);
   const errors = [];
   let primaryProviderUsed = providers[0].name;
@@ -819,7 +1066,7 @@ async function handleParseRequest(req, res, forcedType = null) {
 
   for (const entry of resolvedChunks) {
     if (!entry) continue;
-    const { chunk, parsedChunkData } = entry;
+    const { chunkIdx, chunk, parsedChunkData } = entry;
 
     if (
       parsedChunkData &&
@@ -830,7 +1077,8 @@ async function handleParseRequest(req, res, forcedType = null) {
     }
 
     if (parsedChunkData && Array.isArray(parsedChunkData.questions)) {
-      const remappedChunkQuestions = parsedChunkData.questions.map((q) => {
+      const qCount = parsedChunkData.questions.length;
+      const remappedChunkQuestions = parsedChunkData.questions.map((q, qIdx) => {
         if (Array.isArray(q.diagrams)) {
           q.diagrams = q.diagrams.map((diag) => {
             const chunkItem =
@@ -850,17 +1098,28 @@ async function handleParseRequest(req, res, forcedType = null) {
             };
           });
         }
-        return q;
+        return {
+          ...q,
+          _chunkIndex: chunkIdx,
+          _isFirstInChunk: qIdx === 0,
+          _isLastInChunk: qIdx === qCount - 1,
+        };
       });
 
       aggregatedQuestions.push(...remappedChunkQuestions);
     }
   }
 
-  aggregatedQuestions = aggregatedQuestions.map((q, idx) => ({
-    ...q,
-    id: `q${idx + 1}`,
-  }));
+  // Merge any question split across a page boundary between chunk k-1 and chunk k
+  aggregatedQuestions = mergeCrossPageContinuations(aggregatedQuestions);
+
+  aggregatedQuestions = aggregatedQuestions.map((q, idx) => {
+    const { rawId, isContinuation, _chunkIndex, _isFirstInChunk, _isLastInChunk, ...cleanQ } = q;
+    return {
+      ...cleanQ,
+      id: `q${idx + 1}`,
+    };
+  });
 
   const combinedData = {
     testTitle: masterTestTitle,
@@ -908,6 +1167,27 @@ router.post('/parse-text', (req, res) => handleParseRequest(req, res, 'text'));
 router.post('/parse-image', (req, res) => handleParseRequest(req, res, 'media'));
 router.post('/parse-docx', (req, res) => handleParseRequest(req, res, 'docx_structure'));
 
+function buildPageTargetingPrompt(filesToProcess) {
+  const targeted = filesToProcess.find((f) => typeof f.targetPageNumber === 'number' && f.totalPages > 1);
+  const pageScopeHint = targeted
+    ? `IMPORTANT PAGE SCOPE: This PDF has ${targeted.totalPages} pages. For this request, transcribe ONLY Page ${targeted.targetPageNumber} of ${targeted.totalPages} (ignore all other pages). `
+    : '';
+  const pageIndexHint =
+    filesToProcess.length === 1 && typeof filesToProcess[0].pageIndex === 'number'
+      ? `(Page ${filesToProcess[0].pageIndex + 1}${
+          filesToProcess[0].totalPages ? ` of ${filesToProcess[0].totalPages}` : ''
+        }) `
+      : '';
+
+  return (
+    `${pageScopeHint}Transcribe ALL exam questions visible on the provided page ${pageIndexHint}into separate objects in the "questions" array. ` +
+    `Capture each question's COMPLETE text from start to finish (do NOT truncate stems at inline handwritten scratch calculations or matrix names). ` +
+    `If the very top of the page has an unnumbered continuation of a question from the previous page, include it as the FIRST item with "id": "page_continuation" and "isContinuation": true. ` +
+    `If a numbered question at the very bottom of the page is cut off mid-sentence, still include its visible stem as the last item. ` +
+    DIAGRAM_PROMPT_INSTRUCTION
+  );
+}
+
 async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaType, mediaFiles, docxStructure }) {
   const genAI = new GoogleGenerativeAI(geminiKey);
   const modelName = getGeminiModelName();
@@ -942,11 +1222,7 @@ async function parseWithGemini({ geminiKey, type, rawText, imageBase64, mediaTyp
       });
     });
 
-    promptParts.push(
-      `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. ` +
-        `Extract every numbered question into its own distinct question block with questionText, type, options (all 4 options for MCQ), correctAnswer, and diagrams. ` +
-        DIAGRAM_PROMPT_INSTRUCTION
-    );
+    promptParts.push(buildPageTargetingPrompt(filesToProcess));
   } else if (type === 'docx_structure') {
     promptParts.push(
       `Here is extracted text and formulas from a Word document:\n\n${JSON.stringify(
@@ -1000,7 +1276,7 @@ async function parseWithClaude({ anthropicKey, type, rawText, imageBase64, media
 
     contentBlocks.push({
       type: 'text',
-      text: `Transcribe all exam questions visible across ALL provided ${filesToProcess.length} media file(s)/pages/PDFs into separate objects in the "questions" array. Extract every numbered question into its own distinct question block with questionText, type, options, correctAnswer, and diagrams. ${DIAGRAM_PROMPT_INSTRUCTION}`,
+      text: buildPageTargetingPrompt(filesToProcess),
     });
 
     messages = [{ role: 'user', content: contentBlocks }];
@@ -1033,9 +1309,13 @@ module.exports.validateJsonSchema = validateJsonSchema;
 module.exports.extractAndParseJson = extractAndParseJson;
 module.exports.repairTruncatedJson = repairTruncatedJson;
 module.exports.repairJsonUnescapedBackslashes = repairJsonUnescapedBackslashes;
+module.exports.normalizeRawOptionsAndStem = normalizeRawOptionsAndStem;
+module.exports.mergeCrossPageContinuations = mergeCrossPageContinuations;
+module.exports.chunkMediaFiles = chunkMediaFiles;
 module.exports.buildSmartFallbackCatalogue = buildSmartFallbackCatalogue;
 module.exports.mapWithConcurrencySettled = mapWithConcurrencySettled;
 module.exports.withTimeout = withTimeout;
 module.exports.handleParseRequest = handleParseRequest;
 module.exports.MAX_CONCURRENT_CHUNKS = MAX_CONCURRENT_CHUNKS;
 module.exports.CHUNK_TIMEOUT_MS = CHUNK_TIMEOUT_MS;
+module.exports.isTransientProviderError = isTransientProviderError;

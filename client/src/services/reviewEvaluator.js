@@ -19,21 +19,25 @@ export function computeNeedsReview(question) {
     if (!Array.isArray(question.options) || question.options.length < 2) {
       reasons.push('Fewer than 2 options');
     }
-  } else if (question.type === 'short_answer' || question.type === 'short_answer_text') {
-    reasons.push('Legacy answer type (convert to numerical)');
-  } else if (question.type === 'short_answer_numeric') {
-    const range = question.acceptedRange;
-    const isValidRange = Array.isArray(range) &&
-      range.length === 2 &&
-      typeof range[0] === 'number' && Number.isFinite(range[0]) &&
-      typeof range[1] === 'number' && Number.isFinite(range[1]) &&
-      range[0] <= range[1];
+  } else if (question.type === 'short_answer' || question.type === 'short_answer_numeric') {
+    if (question.type === 'short_answer') {
+      reasons.push('Legacy answer type (convert to numerical)');
+    } else {
+      const range = question.acceptedRange;
+      const isValidRange = Array.isArray(range) &&
+        range.length === 2 &&
+        typeof range[0] === 'number' && Number.isFinite(range[0]) &&
+        typeof range[1] === 'number' && Number.isFinite(range[1]) &&
+        range[0] <= range[1];
 
-    if (!isValidRange) {
-      reasons.push('Numeric range not set');
-    } else if (!question.numericalConfirmed) {
-      reasons.push('Numeric range unconfirmed');
+      if (!isValidRange) {
+        reasons.push('Numeric range not set');
+      } else if (!question.numericalConfirmed) {
+        reasons.push('Numeric range unconfirmed');
+      }
     }
+  } else if (question.type === 'short_answer_text') {
+    reasons.push('Legacy answer type (convert to numerical)');
   } else {
     reasons.push('Unclassified question type');
   }
@@ -62,7 +66,8 @@ export function computeNeedsReview(question) {
       "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
       "\\vhat": "\\hat{\\mathbf{#1}}",
       "\\degree": "{}^{\\circ}",
-      "\\angstrom": "\\text{\\AA}"
+      "\\angstrom": "\\text{\\AA}",
+      "\\adj": "\\operatorname{adj}"
     }
   };
 

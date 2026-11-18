@@ -3,6 +3,16 @@ import katex from 'katex';
 import 'katex/contrib/mhchem';
 import { repairMissingMathBackslashes } from '../../services/mathSanitizerService';
 
+const KATEX_MACROS = {
+  "\\pu": "\\mathrm{#1}",
+  "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
+  "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
+  "\\vhat": "\\hat{\\mathbf{#1}}",
+  "\\degree": "{}^{\\circ}",
+  "\\angstrom": "\\text{\\AA}",
+  "\\adj": "\\operatorname{adj}"
+};
+
 export default function MathRenderer({ text = '', needsReview = false, readOnly = false, onSelectMathForEdit }) {
   if (!text || text.trim() === '') {
     return <span className="text-[#7b7266]">No text entered</span>;
@@ -23,11 +33,7 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
   }
 
   if (lastIndex < sanitizedText.length) {
-    parts.push({ type: 'text', content: sanitizedText.substring(lastIdxOrLast(lastIndex)) });
-  }
-
-  function lastIdxOrLast(idx) {
-    return idx;
+    parts.push({ type: 'text', content: sanitizedText.substring(lastIndex) });
   }
 
   return (
@@ -43,14 +49,13 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
         if (!cleanMathContent) return null;
 
         cleanMathContent = cleanMathContent
-          .replace(/\\{2,}(?=[a-zA-Z])/g, '\\')
           .replace(/(?<!\\)pu\{([^{}]+)\}/g, '\\mathrm{$1}')
           .replace(/(?<!\\)%/g, '\\%');
 
         cleanMathContent = cleanMathContent
           .replace(/\\text\{([^{}]*)\}/g, (_, inner) => {
             const fixedInner = inner
-              .replace(/\\(times|sec|min|max|in|to|pm|mp|div|cdot)\b/g, '$1')
+              .replace(/\\(times|sec|min|max|det|adj|in|to|pm|mp|div|cdot)\b/g, '$1')
               .replace(/(?<!\\)_/g, '\\_');
             return `\\text{${fixedInner}}`;
           })
@@ -68,22 +73,25 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
             displayMode: false,
             throwOnError: true,
             trust: false,
-            macros: {
-              "\\pu": "\\mathrm{#1}",
-              "\\nCr": "{}^{#1}\\mkern-2mu C_{#2}",
-              "\\nPr": "{}^{#1}\\mkern-2mu P_{#2}",
-              "\\vhat": "\\hat{\\mathbf{#1}}",
-              "\\degree": "{}^{\\circ}",
-              "\\angstrom": "\\text{\\AA}"
-            }
+            macros: KATEX_MACROS
           });
         } catch (_) {
           isError = true;
+          try {
+            renderedHtml = katex.renderToString(cleanMathContent, {
+              displayMode: false,
+              throwOnError: false,
+              trust: false,
+              macros: KATEX_MACROS
+            });
+          } catch (__) {
+            renderedHtml = '';
+          }
         }
 
         const isHighlighted = needsReview || isError;
 
-        if (isError) {
+        if (isError && !renderedHtml) {
           return (
             <span
               key={idx}
@@ -93,12 +101,12 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
                   onSelectMathForEdit(cleanMathContent);
                 }
               }}
-              className={`inline-block font-sans text-xs font-medium mx-1 rounded px-2 py-0.5 bg-[#efe9df] border border-[#b8622e] text-[#b8622e] ${
+              className={`inline-block font-mono text-xs font-medium mx-1 rounded px-2 py-0.5 bg-[#efe9df] border border-[#b8622e] text-[#b8622e] ${
                 readOnly ? '' : 'cursor-pointer hover:bg-[#e5dec9] transition-calm'
               }`}
               title={readOnly ? "Formula needs a check" : "This formula needs a check — click to edit visually"}
             >
-              This formula needs a check
+              {cleanMathContent} (needs check)
             </span>
           );
         }
@@ -121,7 +129,13 @@ export default function MathRenderer({ text = '', needsReview = false, readOnly 
                       : 'hover:bg-[#efe9df]'
                   }`
             }`}
-            title={readOnly ? undefined : "Click to edit formula in visual builder"}
+            title={
+              readOnly
+                ? undefined
+                : isError
+                ? "This formula needs a check — click to edit visually"
+                : "Click to edit formula in visual builder"
+            }
             dangerouslySetInnerHTML={{ __html: renderedHtml }}
           />
         );
