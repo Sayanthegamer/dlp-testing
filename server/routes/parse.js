@@ -600,13 +600,13 @@ function mergeCrossPageContinuations(questions) {
         /^page_continuation/i.test(String(curr.rawId || curr.id || '')) ||
         /^continuation/i.test(String(curr.rawId || curr.id || ''));
 
-      // Check whether prev and curr are on different chunks/pages (when chunk tracking metadata is attached)
+      // Check whether prev and curr are on IMMEDIATELY CONSECUTIVE chunks/pages
       const hasChunkTracking =
         typeof prev._chunkIndex === 'number' && typeof curr._chunkIndex === 'number';
-      const crossesPageBoundary = !hasChunkTracking || curr._chunkIndex > prev._chunkIndex;
+      const isImmediatelyAdjacent =
+        !hasChunkTracking || curr._chunkIndex === prev._chunkIndex + 1;
 
-      // Only allow heuristic merge across a page boundary when `prev` was the LAST item of its page
-      // and `curr` is the FIRST item of the next page and starts directly with a formula + "is equal to"
+      // Must be at the page boundary: prev is the LAST item of its page, curr is the FIRST item of the next page
       const isBoundaryPair =
         !hasChunkTracking ||
         (prev._isLastInChunk === true &&
@@ -619,10 +619,17 @@ function mergeCrossPageContinuations(questions) {
         ) &&
         (/\bis\s+equal\s+to\b/i.test(currStem) || /^<math>/.test(currStem));
 
+      // Prev must actually be an incomplete question: either it ends with a dangling connector word ("Then", "such that"),
+      // OR prev has no options and does not end in a question mark.
+      // Under NO circumstances may a complete question (like Q6 with options) be merged into!
+      const prevEndsIncomplete =
+        prevEndsWithDanglingConnector || (prevHasNoOptions && !/\?$/.test(prevStem));
+
       const shouldMerge =
-        crossesPageBoundary &&
-        (currMarkedContinuation ||
-          (isBoundaryPair && prevEndsWithDanglingConnector && currStartsAsFormulaContinuation));
+        isImmediatelyAdjacent &&
+        isBoundaryPair &&
+        prevEndsIncomplete &&
+        (currMarkedContinuation || currStartsAsFormulaContinuation);
 
       if (shouldMerge) {
         const cleanPrevStem = prevStem.replace(/\s+$/, '');
@@ -1050,6 +1057,41 @@ async function handleParseRequest(req, res, forcedType = null) {
     });
   }
 
+  // Recovery Pass: If any chunk failed (e.g. temporary 503 high demand spike) and providers are configured,
+  // do a second sequential pass on the primary provider after a short pause.
+  const remainingUnresolved = [];
+  for (let i = 0; i < mediaChunks.length; i++) {
+    if (!resolvedChunks[i]) remainingUnresolved.push(i);
+  }
+
+  if (remainingUnresolved.length > 0 && providers.length > 0) {
+    const recoveryProvider = providers[0];
+    await sleep(process.env.NODE_ENV === 'test' ? 10 : 2000);
+    for (const chunkIdx of remainingUnresolved) {
+      try {
+        const chunk = mediaChunks[chunkIdx];
+        const parsedChunkData = await runSingleChunkWithProvider({
+          provider: recoveryProvider,
+          type,
+          rawText,
+          imageBase64,
+          mediaType,
+          chunk,
+          docxStructure,
+        });
+        if (parsedChunkData) {
+          resolvedChunks[chunkIdx] = { chunkIdx, chunk, parsedChunkData, provider: recoveryProvider.name };
+        }
+      } catch (recErr) {
+        errors.push({
+          provider: `${recoveryProvider.name}_recovery`,
+          chunkIndex: chunkIdx,
+          error: recErr.message || 'Recovery attempt failed',
+        });
+      }
+    }
+  }
+
   const succeededCount = resolvedChunks.filter(Boolean).length;
   const failedCount = mediaChunks.length - succeededCount;
 
@@ -1058,6 +1100,20 @@ async function handleParseRequest(req, res, forcedType = null) {
     return res.status(500).json({
       success: false,
       error: `AI transcription failed: ${errDetails}. Check your API key in environment settings.`,
+    });
+  }
+
+  if (failedCount > 0) {
+    const failedPageNumbers = mediaChunks
+      .map((_, i) => (!resolvedChunks[i] ? i + 1 : null))
+      .filter(Boolean);
+    const errDetails = errors
+      .filter((e) => failedPageNumbers.includes(e.chunkIndex + 1))
+      .map((e) => `[Page ${e.chunkIndex + 1}]: ${e.error}`)
+      .join(' | ');
+    return res.status(502).json({
+      success: false,
+      error: `Could not transcribe page(s) ${failedPageNumbers.join(', ')}: ${errDetails}. Please try uploading again.`,
     });
   }
 

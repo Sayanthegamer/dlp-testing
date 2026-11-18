@@ -135,6 +135,23 @@ describe('Scanned Matrix PDF Truncation & Cross-Page Split Regression Suite', ()
     };
     const samePageResult = mergeCrossPageContinuations([samePageNumeric, samePageMcq]);
     expect(samePageResult).toHaveLength(2);
+
+    // Non-adjacent chunk merge protection (e.g. Page 2 dropped, so Page 1 Q6 precedes Page 3 continuation)
+    const page1BottomQ6 = {
+      id: 'q6',
+      questionText: 'If the system of equations has infinitely many solutions, then \\delta^4 - \\mu is equal to:',
+      type: 'mcq',
+      options: ['40', '44', '36', '48'],
+      correctAnswer: 1,
+      _chunkIndex: 0,
+      _isFirstInChunk: false,
+      _isLastInChunk: true,
+    };
+    const nonAdjacentResult = mergeCrossPageContinuations([page1BottomQ6, page3TopContinuation]);
+    expect(nonAdjacentResult).toHaveLength(2);
+    expect(nonAdjacentResult[0].id).toBe('q6');
+    expect(nonAdjacentResult[0].options).toHaveLength(4);
+    expect(nonAdjacentResult[1].id).toBe('page_continuation');
   });
 
   it('6. Gates extractEmbeddedJpegsFromPdf strictly to image-only scanned PDFs (never drops text from digital PDFs with embedded diagrams, ignores /SMask, and handles nested << >>)', () => {
